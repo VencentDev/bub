@@ -234,18 +234,44 @@ class _GoogleMark extends StatelessWidget {
   }
 }
 
-class _BubHome extends StatelessWidget {
+enum _BubHomeSection {
+  home('Home section'),
+  chat('Chat section'),
+  safe('Safe section'),
+  settings('Settings section');
+
+  const _BubHomeSection(this.label);
+
+  final String label;
+}
+
+class _BubHome extends StatefulWidget {
   const _BubHome({required this.onLogout, required this.paired});
 
   final VoidCallback onLogout;
   final bool paired;
 
   @override
+  State<_BubHome> createState() => _BubHomeState();
+}
+
+class _BubHomeState extends State<_BubHome> {
+  var _section = _BubHomeSection.home;
+
+  void _selectSection(_BubHomeSection section) {
+    setState(() {
+      _section = section;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Bub'),
-        actions: [TextButton(onPressed: onLogout, child: const Text('Logout'))],
+        actions: [
+          TextButton(onPressed: widget.onLogout, child: const Text('Logout')),
+        ],
       ),
       extendBody: true,
       body: Stack(
@@ -258,27 +284,23 @@ class _BubHome extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    paired ? "You're tethered" : "You're not tethered yet ❤️",
+                    _section.label,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    paired
-                        ? 'Your paired Bub home is ready for the next product stories.'
-                        : 'Pairing, chat, Bubs, moments, and Safe will build from the product stories.',
-                    textAlign: TextAlign.center,
-                  ),
                 ],
               ),
             ),
           ),
-          const Align(
+          Align(
             alignment: Alignment.bottomCenter,
-            child: _BubFloatingNav(),
+            child: _BubFloatingNav(
+              selectedSection: _section,
+              onSelected: _selectSection,
+            ),
           ),
         ],
       ),
@@ -287,7 +309,13 @@ class _BubHome extends StatelessWidget {
 }
 
 class _BubFloatingNav extends StatelessWidget {
-  const _BubFloatingNav();
+  const _BubFloatingNav({
+    required this.selectedSection,
+    required this.onSelected,
+  });
+
+  final _BubHomeSection selectedSection;
+  final ValueChanged<_BubHomeSection> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -331,7 +359,7 @@ class _BubFloatingNav extends StatelessWidget {
                       borderRadius: BorderRadius.circular(30),
                       border: Border.all(color: borderColor),
                     ),
-                    child: const SizedBox(
+                    child: SizedBox(
                       height: 68,
                       child: Row(
                         children: [
@@ -339,27 +367,35 @@ class _BubFloatingNav extends StatelessWidget {
                             child: _BubNavItem(
                               icon: Icons.home_rounded,
                               label: 'Home',
-                              selected: true,
+                              selected: selectedSection == _BubHomeSection.home,
+                              onTap: () => onSelected(_BubHomeSection.home),
                             ),
                           ),
                           Expanded(
                             child: _BubNavItem(
                               icon: Icons.chat_bubble_rounded,
                               label: 'Chat',
+                              selected: selectedSection == _BubHomeSection.chat,
+                              onTap: () => onSelected(_BubHomeSection.chat),
                             ),
                           ),
-                          Expanded(child: SizedBox.shrink()),
+                          const Expanded(child: SizedBox.shrink()),
                           Expanded(
                             child: _BubNavItem(
                               key: Key('bub-nav-safe-lock'),
                               icon: Icons.lock_rounded,
                               label: 'Safe',
+                              selected: selectedSection == _BubHomeSection.safe,
+                              onTap: () => onSelected(_BubHomeSection.safe),
                             ),
                           ),
                           Expanded(
                             child: _BubNavItem(
                               icon: Icons.settings_rounded,
                               label: 'Settings',
+                              selected:
+                                  selectedSection == _BubHomeSection.settings,
+                              onTap: () => onSelected(_BubHomeSection.settings),
                             ),
                           ),
                         ],
@@ -382,11 +418,13 @@ class _BubNavItem extends StatelessWidget {
     super.key,
     required this.icon,
     required this.label,
+    required this.onTap,
     this.selected = false,
   });
 
   final IconData icon;
   final String label;
+  final VoidCallback onTap;
   final bool selected;
 
   @override
@@ -396,7 +434,7 @@ class _BubNavItem extends StatelessWidget {
     final color = selected ? selectedColor : inactiveColor;
 
     return InkWell(
-      onTap: () {},
+      onTap: onTap,
       borderRadius: BorderRadius.circular(22),
       child: SizedBox.expand(
         child: Column(

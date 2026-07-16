@@ -49,7 +49,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text("You're tethered"), findsOneWidget);
+    expect(find.text('Home section'), findsOneWidget);
   });
 
   testWidgets('completed untethered user routes to Bub home', (tester) async {
@@ -64,7 +64,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text("You're not tethered yet ❤️"), findsOneWidget);
+    expect(find.text('Home section'), findsOneWidget);
   });
 
   testWidgets('authenticated Bub home shows floating glass navigation', (
@@ -114,6 +114,39 @@ void main() {
     expect(centerHeart.width, greaterThanOrEqualTo(40));
     expect(centerHeart.height, greaterThanOrEqualTo(40));
     expect(find.byKey(const Key('bub-nav-safe-lock')), findsOneWidget);
+  });
+
+  testWidgets('authenticated Bub home switches non-Bub nav sections', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _appWithAuth(
+        AuthState.authenticated(
+          user: _user(),
+          tetherStatus: const TetherStatusResponse(hasActiveTether: true),
+          tetherOnboardingComplete: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Home section'), findsOneWidget);
+
+    await tester.tap(find.text('Chat'));
+    await tester.pumpAndSettle();
+    expect(find.text('Chat section'), findsOneWidget);
+
+    await tester.tap(find.text('Safe'));
+    await tester.pumpAndSettle();
+    expect(find.text('Safe section'), findsOneWidget);
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.text('Settings section'), findsOneWidget);
+
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    expect(find.text('Home section'), findsOneWidget);
   });
 
   testWidgets('enter tether screen renders required controls and bear', (
@@ -281,7 +314,7 @@ void main() {
     await tester.tap(find.byKey(const Key('go-to-bub-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text("You're not tethered yet ❤️"), findsOneWidget);
+    expect(find.text('Home section'), findsOneWidget);
   });
 }
 
