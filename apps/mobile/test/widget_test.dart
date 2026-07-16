@@ -1,7 +1,7 @@
-import 'package:app_mobile/main.dart';
-import 'package:app_mobile/src/auth/auth_service.dart';
-import 'package:app_mobile/src/auth/token_store.dart';
-import 'package:app_mobile/src/core/dio_provider.dart';
+import 'package:bub/main.dart';
+import 'package:bub/src/auth/auth_service.dart';
+import 'package:bub/src/auth/token_store.dart';
+import 'package:bub/src/core/dio_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';

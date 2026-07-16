@@ -1,4 +1,4 @@
-import 'package:app_mobile/src/core/env.dart';
+import 'package:bub/src/core/env.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

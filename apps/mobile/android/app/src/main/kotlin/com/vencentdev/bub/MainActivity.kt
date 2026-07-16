@@ -1,4 +1,4 @@
-package com.app.app_mobile
+package com.vencentdev.bub
 
 import io.flutter.embedding.android.FlutterActivity
 
