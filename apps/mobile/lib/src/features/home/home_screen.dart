@@ -3,9 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/auth_controller.dart';
 import '../../core/env.dart';
-import '../todos/todos_screen.dart';
 
-/// Starter screen: switches between Google sign-in and the authenticated todo app.
+/// Starter screen: switches between Google sign-in and the authenticated Bub shell.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -15,11 +14,11 @@ class HomeScreen extends ConsumerWidget {
     final controller = ref.read(authControllerProvider.notifier);
 
     if (auth case AsyncData(value: final user) when user != null) {
-      return TodosScreen(user: user, onLogout: controller.logout);
+      return _BubHome(onLogout: controller.logout);
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('app_mobile')),
+      appBar: AppBar(title: const Text('Bub')),
       body: Center(
         child: switch (auth) {
           AsyncLoading() => const CircularProgressIndicator(),
@@ -56,6 +55,42 @@ class HomeScreen extends ConsumerWidget {
             ],
           ),
         },
+      ),
+    );
+  }
+}
+
+class _BubHome extends StatelessWidget {
+  const _BubHome({required this.onLogout});
+
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Bub'),
+        actions: [TextButton(onPressed: onLogout, child: const Text('Logout'))],
+      ),
+      body: const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "You're not tethered yet ❤️",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Pairing, chat, Bubs, moments, and Safe will build from the product stories.',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

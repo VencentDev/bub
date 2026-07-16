@@ -18,7 +18,7 @@ export function LoginPageContent() {
 
 function LoginContent() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') ?? '/todos';
+  const callbackUrl = searchParams.get('callbackUrl') ?? '/';
 
   return <LoginShell callbackUrl={callbackUrl} />;
 }
