@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/auth_controller.dart';
+import '../../auth/auth_state.dart';
 import '../../core/env.dart';
+import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
 
 /// Starter screen: switches between Google sign-in and the authenticated Bub shell.
@@ -14,8 +16,22 @@ class HomeScreen extends ConsumerWidget {
     final auth = ref.watch(authControllerProvider);
     final controller = ref.read(authControllerProvider.notifier);
 
-    if (auth case AsyncData(value: final user) when user != null) {
-      return _BubHome(onLogout: controller.logout);
+    if (auth case AsyncData(
+      value: final state,
+    ) when state.route == AuthRouteState.tethered) {
+      return _BubHome(onLogout: controller.logout, paired: true);
+    }
+
+    if (auth case AsyncData(
+      value: final state,
+    ) when state.route == AuthRouteState.untethered) {
+      return _BubHome(onLogout: controller.logout, paired: false);
+    }
+
+    if (auth case AsyncData(
+      value: final state,
+    ) when state.route == AuthRouteState.needsTetherOnboarding) {
+      return const EnterTetherScreen();
     }
 
     return _LoginScaffold(
@@ -217,9 +233,10 @@ class _GoogleMark extends StatelessWidget {
 }
 
 class _BubHome extends StatelessWidget {
-  const _BubHome({required this.onLogout});
+  const _BubHome({required this.onLogout, required this.paired});
 
   final VoidCallback onLogout;
+  final bool paired;
 
   @override
   Widget build(BuildContext context) {
@@ -228,20 +245,25 @@ class _BubHome extends StatelessWidget {
         title: const Text('Bub'),
         actions: [TextButton(onPressed: onLogout, child: const Text('Logout'))],
       ),
-      body: const Center(
+      body: Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                "You're not tethered yet ❤️",
+                paired ? "You're tethered" : "You're not tethered yet ❤️",
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               Text(
-                'Pairing, chat, Bubs, moments, and Safe will build from the product stories.',
+                paired
+                    ? 'Your paired Bub home is ready for the next product stories.'
+                    : 'Pairing, chat, Bubs, moments, and Safe will build from the product stories.',
                 textAlign: TextAlign.center,
               ),
             ],

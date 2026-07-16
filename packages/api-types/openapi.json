@@ -49,6 +49,82 @@
         ]
       }
     },
+    "/api/v1/tether/me": {
+      "get": {
+        "operationId": "tetherMe",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TetherStatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tether/invitations": {
+      "post": {
+        "operationId": "createTetherInvitation",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TetherInvitationResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tether/accept": {
+      "post": {
+        "operationId": "acceptTether",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TetherAcceptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TetherStatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/users/me": {
       "get": {
         "operationId": "getCurrentUser",
@@ -118,6 +194,49 @@
       "Role": {
         "type": "string",
         "enum": ["USER", "ADMIN"]
+      },
+      "TetherAcceptRequest": {
+        "type": "object",
+        "required": ["code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^BUB-[A-Z0-9]{4}-[A-Z0-9]{4}$"
+          }
+        }
+      },
+      "TetherInvitationResponse": {
+        "type": "object",
+        "required": ["id", "code", "expiresAt", "qrPayload"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "qrPayload": {
+            "type": "string"
+          }
+        }
+      },
+      "TetherStatusResponse": {
+        "type": "object",
+        "required": ["hasActiveTether"],
+        "properties": {
+          "hasActiveTether": {
+            "type": "boolean"
+          },
+          "partnerUserId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          }
+        }
       },
       "UserResponse": {
         "type": "object",

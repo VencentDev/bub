@@ -42,6 +42,7 @@ dependencies:
   retrofit: ^4.9.2
   google_sign_in: ^7.2.0
   flutter_dotenv: ^6.0.1
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:
@@ -74,6 +75,7 @@ flutter:
     - .env
     - assets/branding/
     - assets/icons/
+    - assets/illustrations/bears/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
