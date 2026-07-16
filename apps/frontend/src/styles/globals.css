@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0.985 0.006 285;
+    --foreground: 0.18 0.012 285;
+    --card: 1 0 0;
+    --card-foreground: 0.18 0.012 285;
+    --popover: 1 0 0;
+    --popover-foreground: 0.18 0.012 285;
+    --primary: 0.62 0.19 280;
+    --primary-foreground: 0.985 0.006 285;
+    --secondary: 0.94 0.012 285;
+    --secondary-foreground: 0.22 0.014 285;
+    --muted: 0.94 0.012 285;
+    --muted-foreground: 0.48 0.018 285;
+    --accent: 0.62 0.19 280;
+    --accent-alt: 0.65 0.24 305;
+    --accent-foreground: 0.985 0.006 285;
+    --destructive: 0.6 0.22 25;
+    --destructive-foreground: 0.985 0.006 285;
+    --border: 0.86 0.012 285;
+    --input: 0.86 0.012 285;
+    --ring: 0.62 0.19 280;
+    --radius: 0.625rem;
+    --color-background: oklch(var(--background));
+    --color-foreground: oklch(var(--foreground));
+    --color-card: oklch(var(--card));
+    --color-border: oklch(var(--border));
+    --color-accent: oklch(var(--accent));
+    --color-accent-alt: oklch(var(--accent-alt));
+    --field-background: color-mix(in oklab, black 3%, transparent);
+    --field-background-focus: color-mix(in oklab, black 5%, transparent);
+    --field-placeholder: oklch(0.55 0.012 285);
+  }
+
+  .dark {
+    --background: 0.145 0.005 285;
+    --foreground: 0.985 0 0;
+    --card: 0 0 0;
+    --card-foreground: 0.985 0 0;
+    --popover: 0.18 0.006 285;
+    --popover-foreground: 0.985 0 0;
+    --primary: 0.62 0.19 280;
+    --primary-foreground: 0.985 0 0;
+    --secondary: 0.24 0.01 285;
+    --secondary-foreground: 0.985 0 0;
+    --muted: 0.22 0.009 285;
+    --muted-foreground: 0.55 0.012 285;
+    --accent: 0.62 0.19 280;
+    --accent-alt: 0.65 0.24 305;
+    --accent-foreground: 0.985 0 0;
+    --destructive: 0.6 0.22 25;
+    --destructive-foreground: 0.985 0 0;
+    --border: 0.27 0.008 285;
+    --input: 0.27 0.008 285;
+    --ring: 0.62 0.19 280;
+    --color-background: oklch(var(--background));
+    --color-foreground: oklch(var(--foreground));
+    --color-card: oklch(var(--card));
+    --color-border: oklch(var(--border));
+    --color-accent: oklch(var(--accent));
+    --color-accent-alt: oklch(var(--accent-alt));
+    --field-background: color-mix(in oklab, white 5%, transparent);
+    --field-background-focus: color-mix(in oklab, white 8%, transparent);
+    --field-placeholder: oklch(0.45 0 0);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply overflow-x-clip bg-background text-foreground antialiased;
+  }
+}
+
+@layer components {
+  .field-input {
+    width: 100%;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    background-color: var(--field-background);
+    padding: 0.625rem 1rem;
+    color: var(--color-foreground);
+    font-size: 0.875rem;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .field-input::placeholder {
+    color: var(--field-placeholder);
+  }
+
+  .field-input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 20%, transparent);
+    background-color: var(--field-background-focus);
+  }
+}

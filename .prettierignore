@@ -1,0 +1,7 @@
+node_modules
+.turbo
+dist
+.next
+target
+apps/backend/mvnw
+apps/backend/mvnw.cmd

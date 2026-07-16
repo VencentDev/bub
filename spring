@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+set -eu
+
+case "${1:-}" in
+  dev)
+    cd "$(dirname "$0")/apps/backend"
+    set -a
+    [ ! -f .env ] || . ./.env
+    set +a
+    exec ./mvnw spring-boot:run
+    ;;
+  *)
+    echo "Usage: ./spring dev" >&2
+    exit 2
+    ;;
+esac

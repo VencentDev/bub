@@ -1,0 +1,23 @@
+{
+  "name": "@app/api-types",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./dist/index.d.ts",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "pnpm generate:types",
+    "fetch:spec": "curl -sf http://localhost:8080/v3/api-docs -o ./openapi.json",
+    "generate:types": "openapi-typescript ./openapi.json --output ./dist/index.d.ts",
+    "lint": "echo \"api-types has no lint target\"",
+    "test": "echo \"api-types has no tests\"",
+    "typecheck": "pnpm generate:types"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.10.1"
+  }
+}

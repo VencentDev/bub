@@ -1,0 +1,14 @@
+# OpenAPI -> Dart client generation (Dio).
+# Single source of truth: the backend OpenAPI spec committed for @app/api-types.
+# Regenerate with: dart run swagger_parser && dart run build_runner build -d
+swagger_parser:
+  schema_path: ../../packages/api-types/openapi.json
+  output_directory: lib/src/api/generated
+  language: dart
+  json_serializer: json_serializable
+  root_client: true
+  root_client_name: RestClient
+  client_postfix: Api
+  put_clients_in_folder: true
+  enums_to_json: true
+  use_xml: false

@@ -1,0 +1,7 @@
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:tc:postgresql:16:///backend_test}
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
