@@ -44,11 +44,11 @@ class BubTheme {
     required Color divider,
   }) {
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: BubColors.pink,
+      seedColor: BubColors.purple,
       brightness: brightness,
-      primary: BubColors.pink,
-      secondary: BubColors.purple,
-      tertiary: BubColors.coral,
+      primary: BubColors.purple,
+      secondary: BubColors.pink,
+      tertiary: BubColors.violet,
       surface: surface,
       error: BubColors.notification,
     );
@@ -82,12 +82,12 @@ class BubTheme {
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: bottomNavBackground,
-        selectedItemColor: BubColors.pink,
+        selectedItemColor: BubColors.purple,
         unselectedItemColor: textHint,
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: BubColors.pink,
+          backgroundColor: BubColors.purple,
           foregroundColor: BubColors.white,
           disabledBackgroundColor: BubColors.disabled,
           disabledForegroundColor: textHint,
@@ -97,7 +97,7 @@ class BubTheme {
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: BubColors.pink),
+        style: TextButton.styleFrom(foregroundColor: BubColors.purple),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -113,7 +113,7 @@ class BubTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: BubColors.pink, width: 1.5),
+          borderSide: const BorderSide(color: BubColors.purple, width: 1.5),
         ),
       ),
     );
