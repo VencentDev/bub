@@ -71,7 +71,9 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
+    - .env
     - assets/branding/
+    - assets/icons/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -108,15 +110,17 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: assets/branding/bub_icon.png
-  adaptive_icon_background: '#2563EB'
+  adaptive_icon_background: assets/branding/bub_icon.png
   adaptive_icon_foreground: assets/branding/bub_icon.png
+  adaptive_icon_foreground_inset: 0
   remove_alpha_ios: true
 
 flutter_native_splash:
-  color: '#2563EB'
-  image: assets/branding/splash.png
+  color: '#8A5CF6'
+  image: assets/branding/bub-logo.png
   android: true
   ios: true
+  fullscreen: true
   android_12:
-    color: '#2563EB'
-    image: assets/branding/splash.png
+    color: '#8A5CF6'
+    image: assets/branding/bub-logo.png

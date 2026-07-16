@@ -12,7 +12,7 @@ class AuthController extends AsyncNotifier<UserResponse?> {
   }
 
   Future<UserResponse?> _fetchUser() =>
-      ref.read(restClientProvider).fallback.getCurrentUser();
+      ref.read(restClientProvider).fallback.authMe();
 
   Future<void> login() async {
     state = const AsyncLoading();

@@ -51,7 +51,9 @@ flutter run
 ```
 
 `make -C ../.. mobile-run` runs the same command. The app loads `.env` at
-startup, so IDE launch configurations do not need extra Flutter arguments.
+startup as a Flutter asset, so IDE launch configurations do not need extra
+Flutter arguments. After changing `.env`, stop and rebuild the app so the asset
+bundle is refreshed.
 
 - `10.0.2.2` is the Android emulator's alias for the host's `localhost`.
 - AppAuth custom redirect schemes are not used for Android sign-in.
