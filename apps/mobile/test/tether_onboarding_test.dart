@@ -67,6 +67,55 @@ void main() {
     expect(find.text("You're not tethered yet ❤️"), findsOneWidget);
   });
 
+  testWidgets('authenticated Bub home shows floating glass navigation', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _appWithAuth(
+        AuthState.authenticated(
+          user: _user(),
+          tetherStatus: const TetherStatusResponse(hasActiveTether: true),
+          tetherOnboardingComplete: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final nav = find.byKey(const Key('bub-floating-nav'));
+    expect(nav, findsOneWidget);
+    expect(
+      find.descendant(of: nav, matching: find.text('Home')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: nav, matching: find.text('Chat')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: nav, matching: find.text('Bub')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: nav, matching: find.text('Safe')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: nav, matching: find.text('Settings')),
+      findsOneWidget,
+    );
+
+    final centerHeart = tester.widget<Image>(
+      find.byKey(const Key('bub-nav-heart')),
+    );
+    expect(
+      (centerHeart.image as AssetImage).assetName,
+      'assets/onboarding/heart.png',
+    );
+    expect(centerHeart.width, greaterThanOrEqualTo(40));
+    expect(centerHeart.height, greaterThanOrEqualTo(40));
+    expect(find.byKey(const Key('bub-nav-safe-lock')), findsOneWidget);
+  });
+
   testWidgets('enter tether screen renders required controls and bear', (
     tester,
   ) async {

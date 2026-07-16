@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -245,30 +247,228 @@ class _BubHome extends StatelessWidget {
         title: const Text('Bub'),
         actions: [TextButton(onPressed: onLogout, child: const Text('Logout'))],
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                paired ? "You're tethered" : "You're not tethered yet ❤️",
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
+      extendBody: true,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    paired ? "You're tethered" : "You're not tethered yet ❤️",
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    paired
+                        ? 'Your paired Bub home is ready for the next product stories.'
+                        : 'Pairing, chat, Bubs, moments, and Safe will build from the product stories.',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Align(
+            alignment: Alignment.bottomCenter,
+            child: _BubFloatingNav(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BubFloatingNav extends StatelessWidget {
+  const _BubFloatingNav();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final glassColor =
+        (isDark ? const Color(0xFF2A2633) : const Color(0xFFECEAF1)).withValues(
+          alpha: 0.82,
+        );
+    final borderColor = (isDark ? BubColors.white : BubColors.deepPurple)
+        .withValues(alpha: 0.12);
+    final shadowColor = BubColors.deepPurple.withValues(alpha: 0.18);
+
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+      child: SizedBox(
+        key: const Key('bub-floating-nav'),
+        height: 92,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.bottomCenter,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: shadowColor,
+                    blurRadius: 26,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(30),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: glassColor,
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: const SizedBox(
+                      height: 68,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _BubNavItem(
+                              icon: Icons.home_rounded,
+                              label: 'Home',
+                              selected: true,
+                            ),
+                          ),
+                          Expanded(
+                            child: _BubNavItem(
+                              icon: Icons.chat_bubble_rounded,
+                              label: 'Chat',
+                            ),
+                          ),
+                          Expanded(child: SizedBox.shrink()),
+                          Expanded(
+                            child: _BubNavItem(
+                              key: Key('bub-nav-safe-lock'),
+                              icon: Icons.lock_rounded,
+                              label: 'Safe',
+                            ),
+                          ),
+                          Expanded(
+                            child: _BubNavItem(
+                              icon: Icons.settings_rounded,
+                              label: 'Settings',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                paired
-                    ? 'Your paired Bub home is ready for the next product stories.'
-                    : 'Pairing, chat, Bubs, moments, and Safe will build from the product stories.',
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+            ),
+            const Positioned(top: 0, child: _BubNavHeartItem()),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+class _BubNavItem extends StatelessWidget {
+  const _BubNavItem({
+    super.key,
+    required this.icon,
+    required this.label,
+    this.selected = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedColor = Theme.of(context).colorScheme.primary;
+    final inactiveColor = Theme.of(context).hintColor;
+    final color = selected ? selectedColor : inactiveColor;
+
+    return InkWell(
+      onTap: () {},
+      borderRadius: BorderRadius.circular(22),
+      child: SizedBox.expand(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                letterSpacing: 0,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BubNavHeartItem extends StatelessWidget {
+  const _BubNavHeartItem();
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {},
+      borderRadius: BorderRadius.circular(32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: BubColors.bubGradient,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: BubColors.pink.withValues(alpha: 0.34),
+                  blurRadius: 18,
+                  offset: const Offset(0, 9),
+                ),
+              ],
+            ),
+            child: Image.asset(
+              'assets/onboarding/heart.png',
+              key: const Key('bub-nav-heart'),
+              width: 42,
+              height: 42,
+              fit: BoxFit.contain,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Bub',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0,
+            ),
+          ),
+        ],
       ),
     );
   }
