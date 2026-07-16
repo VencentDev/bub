@@ -43,6 +43,7 @@ dependencies:
   google_sign_in: ^7.2.0
   flutter_dotenv: ^6.0.1
   qr_flutter: ^4.1.0
+  mobile_scanner: ^5.2.3
 
 dev_dependencies:
   flutter_test:
@@ -118,11 +119,11 @@ flutter_launcher_icons:
   remove_alpha_ios: true
 
 flutter_native_splash:
-  color: '#8A5CF6'
+  color: '#7C3AED'
   image: assets/branding/bub-logo.png
   android: true
   ios: true
   fullscreen: true
   android_12:
-    color: '#8A5CF6'
+    color: '#7C3AED'
     image: assets/branding/bub-logo.png

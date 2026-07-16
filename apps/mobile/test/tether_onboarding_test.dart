@@ -8,9 +8,12 @@ import 'package:bub/src/auth/auth_state.dart';
 import 'package:bub/src/features/home/home_screen.dart';
 import 'package:bub/src/features/tether_onboarding/tether_onboarding_screens.dart';
 import 'package:bub/src/api/generated/models/user_type.dart';
+import 'package:bub/src/theme/bub_colors.dart';
+import 'package:bub/src/theme/bub_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 void main() {
   testWidgets('first-time untethered user routes to tether onboarding', (
@@ -21,7 +24,7 @@ void main() {
         AuthState.authenticated(
           user: _user(),
           tetherStatus: const TetherStatusResponse(hasActiveTether: false),
-          tetherOnboardingSkipped: false,
+          tetherOnboardingComplete: false,
         ),
       ),
     );
@@ -40,7 +43,7 @@ void main() {
             hasActiveTether: true,
             partnerUserId: 'partner-id',
           ),
-          tetherOnboardingSkipped: false,
+          tetherOnboardingComplete: false,
         ),
       ),
     );
@@ -49,13 +52,13 @@ void main() {
     expect(find.text("You're tethered"), findsOneWidget);
   });
 
-  testWidgets('skipped user routes to untethered Bub home', (tester) async {
+  testWidgets('completed untethered user routes to Bub home', (tester) async {
     await tester.pumpWidget(
       _appWithAuth(
         AuthState.authenticated(
           user: _user(),
           tetherStatus: const TetherStatusResponse(hasActiveTether: false),
-          tetherOnboardingSkipped: true,
+          tetherOnboardingComplete: true,
         ),
       ),
     );
@@ -72,7 +75,7 @@ void main() {
         AuthState.authenticated(
           user: _user(),
           tetherStatus: const TetherStatusResponse(hasActiveTether: false),
-          tetherOnboardingSkipped: false,
+          tetherOnboardingComplete: false,
         ),
       ),
     );
@@ -85,6 +88,10 @@ void main() {
       (bear.image as AssetImage).assetName,
       'assets/illustrations/bears/bear4.png',
     );
+    final welcome = tester.widget<Text>(find.byKey(const Key('welcome-title')));
+    final prompt = tester.widget<Text>(find.byKey(const Key('tether-prompt')));
+    expect(welcome.style?.fontSize, greaterThan(prompt.style?.fontSize ?? 0));
+    expect(bear.height, greaterThanOrEqualTo(280));
     expect(find.byKey(const Key('tether-code-field')), findsOneWidget);
     expect(find.byKey(const Key('qr-scanner-button')), findsOneWidget);
     await tester.scrollUntilVisible(
@@ -94,7 +101,63 @@ void main() {
     );
     expect(find.text('or'), findsOneWidget);
     expect(find.text('Generate new tether'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Skip for now'),
+      80,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Skip for now'), findsOneWidget);
+  });
+
+  testWidgets('onboarding background adapts to the active theme', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _appWithAuth(
+        AuthState.authenticated(
+          user: _user(),
+          tetherStatus: const TetherStatusResponse(hasActiveTether: false),
+          tetherOnboardingComplete: false,
+        ),
+        theme: BubTheme.dark,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
+    expect(scaffold.backgroundColor, BubColors.darkScaffold);
+  });
+
+  testWidgets('scan QR opens scanner without completing onboarding', (
+    tester,
+  ) async {
+    final controller = _FakeAuthController(
+      AuthState.authenticated(
+        user: _user(),
+        tetherStatus: const TetherStatusResponse(hasActiveTether: false),
+        tetherOnboardingComplete: false,
+      ),
+    );
+    await tester.pumpWidget(_appWithAuthController(controller));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('qr-scanner-button')));
+    await tester.pumpAndSettle();
+
+    expect(controller.completeCount, 0);
+    expect(find.byKey(const Key('tether-scanner-guide')), findsOneWidget);
+    expect(find.byKey(const Key('scanner-back-button')), findsOneWidget);
+    expect(find.text('Place the QR inside the frame'), findsOneWidget);
+  });
+
+  test('tether QR payload parser extracts Bub codes only', () {
+    expect(
+      parseTetherCodeFromQrPayload('bub://tether/accept?code=BUB-7KQ2-XH19'),
+      'BUB-7KQ2-XH19',
+    );
+    expect(parseTetherCodeFromQrPayload('BUB-7KQ2-XH19'), 'BUB-7KQ2-XH19');
+    expect(parseTetherCodeFromQrPayload('https://example.com'), isNull);
+    expect(parseTetherCodeFromQrPayload('BUB-NOPE'), isNull);
   });
 
   testWidgets('generate tether screen renders QR, code, and DONE action', (
@@ -117,12 +180,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Share your tethered link'), findsOneWidget);
+    expect(find.text('Share your tether code'), findsOneWidget);
     expect(
-      find.text('Send this link to your person so they can Bub with you.'),
+      find.byKey(const Key('back-from-generate-tether-button')),
       findsOneWidget,
     );
-    expect(find.byKey(const Key('tether-qr-code')), findsOneWidget);
+    expect(
+      find.text('Send this code to your person so they can Bub with you.'),
+      findsOneWidget,
+    );
+    final qr = tester.widget<QrImageView>(
+      find.byKey(const Key('tether-qr-code')),
+    );
+    expect(qr.embeddedImage, isNull);
+    expect(qr.errorCorrectionLevel, QrErrorCorrectLevel.H);
+    expect(qr.embeddedImageStyle, isNull);
+    expect(find.byKey(const Key('tether-code-container')), findsOneWidget);
+    expect(find.byKey(const Key('copy-tether-code-button')), findsOneWidget);
     expect(find.text('BUB-7KQ2-XH19'), findsOneWidget);
     expect(find.text('DONE'), findsOneWidget);
   });
@@ -135,7 +209,7 @@ void main() {
         AuthState.authenticated(
           user: _user(),
           tetherStatus: const TetherStatusResponse(hasActiveTether: false),
-          tetherOnboardingSkipped: false,
+          tetherOnboardingComplete: false,
         ),
       ),
     );
@@ -151,6 +225,7 @@ void main() {
       (bear.image as AssetImage).assetName,
       'assets/illustrations/bears/bear2.png',
     );
+    expect(bear.height, greaterThanOrEqualTo(300));
     expect(find.text('All set'), findsOneWidget);
     expect(find.text("You're almost there"), findsOneWidget);
 
@@ -161,12 +236,28 @@ void main() {
   });
 }
 
-Widget _appWithAuth(AuthState state, {Widget? home}) {
+Widget _appWithAuth(AuthState state, {Widget? home, ThemeData? theme}) {
+  return _appWithAuthController(
+    _FakeAuthController(state),
+    home: home,
+    theme: theme,
+  );
+}
+
+Widget _appWithAuthController(
+  _FakeAuthController controller, {
+  Widget? home,
+  ThemeData? theme,
+}) {
   return ProviderScope(
     overrides: [
-      authControllerProvider.overrideWith(() => _FakeAuthController(state)),
+      authControllerProvider.overrideWith(() => controller),
+      tetherScannerPreviewProvider.overrideWithValue(
+        (context, scanWindow, onPayloadDetected) =>
+            const ColoredBox(color: Colors.black),
+      ),
     ],
-    child: MaterialApp(home: home ?? const HomeScreen()),
+    child: MaterialApp(theme: theme, home: home ?? const HomeScreen()),
   );
 }
 
@@ -174,12 +265,16 @@ class _FakeAuthController extends AuthController {
   _FakeAuthController(this.initial);
 
   final AuthState initial;
+  var completeCount = 0;
 
   @override
   Future<AuthState> build() async => initial;
 
   @override
-  Future<void> refreshTetherStatus({bool markSkipped = false}) async {
+  Future<void> refreshTetherStatus({
+    bool markComplete = false,
+    bool markSkipped = false,
+  }) async {
     final user = state.asData?.value.user ?? initial.user!;
     final tetherStatus =
         state.asData?.value.tetherStatus ?? initial.tetherStatus!;
@@ -187,13 +282,23 @@ class _FakeAuthController extends AuthController {
       AuthState.authenticated(
         user: user,
         tetherStatus: tetherStatus,
-        tetherOnboardingSkipped: markSkipped || initial.tetherOnboardingSkipped,
+        tetherOnboardingComplete:
+            markComplete || markSkipped || initial.tetherOnboardingComplete,
       ),
     );
   }
 
   @override
-  Future<void> skipTetherOnboarding() => refreshTetherStatus(markSkipped: true);
+  Future<void> completeTetherOnboarding({
+    TetherStatusResponse? tetherStatus,
+  }) async {
+    completeCount += 1;
+    await refreshTetherStatus(markComplete: true);
+  }
+
+  @override
+  Future<void> skipTetherOnboarding() =>
+      refreshTetherStatus(markComplete: true);
 }
 
 UserResponse _user() => UserResponse(
