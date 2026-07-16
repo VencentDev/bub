@@ -8,7 +8,7 @@ class AuthState {
     required this.route,
     this.user,
     this.tetherStatus,
-    this.tetherOnboardingSkipped = false,
+    this.tetherOnboardingComplete = false,
   });
 
   const AuthState.loggedOut() : this._(route: AuthRouteState.loggedOut);
@@ -16,22 +16,22 @@ class AuthState {
   AuthState.authenticated({
     required UserResponse user,
     required TetherStatusResponse tetherStatus,
-    required bool tetherOnboardingSkipped,
+    required bool tetherOnboardingComplete,
   }) : this._(
          route: tetherStatus.hasActiveTether
              ? AuthRouteState.tethered
-             : tetherOnboardingSkipped
+             : tetherOnboardingComplete
              ? AuthRouteState.untethered
              : AuthRouteState.needsTetherOnboarding,
          user: user,
          tetherStatus: tetherStatus,
-         tetherOnboardingSkipped: tetherOnboardingSkipped,
+         tetherOnboardingComplete: tetherOnboardingComplete,
        );
 
   final AuthRouteState route;
   final UserResponse? user;
   final TetherStatusResponse? tetherStatus;
-  final bool tetherOnboardingSkipped;
+  final bool tetherOnboardingComplete;
 
   bool get isLoggedOut => route == AuthRouteState.loggedOut;
 }

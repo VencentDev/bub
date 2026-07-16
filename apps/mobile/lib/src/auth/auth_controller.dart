@@ -17,11 +17,13 @@ class AuthController extends AsyncNotifier<AuthState> {
     final client = ref.read(restClientProvider).fallback;
     final user = await client.authMe();
     final tetherStatus = await client.tetherMe();
-    final skipped = await ref.read(tetherSkipStoreProvider).isSkipped(user.id);
+    final onboardingComplete = await ref
+        .read(tetherSkipStoreProvider)
+        .isComplete(user.id);
     return AuthState.authenticated(
       user: user,
       tetherStatus: tetherStatus,
-      tetherOnboardingSkipped: skipped,
+      tetherOnboardingComplete: onboardingComplete,
     );
   }
 
@@ -39,23 +41,32 @@ class AuthController extends AsyncNotifier<AuthState> {
   }
 
   Future<void> skipTetherOnboarding() async {
+    await completeTetherOnboarding();
+  }
+
+  Future<void> completeTetherOnboarding({
+    TetherStatusResponse? tetherStatus,
+  }) async {
     final current = state.asData?.value;
     final user = current?.user;
-    final tetherStatus = current?.tetherStatus;
-    if (user == null || tetherStatus == null) {
+    final nextTetherStatus = tetherStatus ?? current?.tetherStatus;
+    if (user == null || nextTetherStatus == null) {
       return;
     }
-    await ref.read(tetherSkipStoreProvider).setSkipped(user.id);
+    await ref.read(tetherSkipStoreProvider).setComplete(user.id);
     state = AsyncData(
       AuthState.authenticated(
         user: user,
-        tetherStatus: tetherStatus,
-        tetherOnboardingSkipped: true,
+        tetherStatus: nextTetherStatus,
+        tetherOnboardingComplete: true,
       ),
     );
   }
 
-  Future<void> refreshTetherStatus({bool markSkipped = false}) async {
+  Future<void> refreshTetherStatus({
+    bool markComplete = false,
+    bool markSkipped = false,
+  }) async {
     final current = state.asData?.value;
     final user = current?.user;
     if (user == null) {
@@ -66,33 +77,23 @@ class AuthController extends AsyncNotifier<AuthState> {
           .read(restClientProvider)
           .fallback
           .tetherMe();
-      if (markSkipped && !tetherStatus.hasActiveTether) {
-        await ref.read(tetherSkipStoreProvider).setSkipped(user.id);
+      final shouldComplete = markComplete || markSkipped;
+      if (shouldComplete && !tetherStatus.hasActiveTether) {
+        await ref.read(tetherSkipStoreProvider).setComplete(user.id);
       }
-      final skipped =
-          markSkipped ||
-          await ref.read(tetherSkipStoreProvider).isSkipped(user.id);
+      final onboardingComplete =
+          shouldComplete ||
+          await ref.read(tetherSkipStoreProvider).isComplete(user.id);
       return AuthState.authenticated(
         user: user,
         tetherStatus: tetherStatus,
-        tetherOnboardingSkipped: skipped,
+        tetherOnboardingComplete: onboardingComplete,
       );
     });
   }
 
-  void applyAcceptedTether(TetherStatusResponse tetherStatus) {
-    final user = state.asData?.value.user;
-    if (user == null) {
-      return;
-    }
-    state = AsyncData(
-      AuthState.authenticated(
-        user: user,
-        tetherStatus: tetherStatus,
-        tetherOnboardingSkipped: false,
-      ),
-    );
-  }
+  Future<void> applyAcceptedTether(TetherStatusResponse tetherStatus) =>
+      completeTetherOnboarding(tetherStatus: tetherStatus);
 }
 
 final authControllerProvider = AsyncNotifierProvider<AuthController, AuthState>(
