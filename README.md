@@ -1,8 +1,8 @@
-# Todo App Monorepo
+# Bub Monorepo
 
 ## Project Overview
 
-This repository is a full-stack todo application used as a production-shaped reference for a Next.js frontend, Spring Boot backend, direct Google/GitHub OAuth login, Postgres persistence, generated OpenAPI TypeScript types, and GitHub Actions image publishing.
+This repository is the full-stack Bub application: a private digital home for couples, built with a Next.js frontend, Spring Boot backend, Flutter mobile app, direct Google/GitHub OAuth login, Postgres persistence, generated OpenAPI TypeScript types, and GitHub Actions image publishing.
 
 ## Prerequisites
 
@@ -18,7 +18,7 @@ make dev
 # Postgres :5432, backend :8080, frontend :3000
 ```
 
-Open `http://localhost:3000/todos`. The protected route redirects to Google/GitHub login when you are not signed in.
+Open `http://localhost:3000`. Protected app routes redirect to Google/GitHub login when you are not signed in.
 
 ## Architecture
 
@@ -47,6 +47,7 @@ infra/
   postgres/      Local database initialization
 docs/
   adr/           Architecture decision records
+  product/       Bub product vision, user stories, MVP scope, and epics
   tickets/       Implementation tickets and completion history
 ```
 
