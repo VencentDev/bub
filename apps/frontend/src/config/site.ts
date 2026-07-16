@@ -1,9 +1,9 @@
 export const siteConfig = {
-  name: 'Mono Repo',
-  navName: 'Mono Repo',
-  metadataTitle: 'Mono Repo - Neural substrate access',
-  metadataDescription: 'Minimalist futuristic auth experience for Mono Repo.',
-  loginDescription: 'Sign in to Mono Repo to access the neural substrate.',
-  signupDescription: 'Create your Mono Repo account and initialize your decentralized identity.',
-  emailPlaceholder: 'name@monorepo.dev',
+  name: 'Bub',
+  navName: 'Bub',
+  metadataTitle: 'Bub - Closer, one tap away',
+  metadataDescription: 'A private digital home for couples.',
+  loginDescription: 'Sign in to Bub to get closer, one tap away.',
+  signupDescription: 'Create your Bub account and start your private space for two.',
+  emailPlaceholder: 'name@example.com',
 } as const;

@@ -15,7 +15,6 @@ Use module-first packages under `com.vencentdev.backend.modules`.
 Current module examples:
 
 - `modules/auth/**`
-- `modules/todo/**`
 - `modules/user/**`
 
 All business modules must live under:
@@ -77,9 +76,9 @@ Controllers are thin HTTP adapters.
 - Use `@ResponseStatus(HttpStatus.CREATED)` for create endpoints and `@ResponseStatus(HttpStatus.NO_CONTENT)` for delete endpoints that return no body.
 - Return DTOs, page DTOs, or `void`; do not return JPA entities.
 - Delegate business rules to services. Do not put repository calls, ownership checks, mapping logic, or transaction boundaries in controllers.
-- Keep route names resource-oriented and predictable, like `/api/v1/todos`, `/api/v1/todos/{id}`, and `/api/v1/users/me`.
+- Keep route names resource-oriented and predictable, like `/api/v1/tethers`, `/api/v1/messages/{id}`, and `/api/v1/users/me`.
 
-For paginated list endpoints, use Spring `Pageable` and return the existing `PageResponse<T>` shape rather than exposing Spring's raw `Page` JSON.
+For paginated list endpoints, use Spring `Pageable` and return an explicit response DTO rather than exposing Spring's raw `Page` JSON.
 
 ## Services
 

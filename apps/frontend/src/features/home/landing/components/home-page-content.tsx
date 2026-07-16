@@ -15,10 +15,11 @@ export function HomePageContent() {
         </p>
         <div className="space-y-4">
           <h1 className="text-balance text-4xl font-bold tracking-tight md:text-5xl">
-            Build and Deploy
+            Closer, one tap away.
           </h1>
           <p className="mx-auto max-w-md text-sm leading-6 text-muted-foreground">
-            A ready template for provider-backed authentication and focused application access.
+            Bub is a private digital home for couples to chat, share moments, send Bubs, and keep
+            memories safe.
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
