@@ -6,6 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/auth_controller.dart';
 import '../../auth/auth_state.dart';
 import '../../core/env.dart';
+import '../../features/home/home_dashboard_controller.dart';
+import '../../features/home/widgets/home_latest_bub_card.dart';
+import '../../features/home/widgets/home_partner_card.dart';
+import '../../features/home/widgets/home_safe_quick_access_card.dart';
+import '../../features/home/widgets/home_today_moment_card.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
 
@@ -245,17 +250,17 @@ enum _BubHomeSection {
   final String label;
 }
 
-class _BubHome extends StatefulWidget {
+class _BubHome extends ConsumerStatefulWidget {
   const _BubHome({required this.onLogout, required this.paired});
 
   final VoidCallback onLogout;
   final bool paired;
 
   @override
-  State<_BubHome> createState() => _BubHomeState();
+  ConsumerState<_BubHome> createState() => _BubHomeState();
 }
 
-class _BubHomeState extends State<_BubHome> {
+class _BubHomeState extends ConsumerState<_BubHome> {
   var _section = _BubHomeSection.home;
 
   void _selectSection(_BubHomeSection section) {
@@ -277,22 +282,10 @@ class _BubHomeState extends State<_BubHome> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _section.label,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
+          Positioned.fill(
+            child: _BubHomeSectionBody(
+              section: _section,
+              onOpenSafe: () => _selectSection(_BubHomeSection.safe),
             ),
           ),
           Align(
@@ -302,6 +295,78 @@ class _BubHomeState extends State<_BubHome> {
               onSelected: _selectSection,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BubHomeSectionBody extends ConsumerWidget {
+  const _BubHomeSectionBody({required this.section, required this.onOpenSafe});
+
+  final _BubHomeSection section;
+  final VoidCallback onOpenSafe;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (section != _BubHomeSection.home) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
+          child: Text(
+            section.label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+          ),
+        ),
+      );
+    }
+
+    final dashboard = ref.watch(homeDashboardProvider);
+    return dashboard.when(
+      loading: () => const Center(
+        child: Padding(
+          padding: EdgeInsets.only(bottom: 132),
+          child: CircularProgressIndicator(),
+        ),
+      ),
+      error: (error, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Home could not load',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () =>
+                    ref.read(homeDashboardProvider.notifier).refresh(),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      data: (data) => ListView(
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 140),
+        children: [
+          HomePartnerCard(tether: data.tether),
+          const SizedBox(height: 14),
+          HomeTodayMomentCard(
+            moment: data.todayMoment,
+            onReact: data.todayMoment == null
+                ? () {}
+                : () => ref
+                      .read(homeDashboardProvider.notifier)
+                      .reactToTodayMoment(data.todayMoment!.momentId),
+          ),
+          const SizedBox(height: 14),
+          HomeLatestBubCard(latestBub: data.latestBub),
+          const SizedBox(height: 14),
+          HomeSafeQuickAccessCard(safe: data.safe, onOpenSafe: onOpenSafe),
         ],
       ),
     );

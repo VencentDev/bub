@@ -3,8 +3,14 @@ import 'package:bub/src/api/generated/models/role.dart';
 import 'package:bub/src/api/generated/models/tether_invitation_response.dart';
 import 'package:bub/src/api/generated/models/tether_status_response.dart';
 import 'package:bub/src/api/generated/models/user_response.dart';
+import 'package:bub/src/api/generated/models/home_dashboard_response.dart';
+import 'package:bub/src/api/generated/models/home_latest_bub_response.dart';
+import 'package:bub/src/api/generated/models/home_safe_summary_response.dart';
+import 'package:bub/src/api/generated/models/home_tether_card_response.dart';
+import 'package:bub/src/api/generated/models/home_today_moment_response.dart';
 import 'package:bub/src/auth/auth_controller.dart';
 import 'package:bub/src/auth/auth_state.dart';
+import 'package:bub/src/features/home/home_dashboard_controller.dart';
 import 'package:bub/src/features/home/home_screen.dart';
 import 'package:bub/src/features/tether_onboarding/tether_onboarding_screens.dart';
 import 'package:bub/src/api/generated/models/user_type.dart';
@@ -49,7 +55,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Home section'), findsOneWidget);
+    expect(find.text('No Bubs yet'), findsOneWidget);
   });
 
   testWidgets('completed untethered user routes to Bub home', (tester) async {
@@ -64,7 +70,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Home section'), findsOneWidget);
+    expect(find.text('No Bubs yet'), findsOneWidget);
   });
 
   testWidgets('authenticated Bub home shows floating glass navigation', (
@@ -130,7 +136,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Home section'), findsOneWidget);
+    expect(find.text('No Bubs yet'), findsOneWidget);
 
     await tester.tap(find.text('Chat'));
     await tester.pumpAndSettle();
@@ -146,7 +152,93 @@ void main() {
 
     await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
-    expect(find.text('Home section'), findsOneWidget);
+    expect(find.text('No Bubs yet'), findsOneWidget);
+  });
+
+  testWidgets('home section renders dashboard cards and safe quick access', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _appWithAuth(
+        AuthState.authenticated(
+          user: _user(),
+          tetherStatus: const TetherStatusResponse(hasActiveTether: true),
+          tetherOnboardingComplete: true,
+        ),
+        homeDashboard: _dashboard(
+          tether: HomeTetherCardResponse(
+            hasActiveTether: true,
+            partnerUserId: 'partner-id',
+            partnerDisplayName: 'Bobby',
+            tetheredSince: DateTime(2026, 7, 1),
+          ),
+          todayMoment: const HomeTodayMomentResponse(
+            momentId: 'moment-id',
+            photoUrl: 'https://cdn.example.com/moment.jpg',
+            localDate: '2026-07-16',
+            viewerHasPostedToday: false,
+            partnerReaction: '❤️',
+          ),
+          latestBub: HomeLatestBubResponse(
+            hasActivity: true,
+            copy: 'Partner Bubbed you',
+            occurredAt: DateTime(2026, 7, 16, 10, 0),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bobby'), findsOneWidget);
+    expect(find.textContaining('Tethered since'), findsOneWidget);
+    expect(find.byKey(const Key('home-tether-string')), findsOneWidget);
+    expect(find.byKey(const Key('home-today-moment-photo')), findsOneWidget);
+    expect(find.text('❤️'), findsOneWidget);
+    expect(find.text('Partner Bubbed you'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Open Safe'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -180));
+    await tester.pumpAndSettle();
+    expect(find.text('Open Safe'), findsOneWidget);
+
+    await tester.tap(find.text('Open Safe'));
+    await tester.pumpAndSettle();
+    expect(find.text('Safe section'), findsOneWidget);
+  });
+
+  testWidgets('home section renders untethered partner CTA', (tester) async {
+    await tester.pumpWidget(
+      _appWithAuth(
+        AuthState.authenticated(
+          user: _user(),
+          tetherStatus: const TetherStatusResponse(hasActiveTether: false),
+          tetherOnboardingComplete: true,
+        ),
+        homeDashboard: _dashboard(
+          tether: const HomeTetherCardResponse(
+            hasActiveTether: false,
+            ctaLabel: 'Tether with someone',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final bear = tester.widget<Image>(
+      find.byKey(const Key('home-tether-bear')),
+    );
+    expect(
+      (bear.image as AssetImage).assetName,
+      'assets/illustrations/bears/bear1.png',
+    );
+    expect(find.text('Tether with someone'), findsWidgets);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Tether with someone'));
+    await tester.pumpAndSettle();
+    expect(find.text('Welcome to Bub'), findsOneWidget);
   });
 
   testWidgets('enter tether screen renders required controls and bear', (
@@ -314,15 +406,21 @@ void main() {
     await tester.tap(find.byKey(const Key('go-to-bub-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Home section'), findsOneWidget);
+    expect(find.text('No Bubs yet'), findsOneWidget);
   });
 }
 
-Widget _appWithAuth(AuthState state, {Widget? home, ThemeData? theme}) {
+Widget _appWithAuth(
+  AuthState state, {
+  Widget? home,
+  ThemeData? theme,
+  HomeDashboardResponse? homeDashboard,
+}) {
   return _appWithAuthController(
     _FakeAuthController(state),
     home: home,
     theme: theme,
+    homeDashboard: homeDashboard,
   );
 }
 
@@ -330,10 +428,14 @@ Widget _appWithAuthController(
   _FakeAuthController controller, {
   Widget? home,
   ThemeData? theme,
+  HomeDashboardResponse? homeDashboard,
 }) {
   return ProviderScope(
     overrides: [
       authControllerProvider.overrideWith(() => controller),
+      homeDashboardProvider.overrideWith(
+        () => _FakeHomeDashboardController(homeDashboard ?? _dashboard()),
+      ),
       tetherScannerPreviewProvider.overrideWithValue(
         (context, scanWindow, onPayloadDetected) =>
             const ColoredBox(color: Colors.black),
@@ -341,6 +443,42 @@ Widget _appWithAuthController(
     ],
     child: MaterialApp(theme: theme, home: home ?? const HomeScreen()),
   );
+}
+
+HomeDashboardResponse _dashboard({
+  HomeTetherCardResponse? tether,
+  HomeTodayMomentResponse? todayMoment,
+  HomeLatestBubResponse latestBub = const HomeLatestBubResponse(
+    hasActivity: false,
+    copy: 'No Bubs yet',
+  ),
+}) {
+  return HomeDashboardResponse(
+    tether:
+        tether ??
+        HomeTetherCardResponse(
+          hasActiveTether: true,
+          partnerUserId: 'partner-id',
+          partnerDisplayName: 'Partner',
+          tetheredSince: DateTime(2026, 7, 1),
+        ),
+    todayMoment: todayMoment,
+    latestBub: latestBub,
+    safe: const HomeSafeSummaryResponse(
+      enabled: true,
+      copy: 'Keep important details ready when you need them.',
+      ctaLabel: 'Open Safe',
+    ),
+  );
+}
+
+class _FakeHomeDashboardController extends HomeDashboardController {
+  _FakeHomeDashboardController(this.dashboard);
+
+  final HomeDashboardResponse dashboard;
+
+  @override
+  Future<HomeDashboardResponse> build() async => dashboard;
 }
 
 class _FakeAuthController extends AuthController {
