@@ -11,3 +11,8 @@ target/
 *.log
 *.tsbuildinfo
 .DS_Store
+
+# Local agent/tooling state
+.agents/
+.claude/
+skills-lock.json
