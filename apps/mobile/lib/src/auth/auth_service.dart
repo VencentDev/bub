@@ -17,7 +17,12 @@ class AuthService {
     serverClientId: Env.googleClientId,
   );
 
-  Future<bool> get isLoggedIn async => (await _store.refreshToken) != null;
+  Future<bool> get isLoggedIn async {
+    if (await _store.refreshToken == null) {
+      return false;
+    }
+    return await validAccessToken() != null;
+  }
 
   Future<void> login() async {
     await _initialize();
@@ -52,13 +57,21 @@ class AuthService {
     final refreshToken = await _store.refreshToken;
     if (refreshToken == null) return null;
     await _initialize();
-    final authorization = await _googleSignIn.authorizationClient
-        .authorizationForScopes(Env.googleScopes);
+    final lightweightAuthentication = _googleSignIn
+        .attemptLightweightAuthentication();
+    final account = lightweightAuthentication == null
+        ? null
+        : await lightweightAuthentication;
+    final authorizationClient =
+        account?.authorizationClient ?? _googleSignIn.authorizationClient;
+    final authorization = await authorizationClient.authorizationForScopes(
+      Env.googleScopes,
+    );
     if (authorization == null) return null;
     await _persist(
       authorization.accessToken,
-      refreshToken,
-      await _store.idToken,
+      account?.email ?? refreshToken,
+      account?.authentication.idToken ?? await _store.idToken,
       DateTime.now().add(const Duration(minutes: 50)),
     );
     return authorization.accessToken;

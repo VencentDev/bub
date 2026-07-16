@@ -2,7 +2,7 @@ import NextAuth from 'next-auth';
 import GitHub from 'next-auth/providers/github';
 import Google from 'next-auth/providers/google';
 
-export const protectedHomePath = '/todos';
+export const protectedHomePath = '/';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [

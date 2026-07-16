@@ -9,7 +9,7 @@ type OAuthButtonsProps = {
   callbackUrl?: string;
 };
 
-export function OAuthButtons({ callbackUrl = '/todos' }: OAuthButtonsProps) {
+export function OAuthButtons({ callbackUrl = '/' }: OAuthButtonsProps) {
   return (
     <div className="grid grid-cols-2 gap-3">
       <button

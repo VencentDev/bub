@@ -18,7 +18,7 @@ export function SignupPageContent() {
 
 function SignupContent() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') ?? '/todos';
+  const callbackUrl = searchParams.get('callbackUrl') ?? '/';
 
   return <SignupShell callbackUrl={callbackUrl} />;
 }

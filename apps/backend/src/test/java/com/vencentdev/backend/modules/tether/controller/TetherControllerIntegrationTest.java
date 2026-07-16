@@ -1,0 +1,172 @@
+package com.vencentdev.backend.modules.tether.controller;
+
+import static org.hamcrest.Matchers.matchesPattern;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.vencentdev.backend.IntegrationTestBase;
+import com.vencentdev.backend.modules.tether.entity.TetherConnection;
+import com.vencentdev.backend.modules.tether.entity.TetherInvitation;
+import com.vencentdev.backend.modules.tether.repository.TetherConnectionRepository;
+import com.vencentdev.backend.modules.tether.repository.TetherInvitationRepository;
+import com.vencentdev.backend.modules.user.entity.User;
+import com.vencentdev.backend.modules.user.enums.KycStatus;
+import com.vencentdev.backend.modules.user.enums.Role;
+import com.vencentdev.backend.modules.user.enums.UserType;
+import com.vencentdev.backend.modules.user.repository.UserRepository;
+import java.time.Instant;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+class TetherControllerIntegrationTest extends IntegrationTestBase {
+
+  @Autowired private MockMvc mockMvc;
+  @Autowired private TetherConnectionRepository connections;
+  @Autowired private TetherInvitationRepository invitations;
+  @Autowired private UserRepository users;
+
+  @BeforeEach
+  void setUp() {
+    connections.deleteAll();
+    invitations.deleteAll();
+    users.deleteAll();
+  }
+
+  @Test
+  void statusWithoutTetherReturnsUntetheredState() throws Exception {
+    users.save(user("alice", "alice@example.com"));
+
+    mockMvc
+        .perform(get("/api/v1/tether/me").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.hasActiveTether").value(false))
+        .andExpect(jsonPath("$.partnerUserId").doesNotExist());
+  }
+
+  @Test
+  void statusWithTetherReturnsPartner() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com"));
+    User bob = users.save(user("bob", "bob@example.com"));
+    connections.save(TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+
+    mockMvc
+        .perform(get("/api/v1/tether/me").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.hasActiveTether").value(true))
+        .andExpect(jsonPath("$.partnerUserId").value(bob.getId().toString()));
+  }
+
+  @Test
+  void generateInvitationReturnsCodeAndQrPayload() throws Exception {
+    users.save(user("alice", "alice@example.com"));
+
+    mockMvc
+        .perform(post("/api/v1/tether/invitations").with(currentUser("alice")))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.code").value(matchesPattern("BUB-[A-Z0-9]{4}-[A-Z0-9]{4}")))
+        .andExpect(
+            jsonPath("$.qrPayload")
+                .value(matchesPattern("bub://tether/accept\\?code=BUB-[A-Z0-9]{4}-[A-Z0-9]{4}")))
+        .andExpect(jsonPath("$.expiresAt").exists());
+  }
+
+  @Test
+  void acceptInvitationCreatesActiveTetherAndConsumesCode() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com"));
+    users.save(user("bob", "bob@example.com"));
+    invitations.save(invitation("BUB-7KQ2-XH19", alice, Instant.now().plusSeconds(3600)));
+
+    mockMvc
+        .perform(accept("bob", "BUB-7KQ2-XH19"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.hasActiveTether").value(true))
+        .andExpect(jsonPath("$.partnerUserId").value(alice.getId().toString()));
+  }
+
+  @Test
+  void acceptInvitationRejectsSelfTethering() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com"));
+    invitations.save(invitation("BUB-7KQ2-XH19", alice, Instant.now().plusSeconds(3600)));
+
+    mockMvc.perform(accept("alice", "BUB-7KQ2-XH19")).andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void acceptInvitationRejectsAlreadyTetheredUsers() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com"));
+    User bob = users.save(user("bob", "bob@example.com"));
+    User charlie = users.save(user("charlie", "charlie@example.com"));
+    connections.save(TetherConnection.builder().userOne(bob).userTwo(charlie).active(true).build());
+    invitations.save(invitation("BUB-7KQ2-XH19", alice, Instant.now().plusSeconds(3600)));
+
+    mockMvc.perform(accept("bob", "BUB-7KQ2-XH19")).andExpect(status().isConflict());
+  }
+
+  @Test
+  void acceptInvitationRejectsExpiredCode() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com"));
+    users.save(user("bob", "bob@example.com"));
+    invitations.save(invitation("BUB-7KQ2-XH19", alice, Instant.now().minusSeconds(60)));
+
+    mockMvc.perform(accept("bob", "BUB-7KQ2-XH19")).andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void acceptInvitationRejectsConsumedCode() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com"));
+    User bob = users.save(user("bob", "bob@example.com"));
+    users.save(user("charlie", "charlie@example.com"));
+    invitations.save(
+        TetherInvitation.builder()
+            .code("BUB-7KQ2-XH19")
+            .creator(alice)
+            .expiresAt(Instant.now().plusSeconds(3600))
+            .consumedAt(Instant.now())
+            .acceptedUser(bob)
+            .build());
+
+    mockMvc.perform(accept("charlie", "BUB-7KQ2-XH19")).andExpect(status().isBadRequest());
+  }
+
+  private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder accept(
+      String subject, String code) {
+    return post("/api/v1/tether/accept")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("{\"code\":\"" + code + "\"}")
+        .with(currentUser(subject));
+  }
+
+  private org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors
+          .JwtRequestPostProcessor
+      currentUser(String subject) {
+    return jwt()
+        .jwt(
+            token ->
+                token
+                    .subject(subject)
+                    .claim("email", subject + "@example.com")
+                    .claim("name", subject))
+        .authorities(() -> "ROLE_USER");
+  }
+
+  private TetherInvitation invitation(String code, User creator, Instant expiresAt) {
+    return TetherInvitation.builder().code(code).creator(creator).expiresAt(expiresAt).build();
+  }
+
+  private User user(String externalId, String email) {
+    return User.builder()
+        .externalId(externalId)
+        .email(email)
+        .displayName("User")
+        .role(Role.USER)
+        .userType(UserType.INDIVIDUAL)
+        .kycStatus(KycStatus.NONE)
+        .build();
+  }
+}

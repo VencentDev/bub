@@ -30,10 +30,10 @@ For any `apps/frontend/src/app/**/page.tsx`:
 Example:
 
 ```tsx
-import { TodosPageContent } from '@/features/todos/list/components/todos-page-content';
+import { HomePageContent } from '@/features/home/landing/components/home-page-content';
 
 export default function Page() {
-  return <TodosPageContent />;
+  return <HomePageContent />;
 }
 ```
 
@@ -53,9 +53,6 @@ Current examples:
 - `features/home/landing/components/*`
 - `features/auth/login/components/*`
 - `features/auth/session/api/*`
-- `features/todos/list/components/*`
-- `features/todos/list/api/*`
-- `features/todos/list/hooks/*`
 
 Avoid broad top-level folders like `features/<feature>/components/*` unless the feature is tiny and has no meaningful subfeature split yet.
 
@@ -82,9 +79,7 @@ For `**-page-content.tsx` files:
 
 Good names:
 
-- `todos-page-content.tsx`
-- `todo-filters.tsx`
-- `todo-form-sheet.tsx`
+- `home-page-content.tsx`
 - `login-page-content.tsx`
 
 ## Component Decomposition
@@ -112,11 +107,10 @@ The frontend talks to the Spring Boot backend through typed client helpers and f
 - Keep TanStack Query hooks in `features/**/api/*.hooks.ts`.
 - Keep raw API helpers near the feature API layer when they are feature-specific.
 - Components should consume feature hooks rather than assemble remote calls inline.
-- Do not create Next.js route handlers for Spring Boot domain resources such as todos, users, bookings, or reports.
+- Do not create Next.js route handlers for Spring Boot domain resources such as tethers, messages, users, or moments.
 
 Examples:
 
-- `features/todos/list/api/todos.hooks.ts`
 - `features/auth/session/api/me.hooks.ts`
 
 ## Form And Lib Separation
@@ -138,9 +132,7 @@ Use descriptive, feature-local file names.
 
 Prefer:
 
-- `todos-page-content.tsx`
-- `todo-form-sheet.tsx`
-- `todo-filters.tsx`
+- `home-page-content.tsx`
 - `me.hooks.ts`
 
 Avoid vague names:

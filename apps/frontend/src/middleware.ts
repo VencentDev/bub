@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth';
 export default auth((req) => {
   const pathname = req.nextUrl.pathname;
 
-  if (pathname.startsWith('/todos') && !req.auth) {
+  if (pathname.startsWith('/app') && !req.auth) {
     const url = new URL('/login', req.url);
     url.searchParams.set('callbackUrl', req.url);
     return Response.redirect(url);
@@ -11,5 +11,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ['/todos/:path*'],
+  matcher: ['/app/:path*'],
 };

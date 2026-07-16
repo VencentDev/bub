@@ -1,6 +1,6 @@
-# app_mobile
+# Bub Mobile
 
-Flutter (Dart) mobile client for the monorepo backend. See
+Flutter (Dart) mobile client for Bub's backend. See
 [`docs/adr/0007-flutter-for-mobile.md`](../../docs/adr/0007-flutter-for-mobile.md)
 for the architecture decisions.
 
@@ -31,7 +31,7 @@ bearer token (ADR-006). Configure Google Cloud before filling in `.env`:
   for `GOOGLE_CLIENT_ID` because the Android Google Sign-In SDK uses it as
   `serverClientId`.
 - Create an **Android** OAuth client in the same Google Cloud project. Android
-  debug builds use package name `com.app.app_mobile`.
+  debug builds use package name `com.vencentdev.bub`.
 - Get your debug keystore SHA-1 with:
 
   ```bash
@@ -51,7 +51,9 @@ flutter run
 ```
 
 `make -C ../.. mobile-run` runs the same command. The app loads `.env` at
-startup, so IDE launch configurations do not need extra Flutter arguments.
+startup as a Flutter asset, so IDE launch configurations do not need extra
+Flutter arguments. After changing `.env`, stop and rebuild the app so the asset
+bundle is refreshed.
 
 - `10.0.2.2` is the Android emulator's alias for the host's `localhost`.
 - AppAuth custom redirect schemes are not used for Android sign-in.

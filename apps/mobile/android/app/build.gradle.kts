@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.app.app_mobile"
+    namespace = "com.vencentdev.bub"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,8 +20,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.app.app_mobile"
+        applicationId = "com.vencentdev.bub"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // google_sign_in supports Android SDK 21+.

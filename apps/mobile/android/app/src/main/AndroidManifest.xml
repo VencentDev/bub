@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.CAMERA"/>
+
     <application
-        android:label="app_mobile"
+        android:label="Bub"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
