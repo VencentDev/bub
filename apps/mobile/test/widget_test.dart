@@ -103,6 +103,27 @@ void main() {
     expect(source, contains('ref.invalidate(dioProvider)'));
   });
 
+  test('auth controller clears home data after tether status changes', () {
+    final source = File('lib/src/auth/auth_controller.dart').readAsStringSync();
+
+    expect(source, contains('_invalidateAuthenticatedData()'));
+    expect(source, contains('Future<void> applyAcceptedTether'));
+    expect(
+      source,
+      contains('completeTetherOnboarding(tetherStatus: tetherStatus)'),
+    );
+  });
+
+  test('all set action awaits tether refresh before returning home', () {
+    final source = File(
+      'lib/src/features/tether_onboarding/tether_onboarding_screens.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('onPressed: () async'));
+    expect(source, contains('await ref'));
+    expect(source, contains('.refreshTetherStatus(markComplete: true)'));
+  });
+
   test('API client uses finite network timeouts', () {
     final container = ProviderContainer(
       overrides: [

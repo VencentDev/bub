@@ -276,10 +276,13 @@ class AllSetScreen extends ConsumerWidget {
       bottom: _GradientButton(
         key: const Key('go-to-bub-button'),
         label: 'Go to Bub',
-        onPressed: () {
-          ref
+        onPressed: () async {
+          await ref
               .read(authControllerProvider.notifier)
               .refreshTetherStatus(markComplete: true);
+          if (!context.mounted) {
+            return;
+          }
           Navigator.of(context).popUntil((route) => route.isFirst);
         },
       ),

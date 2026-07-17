@@ -39,10 +39,7 @@ class AuthController extends AsyncNotifier<AuthState> {
 
   Future<void> logout() async {
     await ref.read(authServiceProvider).logout();
-    ref.invalidate(homeDashboardProvider);
-    ref.invalidate(chatThreadProvider);
-    ref.invalidate(restClientProvider);
-    ref.invalidate(dioProvider);
+    _invalidateAuthenticatedData();
     state = const AsyncData(AuthState.loggedOut());
   }
 
@@ -60,6 +57,7 @@ class AuthController extends AsyncNotifier<AuthState> {
       return;
     }
     await ref.read(tetherSkipStoreProvider).setComplete(user.id ?? '');
+    _invalidateAuthenticatedData();
     state = AsyncData(
       AuthState.authenticated(
         user: user,
@@ -90,6 +88,7 @@ class AuthController extends AsyncNotifier<AuthState> {
       final onboardingComplete =
           shouldComplete ||
           await ref.read(tetherSkipStoreProvider).isComplete(user.id ?? '');
+      _invalidateAuthenticatedData();
       return AuthState.authenticated(
         user: user,
         tetherStatus: tetherStatus,
@@ -100,6 +99,13 @@ class AuthController extends AsyncNotifier<AuthState> {
 
   Future<void> applyAcceptedTether(TetherStatusResponse tetherStatus) =>
       completeTetherOnboarding(tetherStatus: tetherStatus);
+
+  void _invalidateAuthenticatedData() {
+    ref.invalidate(homeDashboardProvider);
+    ref.invalidate(chatThreadProvider);
+    ref.invalidate(restClientProvider);
+    ref.invalidate(dioProvider);
+  }
 }
 
 final authControllerProvider = AsyncNotifierProvider<AuthController, AuthState>(
