@@ -4,14 +4,13 @@ Home is the couple dashboard and should immediately reflect tether state, partne
 
 ## US-009 View Partner Card
 
-As a user, I want to view my partner card so that I can see key relationship and presence details.
+As a user, I want to view our tether card so that I can see how long we've been tethered together. If you dont have any tethered account yet then it should just display tether with someone then maybe add bear1.png on the left side of the card with a redirect button to our tether page. The one in onboarding.
 
 ### Acceptance Criteria
 
-- Shows partner profile picture.
-- Shows partner name.
-- Shows together since date.
-- Shows online status.
+- Shows partner profile picture and your profile picture connected by a red string
+- Shows tethered since date.
+- Shows the redirect button.
 
 ## US-010 Today's Moment
 
@@ -30,12 +29,3 @@ As a user, I want to view the latest Bub activity so that I know when my partner
 
 - Shows copy similar to: `Partner Bubbed you`.
 - Shows relative time, for example: `5 mins ago`.
-
-## US-012 Open Safe
-
-As a user, I want quick access to the Safe so that I can reach private memories from Home.
-
-### Acceptance Criteria
-
-- Shows memory count, for example: `128 memories`.
-- Never previews Safe images on Home.

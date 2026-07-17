@@ -351,10 +351,10 @@ class _BubHomeSectionBody extends ConsumerWidget {
         ),
       ),
       data: (data) => ListView(
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 140),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
         children: [
           HomePartnerCard(tether: data.tether),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           HomeTodayMomentCard(
             moment: data.todayMoment,
             onReact: data.todayMoment == null
@@ -363,9 +363,9 @@ class _BubHomeSectionBody extends ConsumerWidget {
                       .read(homeDashboardProvider.notifier)
                       .reactToTodayMoment(data.todayMoment!.momentId),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           HomeLatestBubCard(latestBub: data.latestBub),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           HomeSafeQuickAccessCard(safe: data.safe, onOpenSafe: onOpenSafe),
         ],
       ),
@@ -554,8 +554,8 @@ class _BubNavHeartItem extends StatelessWidget {
             child: Image.asset(
               'assets/onboarding/heart.png',
               key: const Key('bub-nav-heart'),
-              width: 42,
-              height: 42,
+              width: 52,
+              height: 52,
               fit: BoxFit.contain,
             ),
           ),

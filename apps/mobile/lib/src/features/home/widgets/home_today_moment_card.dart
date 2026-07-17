@@ -17,52 +17,72 @@ class HomeTodayMomentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final current = moment;
     return _HomeCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      key: const Key('home-today-moment-card'),
+      minHeight: 208,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Text(
-            "Today's Moment",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 12),
-          if (current == null)
-            const Text('Add today\'s photo when you are ready.')
-          else ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Image.network(
-                current.photoUrl,
-                key: const Key('home-today-moment-photo'),
-                height: 150,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  height: 150,
-                  width: double.infinity,
-                  alignment: Alignment.center,
-                  color: BubColors.partnerBubbleLight,
-                  child: const Icon(Icons.photo_rounded),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: Text(current.localDate)),
-                if (current.partnerReaction != null)
-                  Text(
-                    current.partnerReaction!,
-                    style: const TextStyle(fontSize: 22),
+                const Text(
+                  "Today's Moment",
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 10),
+                if (current == null)
+                  const Text(
+                    "Once you're tethered, your daily photo moments will sparkle here.",
                   )
-                else
-                  IconButton(
-                    onPressed: onReact,
-                    icon: const Icon(Icons.favorite_rounded),
-                    color: BubColors.heart,
+                else ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Image.network(
+                      current.photoUrl,
+                      key: const Key('home-today-moment-photo'),
+                      height: 124,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        height: 124,
+                        width: double.infinity,
+                        alignment: Alignment.center,
+                        color: BubColors.partnerBubbleLight,
+                        child: const Icon(Icons.photo_rounded),
+                      ),
+                    ),
                   ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(child: Text(current.localDate)),
+                      if (current.partnerReaction != null)
+                        Text(
+                          current.partnerReaction!,
+                          style: const TextStyle(fontSize: 22),
+                        )
+                      else
+                        IconButton(
+                          onPressed: onReact,
+                          icon: const Icon(Icons.favorite_rounded),
+                          color: BubColors.heart,
+                        ),
+                    ],
+                  ),
+                ],
               ],
             ),
-          ],
+          ),
+          const SizedBox(width: 14),
+          Image.asset(
+            'assets/illustrations/bears/bear3.png',
+            key: const Key('home-today-moment-bear'),
+            width: 104,
+            height: 136,
+            fit: BoxFit.contain,
+          ),
         ],
       ),
     );
@@ -70,9 +90,10 @@ class HomeTodayMomentCard extends StatelessWidget {
 }
 
 class _HomeCard extends StatelessWidget {
-  const _HomeCard({required this.child});
+  const _HomeCard({super.key, required this.child, required this.minHeight});
 
   final Widget child;
+  final double minHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +103,10 @@ class _HomeCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: BubColors.divider),
       ),
-      child: Padding(padding: const EdgeInsets.all(18), child: child),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: minHeight),
+        child: Padding(padding: const EdgeInsets.all(16), child: child),
+      ),
     );
   }
 }

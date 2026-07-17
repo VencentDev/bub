@@ -117,8 +117,8 @@ void main() {
       (centerHeart.image as AssetImage).assetName,
       'assets/onboarding/heart.png',
     );
-    expect(centerHeart.width, greaterThanOrEqualTo(40));
-    expect(centerHeart.height, greaterThanOrEqualTo(40));
+    expect(centerHeart.width, greaterThanOrEqualTo(50));
+    expect(centerHeart.height, greaterThanOrEqualTo(50));
     expect(find.byKey(const Key('bub-nav-safe-lock')), findsOneWidget);
   });
 
@@ -137,6 +137,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No Bubs yet'), findsOneWidget);
+    expect(
+      find.text(
+        "Once you're tethered, tiny Bubs from your person will land here.",
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Ready for the first Bub'), findsOneWidget);
+    expect(
+      find.text(
+        "Once you're tethered, your daily photo moments will sparkle here.",
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Chat'));
     await tester.pumpAndSettle();
@@ -192,9 +205,34 @@ void main() {
     expect(find.text('Bobby'), findsOneWidget);
     expect(find.textContaining('Tethered since'), findsOneWidget);
     expect(find.byKey(const Key('home-tether-string')), findsOneWidget);
+    final momentBear = tester.widget<Image>(
+      find.byKey(const Key('home-today-moment-bear')),
+    );
+    expect(
+      (momentBear.image as AssetImage).assetName,
+      'assets/illustrations/bears/bear3.png',
+    );
+    expect(
+      tester.getCenter(find.byKey(const Key('home-today-moment-bear'))).dx,
+      greaterThan(
+        tester.getCenter(find.byKey(const Key('home-today-moment-photo'))).dx,
+      ),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('home-today-moment-card'))).height,
+      greaterThanOrEqualTo(200),
+    );
     expect(find.byKey(const Key('home-today-moment-photo')), findsOneWidget);
     expect(find.text('❤️'), findsOneWidget);
     expect(find.text('Partner Bubbed you'), findsOneWidget);
+    final bubArt = tester.widget<Image>(
+      find.byKey(const Key('home-latest-bub-art')),
+    );
+    expect((bubArt.image as AssetImage).assetName, 'assets/onboarding/bub.png');
+    expect(
+      tester.getSize(find.byKey(const Key('home-latest-bub-card'))).height,
+      greaterThanOrEqualTo(160),
+    );
     await tester.scrollUntilVisible(
       find.text('Open Safe'),
       120,
@@ -234,9 +272,24 @@ void main() {
       (bear.image as AssetImage).assetName,
       'assets/illustrations/bears/bear1.png',
     );
-    expect(find.text('Tether with someone'), findsWidgets);
+    expect(find.text('Find your Bub'), findsOneWidget);
+    expect(
+      find.text(
+        "Once you're tethered, you'll see how long you've been paired here.",
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('home-tether-cta-heart')), findsOneWidget);
+    expect(
+      find.widgetWithText(FilledButton, 'Start tethering'),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('home-tether-cta-button'))).width,
+      greaterThan(180),
+    );
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Tether with someone'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Start tethering'));
     await tester.pumpAndSettle();
     expect(find.text('Welcome to Bub'), findsOneWidget);
   });

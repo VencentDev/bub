@@ -108,21 +108,44 @@ class _UntetheredPartnerCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Tether with someone',
+                'Find your Bub',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
               ),
-              const SizedBox(height: 10),
-              FilledButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const EnterTetherScreen(),
-                    ),
-                  );
-                },
-                child: const Text('Tether with someone'),
+              const SizedBox(height: 6),
+              Text(
+                "Once you're tethered, you'll see how long you've been paired here.",
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                key: const Key('home-tether-cta-button'),
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const EnterTetherScreen(),
+                      ),
+                    );
+                  },
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.favorite_rounded,
+                        key: Key('home-tether-cta-heart'),
+                        size: 18,
+                      ),
+                      SizedBox(width: 8),
+                      Text('Start tethering'),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),

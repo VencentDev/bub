@@ -87,6 +87,21 @@ void main() {
     expect(source, contains('validAccessToken() != null'));
   });
 
+  test('API client uses finite network timeouts', () {
+    final container = ProviderContainer(
+      overrides: [
+        authServiceProvider.overrideWithValue(_LoggedOutAuthService()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final dio = container.read(dioProvider);
+
+    expect(dio.options.connectTimeout, const Duration(seconds: 8));
+    expect(dio.options.receiveTimeout, const Duration(seconds: 12));
+    expect(dio.options.sendTimeout, const Duration(seconds: 8));
+  });
+
   test('native splash uses purple background behind the white logo', () {
     final source = File('pubspec.yaml').readAsStringSync();
 

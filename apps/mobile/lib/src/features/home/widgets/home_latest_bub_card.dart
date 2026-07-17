@@ -11,25 +11,98 @@ class HomeLatestBubCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _HomeCard(
+      key: const Key('home-latest-bub-card'),
+      minHeight: 166,
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Icon(Icons.bolt_rounded, color: BubColors.purple),
-          const SizedBox(width: 12),
+          Image.asset(
+            'assets/onboarding/bub.png',
+            key: const Key('home-latest-bub-art'),
+            width: 120,
+            height: 128,
+            fit: BoxFit.contain,
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.bolt_rounded, color: BubColors.purple, size: 18),
+                    SizedBox(width: 6),
+                    Text(
+                      'Latest Bub',
+                      style: TextStyle(
+                        color: BubColors.purple,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 Text(
                   latestBub.copy,
-                  maxLines: 2,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 17,
+                    fontSize: 19,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                if (latestBub.occurredAt != null)
-                  Text(_relativeTime(latestBub.occurredAt!)),
+                if (!latestBub.hasActivity) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    "Once you're tethered, tiny Bubs from your person will land here.",
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: BubColors.partnerBubbleLight,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.favorite_rounded,
+                            color: BubColors.heart,
+                            size: 16,
+                          ),
+                          SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Ready for the first Bub',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: BubColors.deepPurple,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ] else if (latestBub.occurredAt != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(_relativeTime(latestBub.occurredAt!)),
+                  ),
               ],
             ),
           ),
@@ -52,9 +125,10 @@ class HomeLatestBubCard extends StatelessWidget {
 }
 
 class _HomeCard extends StatelessWidget {
-  const _HomeCard({required this.child});
+  const _HomeCard({super.key, required this.child, required this.minHeight});
 
   final Widget child;
+  final double minHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +138,10 @@ class _HomeCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: BubColors.divider),
       ),
-      child: Padding(padding: const EdgeInsets.all(18), child: child),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: minHeight),
+        child: Padding(padding: const EdgeInsets.all(16), child: child),
+      ),
     );
   }
 }
