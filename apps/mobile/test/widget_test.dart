@@ -124,6 +124,24 @@ void main() {
     expect(source, contains('.refreshTetherStatus(markComplete: true)'));
   });
 
+  test(
+    'home controller captures and sends today moment through backend upload',
+    () {
+      final source = File(
+        'lib/src/features/home/home_dashboard_controller.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('pickImage'));
+      expect(source, contains('ImageSource.camera'));
+      expect(source, isNot(contains('cropImage')));
+      expect(source, contains('/api/v1/home/today-moment/photo'));
+      expect(source, contains('FormData.fromMap'));
+      expect(source, isNot(contains('SUPABASE_SECRET_KEY')));
+      expect(source, isNot(contains('/storage/v1/object/')));
+      expect(source, isNot(contains('putTodayMoment(publicUrl')));
+    },
+  );
+
   test('API client uses finite network timeouts', () {
     final container = ProviderContainer(
       overrides: [

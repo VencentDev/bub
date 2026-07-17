@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -418,34 +419,66 @@ class _BubHomeSectionBody extends ConsumerWidget {
           );
         }
         final isTethered = paired && tether.hasActiveTether == true;
-        return ListView(
-          cacheExtent: 1200,
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
-          children: [
-            HomePartnerCard(tether: tether),
-            const SizedBox(height: 16),
-            HomeTodayMomentCard(
-              moment: data.todayMoment,
-              isTethered: isTethered,
-              onReact: data.todayMoment == null
-                  ? () {}
-                  : () => ref
+        return RefreshIndicator(
+          onRefresh: () => ref.read(homeDashboardProvider.notifier).refresh(),
+          child: ListView(
+            key: const Key('home-dashboard-refresh-list'),
+            physics: const AlwaysScrollableScrollPhysics(),
+            cacheExtent: 1200,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
+            children: [
+              HomePartnerCard(tether: tether),
+              const SizedBox(height: 16),
+              HomeTodayMomentCard(
+                moment: data.todayMoment,
+                isTethered: isTethered,
+                onCaptureMoment: () async {
+                  try {
+                    await ref
                         .read(homeDashboardProvider.notifier)
-                        .reactToTodayMoment(data.todayMoment!.momentId ?? ''),
-            ),
-            const SizedBox(height: 16),
-            HomeLatestBubCard(latestBub: latestBub),
-            const SizedBox(height: 16),
-            HomeMoodCard(
-              mood: mood,
-              onSaveMood: (mood) =>
-                  ref.read(homeDashboardProvider.notifier).putMood(mood),
-            ),
-          ],
+                        .captureTodayMoment();
+                  } catch (error) {
+                    if (!context.mounted) {
+                      return;
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(_momentUploadMessage(error))),
+                    );
+                  }
+                },
+                onReact: data.todayMoment == null
+                    ? () {}
+                    : () => ref
+                          .read(homeDashboardProvider.notifier)
+                          .reactToTodayMoment(data.todayMoment!.momentId ?? ''),
+              ),
+              const SizedBox(height: 16),
+              HomeLatestBubCard(latestBub: latestBub),
+              const SizedBox(height: 16),
+              HomeMoodCard(
+                mood: mood,
+                onSaveMood: (mood) =>
+                    ref.read(homeDashboardProvider.notifier).putMood(mood),
+              ),
+            ],
+          ),
         );
       },
     );
   }
+}
+
+String _momentUploadMessage(Object error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map<String, dynamic>) {
+      final message = data['message'];
+      if (message is String && message.trim().isNotEmpty) {
+        return message;
+      }
+    }
+  }
+  return "Moment couldn't upload. Please try again.";
 }
 
 class _BubFloatingNav extends StatelessWidget {

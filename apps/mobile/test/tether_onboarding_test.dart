@@ -268,6 +268,7 @@ void main() {
           todayMoment: HomeTodayMomentResponse(
             momentId: 'moment-id',
             photoUrl: 'https://cdn.example.com/moment.jpg',
+            partnerCapturedAt: DateTime(2026, 7, 16, 10, 42),
             localDate: DateTime(2026, 7, 16),
             viewerHasPostedToday: false,
             partnerReaction: '❤️',
@@ -286,9 +287,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Bobby'), findsOneWidget);
+    expect(find.text('Bobby'), findsNothing);
     expect(find.textContaining('Tethered since'), findsOneWidget);
     expect(find.byKey(const Key('home-tether-string')), findsOneWidget);
+    expect(find.byKey(const Key('home-tether-since-date')), findsOneWidget);
+    expect(find.byKey(const Key('home-tether-duration')), findsOneWidget);
+    expect(find.byType(RefreshIndicator), findsOneWidget);
+    final refreshList = tester.widget<ListView>(
+      find.byKey(const Key('home-dashboard-refresh-list')),
+    );
+    expect(refreshList.physics, isA<AlwaysScrollableScrollPhysics>());
     expect(
       tester
           .getSize(find.byKey(const Key('home-today-moment-photo')))
@@ -304,7 +312,31 @@ void main() {
       lessThan(260),
     );
     expect(find.byKey(const Key('home-today-moment-photo')), findsOneWidget);
-    expect(find.text('❤️'), findsOneWidget);
+    expect(
+      find.byKey(const Key('home-today-moment-partner-timestamp')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getCenter(
+            find.byKey(const Key('home-today-moment-partner-timestamp')),
+          )
+          .dx,
+      lessThan(
+        tester.getCenter(find.byKey(const Key('home-today-moment-photo'))).dx,
+      ),
+    );
+    expect(find.text('07/16'), findsOneWidget);
+    expect(find.text('10:42 AM'), findsOneWidget);
+    expect(
+      find.byKey(const Key('home-today-moment-reaction-badge')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('home-today-moment-reacted-heart')),
+      findsOneWidget,
+    );
+    expect(find.text('❤️'), findsNothing);
     expect(find.text('Partner Bubbed you'), findsOneWidget);
     final bubArt = tester.widget<Image>(
       find.byKey(const Key('home-latest-bub-art')),
@@ -330,6 +362,13 @@ void main() {
     expect(find.text('How are you feeling?'), findsOneWidget);
     expect(find.byKey(const Key('home-mood-card')), findsOneWidget);
 
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('home-mood-value')),
+      80,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(ListView), const Offset(0, -80));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('home-mood-value')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('home-mood-dialog-glass')), findsOneWidget);
@@ -370,6 +409,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('home-today-moment-mood-pill')), findsNothing);
+    expect(
+      find.byKey(const Key('home-today-moment-empty-heart')),
+      findsOneWidget,
+    );
     await tester.scrollUntilVisible(
       find.byKey(const Key('home-mood-card')),
       120,
@@ -394,7 +437,7 @@ void main() {
         homeDashboard: _dashboard(
           todayMoment: HomeTodayMomentResponse(
             momentId: 'moment-id',
-            photoUrl: 'https://cdn.example.com/moment.jpg',
+            viewerPhotoUrl: 'https://cdn.example.com/moment.jpg',
             localDate: DateTime(2026, 7, 16),
             viewerHasPostedToday: true,
           ),
@@ -407,6 +450,11 @@ void main() {
       find.byKey(const Key('home-today-moment-self-polaroid')),
       findsOneWidget,
     );
+    expect(find.byKey(const Key('home-today-moment-photo')), findsNothing);
+    expect(
+      find.text("Your partner hasn't shared their moment today."),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const Key('home-today-moment-camera-tile')),
       findsNothing,
@@ -417,6 +465,10 @@ void main() {
 
     expect(
       find.byKey(const Key('home-today-moment-self-preview')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('home-today-moment-retake-button')),
       findsOneWidget,
     );
   });
@@ -463,7 +515,11 @@ void main() {
           home: Scaffold(
             body: Theme(
               data: theme,
-              child: HomeTodayMomentCard(moment: null, onReact: () {}),
+              child: HomeTodayMomentCard(
+                moment: null,
+                onReact: () {},
+                onCaptureMoment: () {},
+              ),
             ),
           ),
         ),

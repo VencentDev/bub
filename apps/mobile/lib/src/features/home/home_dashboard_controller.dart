@@ -1,10 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../api/generated/models/home_dashboard_response.dart';
 import '../../api/generated/models/home_moment_reaction_request.dart';
 import '../../api/generated/models/home_mood_request.dart';
 import '../../api/generated/models/home_today_moment_request.dart';
 import '../../core/dio_provider.dart';
+
+final momentImagePickerProvider = Provider<ImagePicker>((ref) => ImagePicker());
 
 class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
   @override
@@ -31,6 +35,55 @@ class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
           );
       return ref.read(restClientProvider).homeController.getHomeDashboard();
     });
+  }
+
+  Future<void> captureTodayMoment() async {
+    final image = await ref
+        .read(momentImagePickerProvider)
+        .pickImage(
+          source: ImageSource.camera,
+          imageQuality: 86,
+          maxWidth: 1600,
+          preferredCameraDevice: CameraDevice.rear,
+        );
+    if (image == null) {
+      return;
+    }
+
+    final previous = state.asData?.value;
+    state = const AsyncLoading<HomeDashboardResponse>();
+    try {
+      await _uploadMomentPhoto(image.path);
+      state = AsyncData(
+        await ref.read(restClientProvider).homeController.getHomeDashboard(),
+      );
+    } catch (error, stackTrace) {
+      if (previous != null) {
+        state = AsyncData(previous);
+      } else {
+        state = AsyncError(error, stackTrace);
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  Future<void> _uploadMomentPhoto(String imagePath) async {
+    final formData = FormData.fromMap({
+      'file': await MultipartFile.fromFile(
+        imagePath,
+        filename: _fileName(imagePath),
+      ),
+    });
+    final response = await ref
+        .read(dioProvider)
+        .post<Map<String, dynamic>>(
+          '/api/v1/home/today-moment/photo',
+          data: formData,
+        );
+    final photoUrl = response.data?['photoUrl'] as String?;
+    if (photoUrl == null || photoUrl.trim().isEmpty) {
+      throw StateError('Moment upload did not return a photo URL');
+    }
   }
 
   Future<void> reactToTodayMoment(String momentId) async {
@@ -65,6 +118,11 @@ class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
     final month = date.month.toString().padLeft(2, '0');
     final day = date.day.toString().padLeft(2, '0');
     return '${date.year}-$month-$day';
+  }
+
+  String _fileName(String path) {
+    final name = path.split('/').last.trim();
+    return name.isEmpty ? 'moment.jpg' : name;
   }
 }
 
