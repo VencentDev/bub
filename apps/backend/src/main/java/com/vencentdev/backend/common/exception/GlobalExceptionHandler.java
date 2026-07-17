@@ -65,6 +65,13 @@ public class GlobalExceptionHandler {
     return error(HttpStatus.CONFLICT, "CONFLICT", exception.getMessage(), List.of());
   }
 
+  @ExceptionHandler(StorageException.class)
+  ResponseEntity<ApiError> handleStorage(StorageException exception) {
+    log.warn("Storage API exception: {}", exception.getMessage());
+    return error(
+        HttpStatus.SERVICE_UNAVAILABLE, "STORAGE_UNAVAILABLE", exception.getMessage(), List.of());
+  }
+
   @ExceptionHandler(AccessDeniedException.class)
   ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException exception) {
     return error(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access denied", List.of());

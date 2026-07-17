@@ -5,6 +5,8 @@ import com.vencentdev.backend.modules.auth.CurrentUser;
 import com.vencentdev.backend.modules.user.dto.UserResponse;
 import com.vencentdev.backend.modules.user.dto.UserUpdateRequest;
 import com.vencentdev.backend.modules.user.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -23,13 +25,16 @@ public class UserController {
   }
 
   @GetMapping("/me")
-  public UserResponse me(@CurrentUser AuthenticatedUser user) {
+  @Operation(operationId = "getCurrentUser")
+  public UserResponse me(@Parameter(hidden = true) @CurrentUser AuthenticatedUser user) {
     return users.getMe(user);
   }
 
   @PatchMapping("/me")
+  @Operation(operationId = "updateCurrentUser")
   public UserResponse updateMe(
-      @CurrentUser AuthenticatedUser user, @Valid @RequestBody UserUpdateRequest request) {
+      @Parameter(hidden = true) @CurrentUser AuthenticatedUser user,
+      @Valid @RequestBody UserUpdateRequest request) {
     return users.updateMe(user, request);
   }
 }

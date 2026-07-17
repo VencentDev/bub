@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../api/generated/models/home_latest_bub_response.dart';
 import '../../../theme/bub_colors.dart';
+import 'home_card_shell.dart';
 
 class HomeLatestBubCard extends StatelessWidget {
   const HomeLatestBubCard({super.key, required this.latestBub});
@@ -10,17 +11,19 @@ class HomeLatestBubCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _HomeCard(
+    final hasActivity = latestBub.hasActivity == true;
+    return HomeCardShell(
       key: const Key('home-latest-bub-card'),
-      minHeight: 166,
+      treatment: HomeCardTreatment.latestBub,
+      minHeight: hasActivity ? 166 : 132,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Image.asset(
             'assets/onboarding/bub.png',
             key: const Key('home-latest-bub-art'),
-            width: 120,
-            height: 128,
+            width: hasActivity ? 120 : 98,
+            height: hasActivity ? 128 : 104,
             fit: BoxFit.contain,
           ),
           const SizedBox(width: 14),
@@ -29,24 +32,32 @@ class HomeLatestBubCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.bolt_rounded, color: BubColors.purple, size: 18),
-                    SizedBox(width: 6),
-                    Text(
-                      'Latest Bub',
-                      style: TextStyle(
+                if (hasActivity) ...[
+                  const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.bolt_rounded,
                         color: BubColors.purple,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
+                        size: 18,
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
+                      SizedBox(width: 6),
+                      Text(
+                        'Latest Bub',
+                        style: TextStyle(
+                          color: BubColors.purple,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 Text(
-                  latestBub.copy,
+                  hasActivity
+                      ? latestBub.copy ?? 'Latest Bub'
+                      : 'Tether to send bub',
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -54,15 +65,8 @@ class HomeLatestBubCard extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                if (!latestBub.hasActivity) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    "Once you're tethered, tiny Bubs from your person will land here.",
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+                if (!hasActivity) ...[
+                  const SizedBox(height: 10),
                   DecoratedBox(
                     decoration: BoxDecoration(
                       color: BubColors.partnerBubbleLight,
@@ -121,27 +125,5 @@ class HomeLatestBubCard extends StatelessWidget {
     }
     final hours = minutes ~/ 60;
     return '$hours hours ago';
-  }
-}
-
-class _HomeCard extends StatelessWidget {
-  const _HomeCard({super.key, required this.child, required this.minHeight});
-
-  final Widget child;
-  final double minHeight;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: BubColors.divider),
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: minHeight),
-        child: Padding(padding: const EdgeInsets.all(16), child: child),
-      ),
-    );
   }
 }

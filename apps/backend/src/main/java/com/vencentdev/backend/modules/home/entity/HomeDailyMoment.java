@@ -13,6 +13,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -28,8 +29,8 @@ import lombok.Setter;
     name = "home_daily_moments",
     uniqueConstraints =
         @UniqueConstraint(
-            name = "uq_home_daily_moments_tether_date",
-            columnNames = {"tether_connection_id", "local_date"}))
+            name = "uq_home_daily_moments_tether_user_date",
+            columnNames = {"tether_connection_id", "created_by_user_id", "local_date"}))
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -56,6 +57,12 @@ public class HomeDailyMoment extends AuditableEntity {
 
   @Column(name = "photo_url", nullable = false, columnDefinition = "text")
   private String photoUrl;
+
+  @Column(name = "storage_object_path", columnDefinition = "text")
+  private String storageObjectPath;
+
+  @Column(name = "expires_at", nullable = false)
+  private Instant expiresAt;
 
   @Column(name = "partner_reaction", length = 16)
   private String partnerReaction;

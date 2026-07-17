@@ -1,15 +1,17 @@
 import 'dart:ui';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/auth_controller.dart';
 import '../../auth/auth_state.dart';
 import '../../core/env.dart';
+import '../../features/chat/chat_section.dart';
 import '../../features/home/home_dashboard_controller.dart';
 import '../../features/home/widgets/home_latest_bub_card.dart';
+import '../../features/home/widgets/home_mood_card.dart';
 import '../../features/home/widgets/home_partner_card.dart';
-import '../../features/home/widgets/home_safe_quick_access_card.dart';
 import '../../features/home/widgets/home_today_moment_card.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
@@ -273,7 +275,8 @@ class _BubHomeState extends ConsumerState<_BubHome> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Bub'),
+        titleSpacing: 0,
+        title: const _BubAppBarLogo(),
         actions: [
           TextButton(onPressed: widget.onLogout, child: const Text('Logout')),
         ],
@@ -285,6 +288,7 @@ class _BubHomeState extends ConsumerState<_BubHome> {
           Positioned.fill(
             child: _BubHomeSectionBody(
               section: _section,
+              paired: widget.paired,
               onOpenSafe: () => _selectSection(_BubHomeSection.safe),
             ),
           ),
@@ -301,14 +305,63 @@ class _BubHomeState extends ConsumerState<_BubHome> {
   }
 }
 
+class _BubAppBarLogo extends StatelessWidget {
+  const _BubAppBarLogo();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final asset = isDark
+        ? 'assets/branding/bub-logo.png'
+        : 'assets/branding/bub-logo-purple.png';
+
+    return SizedBox(
+      key: const Key('bub-app-bar-logo'),
+      height: 30,
+      width: 120,
+      child: ClipRect(
+        child: Align(
+          alignment: Alignment.center,
+          child: SizedBox(
+            height: 30,
+            width: 120,
+            child: FittedBox(
+              alignment: Alignment.center,
+              fit: BoxFit.none,
+              clipBehavior: Clip.hardEdge,
+              child: Image.asset(
+                asset,
+                key: const Key('bub-app-bar-logo-image'),
+                width: 100,
+                height: 100,
+                fit: BoxFit.contain,
+                semanticLabel: 'Bub',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BubHomeSectionBody extends ConsumerWidget {
-  const _BubHomeSectionBody({required this.section, required this.onOpenSafe});
+  const _BubHomeSectionBody({
+    required this.section,
+    required this.paired,
+    required this.onOpenSafe,
+  });
 
   final _BubHomeSection section;
+  final bool paired;
   final VoidCallback onOpenSafe;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (section == _BubHomeSection.chat) {
+      return const ChatSection();
+    }
+
     if (section != _BubHomeSection.home) {
       return Center(
         child: Padding(
@@ -350,27 +403,82 @@ class _BubHomeSectionBody extends ConsumerWidget {
           ),
         ),
       ),
-      data: (data) => ListView(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
-        children: [
-          HomePartnerCard(tether: data.tether),
-          const SizedBox(height: 16),
-          HomeTodayMomentCard(
-            moment: data.todayMoment,
-            onReact: data.todayMoment == null
-                ? () {}
-                : () => ref
-                      .read(homeDashboardProvider.notifier)
-                      .reactToTodayMoment(data.todayMoment!.momentId),
+      data: (data) {
+        final tether = data.tether;
+        final latestBub = data.latestBub;
+        final mood = data.mood;
+        if (tether == null || latestBub == null || mood == null) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(24, 24, 24, 132),
+              child: Text(
+                'Home could not load',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          );
+        }
+        final isTethered = paired && tether.hasActiveTether == true;
+        return RefreshIndicator(
+          onRefresh: () => ref.read(homeDashboardProvider.notifier).refresh(),
+          child: ListView(
+            key: const Key('home-dashboard-refresh-list'),
+            physics: const AlwaysScrollableScrollPhysics(),
+            cacheExtent: 1200,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
+            children: [
+              HomePartnerCard(tether: tether),
+              const SizedBox(height: 16),
+              HomeTodayMomentCard(
+                moment: data.todayMoment,
+                isTethered: isTethered,
+                onCaptureMoment: () async {
+                  try {
+                    await ref
+                        .read(homeDashboardProvider.notifier)
+                        .captureTodayMoment();
+                  } catch (error) {
+                    if (!context.mounted) {
+                      return;
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(_momentUploadMessage(error))),
+                    );
+                  }
+                },
+                onReact: data.todayMoment == null
+                    ? () {}
+                    : () => ref
+                          .read(homeDashboardProvider.notifier)
+                          .reactToTodayMoment(data.todayMoment!.momentId ?? ''),
+              ),
+              const SizedBox(height: 16),
+              HomeLatestBubCard(latestBub: latestBub),
+              const SizedBox(height: 16),
+              HomeMoodCard(
+                mood: mood,
+                onSaveMood: (mood) =>
+                    ref.read(homeDashboardProvider.notifier).putMood(mood),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          HomeLatestBubCard(latestBub: data.latestBub),
-          const SizedBox(height: 16),
-          HomeSafeQuickAccessCard(safe: data.safe, onOpenSafe: onOpenSafe),
-        ],
-      ),
+        );
+      },
     );
   }
+}
+
+String _momentUploadMessage(Object error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map<String, dynamic>) {
+      final message = data['message'];
+      if (message is String && message.trim().isNotEmpty) {
+        return message;
+      }
+    }
+  }
+  return "Moment couldn't upload. Please try again.";
 }
 
 class _BubFloatingNav extends StatelessWidget {

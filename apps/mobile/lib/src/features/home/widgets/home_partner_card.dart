@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../api/generated/models/home_tether_card_response.dart';
 import '../../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../../theme/bub_colors.dart';
+import 'home_card_shell.dart';
 
 class HomePartnerCard extends StatelessWidget {
   const HomePartnerCard({super.key, required this.tether});
@@ -11,8 +12,11 @@ class HomePartnerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _HomeCard(
-      child: tether.hasActiveTether
+    return HomeCardShell(
+      key: const Key('home-partner-card'),
+      treatment: HomeCardTreatment.partner,
+      padding: const EdgeInsets.all(18),
+      child: tether.hasActiveTether == true
           ? _TetheredPartnerCard(tether: tether)
           : const _UntetheredPartnerCard(),
     );
@@ -28,28 +32,28 @@ class _TetheredPartnerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final partnerName = tether.partnerDisplayName ?? 'Your Bub';
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
-          partnerName,
+          'Tethered since ${_dateLabel(tether.tetheredSince)}',
+          key: const Key('home-tether-since-date'),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: BubColors.deepPurple.withValues(alpha: 0.72),
+            fontWeight: FontWeight.w900,
+          ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         SizedBox(
-          height: 76,
+          height: 86,
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Container(
-                key: const Key('home-tether-string'),
-                height: 3,
-                margin: const EdgeInsets.symmetric(horizontal: 48),
-                decoration: BoxDecoration(
-                  color: BubColors.heart,
-                  borderRadius: BorderRadius.circular(999),
-                ),
+              const Positioned.fill(
+                key: Key('home-tether-string'),
+                child: CustomPaint(painter: _TetherStringPainter()),
               ),
               const Align(
                 alignment: Alignment.centerLeft,
@@ -62,12 +66,16 @@ class _TetheredPartnerCard extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Text(
-          'Tethered since ${_dateLabel(tether.tetheredSince)}',
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+          _durationLabel(tether.tetheredSince, DateTime.now()),
+          key: const Key('home-tether-duration'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: BubColors.deepPurple,
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+          ),
         ),
       ],
     );
@@ -86,6 +94,120 @@ class _TetheredPartnerCard extends StatelessWidget {
     final day = date.day.toString().padLeft(2, '0');
     return '${date.year}-$month-$day';
   }
+
+  static String _durationLabel(DateTime? start, DateTime now) {
+    if (start == null) {
+      return '0 seconds';
+    }
+    final duration = now.difference(start);
+    if (duration.isNegative) {
+      return '0 seconds';
+    }
+    if (duration.inSeconds < 60) {
+      final seconds = duration.inSeconds;
+      return '$seconds ${seconds == 1 ? 'second' : 'seconds'}';
+    }
+    if (duration.inMinutes < 60) {
+      final minutes = duration.inMinutes;
+      return '$minutes mins';
+    }
+    if (duration.inHours < 24) {
+      final hours = duration.inHours;
+      return '$hours ${hours == 1 ? 'hour' : 'hours'}';
+    }
+
+    final days = duration.inDays;
+    if (days < 30) {
+      return '$days ${days == 1 ? 'day' : 'days'}';
+    }
+    if (days < 365) {
+      final months = days ~/ 30;
+      final remainingDays = days % 30;
+      if (remainingDays == 0) {
+        return '${months}m';
+      }
+      return '${months}m ${remainingDays}d';
+    }
+
+    final years = days ~/ 365;
+    final months = (days % 365) ~/ 30;
+    if (months == 0) {
+      return '${years}y';
+    }
+    return '${years}y ${months}m';
+  }
+}
+
+class _TetherStringPainter extends CustomPainter {
+  const _TetherStringPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final left = 58.0;
+    final right = size.width - 58.0;
+    final midY = size.height / 2;
+    final path = Path()
+      ..moveTo(left, midY + 2)
+      ..cubicTo(
+        size.width * 0.30,
+        midY - 18,
+        size.width * 0.40,
+        midY + 16,
+        size.width * 0.50,
+        midY - 2,
+      )
+      ..cubicTo(
+        size.width * 0.60,
+        midY - 18,
+        size.width * 0.70,
+        midY + 16,
+        right,
+        midY - 1,
+      );
+
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.08)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7
+      ..strokeCap = StrokeCap.round;
+    canvas.drawPath(path.shift(const Offset(0, 2)), shadowPaint);
+
+    final stringPaint = Paint()
+      ..color = BubColors.heart
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+    canvas.drawPath(path, stringPaint);
+
+    final highlightPaint = Paint()
+      ..color = BubColors.white.withValues(alpha: 0.36)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round;
+    canvas.drawPath(path.shift(const Offset(0, -1.4)), highlightPaint);
+
+    _drawKnot(canvas, Offset(size.width * 0.36, midY + 2), -0.35);
+    _drawKnot(canvas, Offset(size.width * 0.64, midY - 2), 0.35);
+  }
+
+  void _drawKnot(Canvas canvas, Offset center, double rotation) {
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(rotation);
+    final knotPaint = Paint()
+      ..color = BubColors.heart
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    final knotPath = Path()..addOval(const Rect.fromLTWH(-8, -5, 16, 10));
+    canvas.drawPath(knotPath, knotPaint);
+    canvas.drawLine(const Offset(-11, 0), const Offset(-6, 0), knotPaint);
+    canvas.drawLine(const Offset(6, 0), const Offset(11, 0), knotPaint);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _TetherStringPainter oldDelegate) => false;
 }
 
 class _UntetheredPartnerCard extends StatelessWidget {
@@ -187,31 +309,6 @@ class _ProfileNode extends StatelessWidget {
           fontWeight: FontWeight.w900,
         ),
       ),
-    );
-  }
-}
-
-class _HomeCard extends StatelessWidget {
-  const _HomeCard({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: BubColors.divider),
-        boxShadow: [
-          BoxShadow(
-            color: BubColors.deepPurple.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Padding(padding: const EdgeInsets.all(18), child: child),
     );
   }
 }

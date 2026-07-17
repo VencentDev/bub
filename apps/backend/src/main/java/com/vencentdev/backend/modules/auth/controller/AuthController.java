@@ -4,6 +4,8 @@ import com.vencentdev.backend.modules.auth.AuthenticatedUser;
 import com.vencentdev.backend.modules.auth.CurrentUser;
 import com.vencentdev.backend.modules.user.dto.UserResponse;
 import com.vencentdev.backend.modules.user.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -19,7 +21,8 @@ public class AuthController {
   }
 
   @GetMapping("/me")
-  public UserResponse me(@CurrentUser AuthenticatedUser user) {
+  @Operation(operationId = "authMe")
+  public UserResponse me(@Parameter(hidden = true) @CurrentUser AuthenticatedUser user) {
     return users.findOrProvision(user);
   }
 }

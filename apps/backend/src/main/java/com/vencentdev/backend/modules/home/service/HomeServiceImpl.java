@@ -7,58 +7,73 @@ import com.vencentdev.backend.modules.auth.AuthenticatedUser;
 import com.vencentdev.backend.modules.home.dto.HomeDashboardResponse;
 import com.vencentdev.backend.modules.home.dto.HomeLatestBubResponse;
 import com.vencentdev.backend.modules.home.dto.HomeMomentReactionRequest;
-import com.vencentdev.backend.modules.home.dto.HomeSafeSummaryResponse;
+import com.vencentdev.backend.modules.home.dto.HomeMoodRequest;
+import com.vencentdev.backend.modules.home.dto.HomeMoodSummaryResponse;
 import com.vencentdev.backend.modules.home.dto.HomeTetherCardResponse;
 import com.vencentdev.backend.modules.home.dto.HomeTodayMomentRequest;
 import com.vencentdev.backend.modules.home.dto.HomeTodayMomentResponse;
 import com.vencentdev.backend.modules.home.entity.HomeDailyMoment;
+import com.vencentdev.backend.modules.home.entity.HomeMood;
 import com.vencentdev.backend.modules.home.repository.HomeDailyMomentRepository;
+import com.vencentdev.backend.modules.home.repository.HomeMoodRepository;
+import com.vencentdev.backend.modules.home.service.MomentStorageService.StoredMomentPhoto;
 import com.vencentdev.backend.modules.tether.entity.TetherConnection;
 import com.vencentdev.backend.modules.tether.repository.TetherConnectionRepository;
 import com.vencentdev.backend.modules.user.entity.User;
 import com.vencentdev.backend.modules.user.repository.UserRepository;
 import com.vencentdev.backend.modules.user.service.UserService;
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class HomeServiceImpl implements HomeService {
 
   private static final String TETHER_CTA = "Tether with someone";
   private static final String NO_BUBS_COPY = "No Bubs yet";
-  private static final String SAFE_COPY = "Keep important details ready when you need them.";
-  private static final String SAFE_CTA = "Open Safe";
+  private static final String MOOD_COPY = "How are you feeling?";
   private static final String HEART_REACTION = "❤️";
+  private static final Duration MOMENT_TTL = Duration.ofHours(24);
 
   private final TetherConnectionRepository connections;
   private final HomeDailyMomentRepository moments;
+  private final HomeMoodRepository moods;
   private final UserRepository users;
   private final UserService userService;
+  private final MomentStorageService momentStorageService;
   private final Clock clock;
 
   @Autowired
   public HomeServiceImpl(
       TetherConnectionRepository connections,
       HomeDailyMomentRepository moments,
+      HomeMoodRepository moods,
       UserRepository users,
-      UserService userService) {
-    this(connections, moments, users, userService, Clock.systemUTC());
+      UserService userService,
+      MomentStorageService momentStorageService) {
+    this(connections, moments, moods, users, userService, momentStorageService, Clock.systemUTC());
   }
 
   HomeServiceImpl(
       TetherConnectionRepository connections,
       HomeDailyMomentRepository moments,
+      HomeMoodRepository moods,
       UserRepository users,
       UserService userService,
+      MomentStorageService momentStorageService,
       Clock clock) {
     this.connections = connections;
     this.moments = moments;
+    this.moods = moods;
     this.users = users;
     this.userService = userService;
+    this.momentStorageService = momentStorageService;
     this.clock = clock;
   }
 
@@ -69,7 +84,7 @@ public class HomeServiceImpl implements HomeService {
     return connections
         .findActiveByUserId(userId)
         .map(connection -> dashboardForTetheredUser(connection, userId))
-        .orElseGet(this::dashboardForUntetheredUser);
+        .orElseGet(() -> dashboardForUntetheredUser(userId));
   }
 
   @Override
@@ -82,7 +97,8 @@ public class HomeServiceImpl implements HomeService {
     TetherConnection connection = activeConnection(userId);
     HomeDailyMoment moment =
         moments
-            .findByTetherConnectionIdAndLocalDate(connection.getId(), request.localDate())
+            .findByTetherConnectionIdAndCreatedByUserIdAndLocalDate(
+                connection.getId(), userId, request.localDate())
             .orElseGet(
                 () ->
                     HomeDailyMoment.builder()
@@ -92,8 +108,48 @@ public class HomeServiceImpl implements HomeService {
                         .build());
     moment.setPhotoUrl(request.photoUrl());
     moment.setCreatedByUser(user);
+    moment.setExpiresAt(expiresAt());
     moment.setPartnerReaction(null);
     return toMomentResponse(moments.save(moment), userId);
+  }
+
+  @Override
+  @Transactional
+  public HomeTodayMomentResponse uploadTodayMomentPhoto(
+      AuthenticatedUser principal, MultipartFile photo) {
+    if (photo == null || photo.isEmpty()) {
+      throw new BadRequestException("Moment photo is required");
+    }
+
+    UUID userId = userService.resolveInternalId(principal);
+    User user =
+        users.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    TetherConnection connection = activeConnection(userId);
+    LocalDate localDate = LocalDate.now(clock);
+    HomeDailyMoment moment =
+        moments
+            .findByTetherConnectionIdAndCreatedByUserIdAndLocalDate(
+                connection.getId(), userId, localDate)
+            .orElseGet(
+                () ->
+                    HomeDailyMoment.builder()
+                        .tetherConnection(connection)
+                        .createdByUser(user)
+                        .localDate(localDate)
+                        .build());
+    String previousObjectPath = moment.getStorageObjectPath();
+    StoredMomentPhoto storedPhoto =
+        momentStorageService.uploadMoment(connection.getId(), userId, localDate, photo);
+    moment.setPhotoUrl(storedPhoto.publicUrl());
+    moment.setStorageObjectPath(storedPhoto.objectPath());
+    moment.setCreatedByUser(user);
+    moment.setExpiresAt(expiresAt());
+    moment.setPartnerReaction(null);
+    HomeTodayMomentResponse response = toMomentResponse(moments.save(moment), userId);
+    if (previousObjectPath != null && !previousObjectPath.equals(storedPhoto.objectPath())) {
+      momentStorageService.deleteMoment(previousObjectPath);
+    }
+    return response;
   }
 
   @Override
@@ -121,26 +177,46 @@ public class HomeServiceImpl implements HomeService {
     return toMomentResponse(moment, userId);
   }
 
-  private HomeDashboardResponse dashboardForTetheredUser(TetherConnection connection, UUID userId) {
-    HomeTodayMomentResponse todayMoment =
-        moments
-            .findByTetherConnectionIdAndLocalDate(connection.getId(), LocalDate.now(clock))
-            .map(moment -> toMomentResponse(moment, userId))
-            .orElse(null);
-
-    return new HomeDashboardResponse(
-        tetherCard(connection, userId),
-        todayMoment,
-        noBubs(),
-        new HomeSafeSummaryResponse(true, SAFE_COPY, SAFE_CTA));
+  @Override
+  @Transactional
+  public HomeMoodSummaryResponse putMood(AuthenticatedUser principal, HomeMoodRequest request) {
+    UUID userId = userService.resolveInternalId(principal);
+    User user =
+        users.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    HomeMood mood =
+        moods.findByUserId(userId).orElseGet(() -> HomeMood.builder().user(user).build());
+    mood.setMood(request.mood().trim());
+    return toMoodResponse(moods.save(mood));
   }
 
-  private HomeDashboardResponse dashboardForUntetheredUser() {
+  private HomeDashboardResponse dashboardForTetheredUser(TetherConnection connection, UUID userId) {
+    LocalDate today = LocalDate.now(clock);
+    User partner = partner(connection, userId);
+    HomeDailyMoment viewerMoment =
+        moments
+            .findByTetherConnectionIdAndCreatedByUserIdAndLocalDate(
+                connection.getId(), userId, today)
+            .orElse(null);
+    HomeDailyMoment partnerMoment =
+        moments
+            .findByTetherConnectionIdAndCreatedByUserIdAndLocalDate(
+                connection.getId(), partner.getId(), today)
+            .orElse(null);
+    HomeTodayMomentResponse todayMoment =
+        viewerMoment == null && partnerMoment == null
+            ? null
+            : toMomentResponse(partnerMoment, viewerMoment);
+
+    return new HomeDashboardResponse(
+        tetherCard(connection, userId), todayMoment, noBubs(), moodForUser(userId));
+  }
+
+  private HomeDashboardResponse dashboardForUntetheredUser(UUID userId) {
     return new HomeDashboardResponse(
         new HomeTetherCardResponse(false, null, null, null, null, null, TETHER_CTA),
         null,
         noBubs(),
-        new HomeSafeSummaryResponse(true, SAFE_COPY, SAFE_CTA));
+        moodForUser(userId));
   }
 
   private TetherConnection activeConnection(UUID userId) {
@@ -177,12 +253,46 @@ public class HomeServiceImpl implements HomeService {
     return new HomeTodayMomentResponse(
         moment.getId(),
         moment.getPhotoUrl(),
+        moment.getCreatedByUser().getId().equals(viewerId) ? moment.getPhotoUrl() : null,
+        moment.getCreatedByUser().getId().equals(viewerId) ? null : moment.getCreatedAt(),
         moment.getLocalDate(),
         moment.getCreatedByUser().getId().equals(viewerId),
         moment.getPartnerReaction());
   }
 
+  private HomeTodayMomentResponse toMomentResponse(
+      HomeDailyMoment partnerMoment, HomeDailyMoment viewerMoment) {
+    if (partnerMoment != null) {
+      return new HomeTodayMomentResponse(
+          partnerMoment.getId(),
+          partnerMoment.getPhotoUrl(),
+          viewerMoment == null ? null : viewerMoment.getPhotoUrl(),
+          partnerMoment.getCreatedAt(),
+          partnerMoment.getLocalDate(),
+          viewerMoment != null,
+          partnerMoment.getPartnerReaction());
+    }
+
+    return new HomeTodayMomentResponse(
+        null, null, viewerMoment.getPhotoUrl(), null, viewerMoment.getLocalDate(), true, null);
+  }
+
   private HomeLatestBubResponse noBubs() {
     return new HomeLatestBubResponse(false, NO_BUBS_COPY, null);
+  }
+
+  private HomeMoodSummaryResponse moodForUser(UUID userId) {
+    return moods
+        .findByUserId(userId)
+        .map(this::toMoodResponse)
+        .orElseGet(() -> new HomeMoodSummaryResponse(MOOD_COPY, null));
+  }
+
+  private HomeMoodSummaryResponse toMoodResponse(HomeMood mood) {
+    return new HomeMoodSummaryResponse(MOOD_COPY, mood.getMood());
+  }
+
+  private Instant expiresAt() {
+    return clock.instant().plus(MOMENT_TTL);
   }
 }

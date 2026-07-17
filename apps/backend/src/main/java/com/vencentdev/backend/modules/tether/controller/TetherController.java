@@ -6,6 +6,8 @@ import com.vencentdev.backend.modules.tether.dto.TetherAcceptRequest;
 import com.vencentdev.backend.modules.tether.dto.TetherInvitationResponse;
 import com.vencentdev.backend.modules.tether.dto.TetherStatusResponse;
 import com.vencentdev.backend.modules.tether.service.TetherService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,19 +28,24 @@ public class TetherController {
   }
 
   @GetMapping("/me")
-  public TetherStatusResponse me(@CurrentUser AuthenticatedUser user) {
+  @Operation(operationId = "tetherMe")
+  public TetherStatusResponse me(@Parameter(hidden = true) @CurrentUser AuthenticatedUser user) {
     return tetherService.getStatus(user);
   }
 
   @PostMapping("/invitations")
   @ResponseStatus(HttpStatus.CREATED)
-  public TetherInvitationResponse generateInvitation(@CurrentUser AuthenticatedUser user) {
+  @Operation(operationId = "createTetherInvitation")
+  public TetherInvitationResponse generateInvitation(
+      @Parameter(hidden = true) @CurrentUser AuthenticatedUser user) {
     return tetherService.generateInvitation(user);
   }
 
   @PostMapping("/accept")
+  @Operation(operationId = "acceptTether")
   public TetherStatusResponse accept(
-      @CurrentUser AuthenticatedUser user, @Valid @RequestBody TetherAcceptRequest request) {
+      @Parameter(hidden = true) @CurrentUser AuthenticatedUser user,
+      @Valid @RequestBody TetherAcceptRequest request) {
     return tetherService.acceptInvitation(user, request);
   }
 }

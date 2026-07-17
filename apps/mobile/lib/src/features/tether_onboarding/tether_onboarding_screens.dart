@@ -107,9 +107,14 @@ class _EnterTetherScreenState extends ConsumerState<EnterTetherScreen> {
           const SizedBox(height: 8),
           TextButton(
             key: const Key('skip-tether-button'),
-            onPressed: () => ref
-                .read(authControllerProvider.notifier)
-                .skipTetherOnboarding(),
+            onPressed: () async {
+              await ref
+                  .read(authControllerProvider.notifier)
+                  .skipTetherOnboarding();
+              if (context.mounted && Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+            },
             child: const Text('Skip for now'),
           ),
         ],
@@ -130,7 +135,7 @@ class _EnterTetherScreenState extends ConsumerState<EnterTetherScreen> {
     try {
       final status = await ref
           .read(restClientProvider)
-          .fallback
+          .tetherController
           .acceptTether(body: TetherAcceptRequest(code: code));
       await ref
           .read(authControllerProvider.notifier)
@@ -271,10 +276,13 @@ class AllSetScreen extends ConsumerWidget {
       bottom: _GradientButton(
         key: const Key('go-to-bub-button'),
         label: 'Go to Bub',
-        onPressed: () {
-          ref
+        onPressed: () async {
+          await ref
               .read(authControllerProvider.notifier)
               .refreshTetherStatus(markComplete: true);
+          if (!context.mounted) {
+            return;
+          }
           Navigator.of(context).popUntil((route) => route.isFirst);
         },
       ),
@@ -361,7 +369,7 @@ class _TetherScannerScreenState extends ConsumerState<TetherScannerScreen> {
     try {
       final status = await ref
           .read(restClientProvider)
-          .fallback
+          .tetherController
           .acceptTether(body: TetherAcceptRequest(code: code));
       await ref
           .read(authControllerProvider.notifier)
@@ -616,7 +624,10 @@ class _ScannerGuidePainter extends CustomPainter {
 
 final tetherInvitationProvider =
     FutureProvider.autoDispose<TetherInvitationResponse>(
-      (ref) => ref.read(restClientProvider).fallback.createTetherInvitation(),
+      (ref) => ref
+          .read(restClientProvider)
+          .tetherController
+          .createTetherInvitation(),
     );
 
 class _InviteQr extends StatelessWidget {
@@ -639,7 +650,7 @@ class _InviteQr extends StatelessWidget {
             padding: const EdgeInsets.all(18),
             child: QrImageView(
               key: const Key('tether-qr-code'),
-              data: invite.qrPayload,
+              data: invite.qrPayload ?? '',
               size: 220,
               errorCorrectionLevel: QrErrorCorrectLevel.H,
               backgroundColor: BubColors.white,
@@ -647,7 +658,7 @@ class _InviteQr extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        _TetherCodeContainer(code: invite.code),
+        _TetherCodeContainer(code: invite.code ?? ''),
       ],
     );
   }

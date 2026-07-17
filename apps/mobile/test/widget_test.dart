@@ -87,6 +87,61 @@ void main() {
     expect(source, contains('validAccessToken() != null'));
   });
 
+  test('auth service revokes Google authorization on logout', () {
+    final source = File('lib/src/auth/auth_service.dart').readAsStringSync();
+
+    expect(source, contains('_googleSignIn.disconnect()'));
+    expect(source, isNot(contains('_googleSignIn.signOut()')));
+  });
+
+  test('auth controller clears authenticated provider caches on logout', () {
+    final source = File('lib/src/auth/auth_controller.dart').readAsStringSync();
+
+    expect(source, contains('ref.invalidate(homeDashboardProvider)'));
+    expect(source, contains('ref.invalidate(chatThreadProvider)'));
+    expect(source, contains('ref.invalidate(restClientProvider)'));
+    expect(source, contains('ref.invalidate(dioProvider)'));
+  });
+
+  test('auth controller clears home data after tether status changes', () {
+    final source = File('lib/src/auth/auth_controller.dart').readAsStringSync();
+
+    expect(source, contains('_invalidateAuthenticatedData()'));
+    expect(source, contains('Future<void> applyAcceptedTether'));
+    expect(
+      source,
+      contains('completeTetherOnboarding(tetherStatus: tetherStatus)'),
+    );
+  });
+
+  test('all set action awaits tether refresh before returning home', () {
+    final source = File(
+      'lib/src/features/tether_onboarding/tether_onboarding_screens.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('onPressed: () async'));
+    expect(source, contains('await ref'));
+    expect(source, contains('.refreshTetherStatus(markComplete: true)'));
+  });
+
+  test(
+    'home controller captures and sends today moment through backend upload',
+    () {
+      final source = File(
+        'lib/src/features/home/home_dashboard_controller.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('pickImage'));
+      expect(source, contains('ImageSource.camera'));
+      expect(source, isNot(contains('cropImage')));
+      expect(source, contains('/api/v1/home/today-moment/photo'));
+      expect(source, contains('FormData.fromMap'));
+      expect(source, isNot(contains('SUPABASE_SECRET_KEY')));
+      expect(source, isNot(contains('/storage/v1/object/')));
+      expect(source, isNot(contains('putTodayMoment(publicUrl')));
+    },
+  );
+
   test('API client uses finite network timeouts', () {
     final container = ProviderContainer(
       overrides: [

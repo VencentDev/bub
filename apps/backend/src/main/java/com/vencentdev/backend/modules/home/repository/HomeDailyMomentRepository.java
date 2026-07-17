@@ -1,7 +1,9 @@
 package com.vencentdev.backend.modules.home.repository;
 
 import com.vencentdev.backend.modules.home.entity.HomeDailyMoment;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,11 +19,15 @@ public interface HomeDailyMomentRepository extends JpaRepository<HomeDailyMoment
       join fetch moment.tetherConnection connection
       join fetch moment.createdByUser
       where connection.id = :tetherConnectionId
+        and moment.createdByUser.id = :createdByUserId
         and moment.localDate = :localDate
       """)
-  Optional<HomeDailyMoment> findByTetherConnectionIdAndLocalDate(
+  Optional<HomeDailyMoment> findByTetherConnectionIdAndCreatedByUserIdAndLocalDate(
       @Param("tetherConnectionId") UUID tetherConnectionId,
+      @Param("createdByUserId") UUID createdByUserId,
       @Param("localDate") LocalDate localDate);
+
+  List<HomeDailyMoment> findByExpiresAtBefore(Instant cutoff);
 
   @Query(
       """

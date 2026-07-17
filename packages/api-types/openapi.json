@@ -1,518 +1,598 @@
 {
   "openapi": "3.1.0",
-  "info": {
-    "title": "Backend API",
-    "version": "0.0.1"
-  },
+  "info": { "title": "OpenAPI definition", "version": "v0" },
+  "servers": [{ "url": "http://127.0.0.1:8080", "description": "Generated server url" }],
+  "security": [{ "bearer": [] }],
   "paths": {
-    "/api/v1/admin/ping": {
-      "get": {
-        "operationId": "adminPing",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/auth/me": {
-      "get": {
-        "operationId": "authMe",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/home/dashboard": {
-      "get": {
-        "operationId": "getHomeDashboard",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HomeDashboardResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/home/today-moment": {
       "put": {
+        "tags": ["home-controller"],
         "operationId": "putTodayMoment",
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/HomeTodayMomentRequest"
-              }
+              "schema": { "$ref": "#/components/schemas/HomeTodayMomentRequest" }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
             "description": "OK",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HomeTodayMomentResponse"
-                }
-              }
+              "*/*": { "schema": { "$ref": "#/components/schemas/HomeTodayMomentResponse" } }
             }
           }
+        }
+      }
+    },
+    "/api/v1/home/mood": {
+      "put": {
+        "tags": ["home-controller"],
+        "operationId": "putMood",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/HomeMoodRequest" } }
+          },
+          "required": true
         },
-        "security": [
-          {
-            "bearer": []
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": { "schema": { "$ref": "#/components/schemas/HomeMoodSummaryResponse" } }
+            }
           }
-        ]
+        }
+      }
+    },
+    "/api/v1/tether/invitations": {
+      "post": {
+        "tags": ["tether-controller"],
+        "operationId": "createTetherInvitation",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": { "schema": { "$ref": "#/components/schemas/TetherInvitationResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tether/accept": {
+      "post": {
+        "tags": ["tether-controller"],
+        "operationId": "acceptTether",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/TetherAcceptRequest" } }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": { "schema": { "$ref": "#/components/schemas/TetherStatusResponse" } }
+            }
+          }
+        }
       }
     },
     "/api/v1/home/today-moment/{momentId}/reaction": {
       "post": {
+        "tags": ["home-controller"],
         "operationId": "reactToTodayMoment",
         "parameters": [
           {
             "name": "momentId",
             "in": "path",
             "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
-          "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/HomeMomentReactionRequest"
-              }
+              "schema": { "$ref": "#/components/schemas/HomeMomentReactionRequest" }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
             "description": "OK",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HomeTodayMomentResponse"
-                }
-              }
+              "*/*": { "schema": { "$ref": "#/components/schemas/HomeTodayMomentResponse" } }
             }
           }
+        }
+      }
+    },
+    "/api/v1/chat/typing": {
+      "post": {
+        "tags": ["chat-controller"],
+        "operationId": "setChatTyping",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ChatTypingRequest" } }
+          },
+          "required": true
         },
-        "security": [
-          {
-            "bearer": []
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "*/*": { "schema": { "$ref": "#/components/schemas/ChatStateResponse" } } }
           }
-        ]
+        }
+      }
+    },
+    "/api/v1/chat/read": {
+      "post": {
+        "tags": ["chat-controller"],
+        "operationId": "markChatMessagesRead",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ChatReadRequest" } }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "*/*": { "schema": { "$ref": "#/components/schemas/ChatStateResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/chat/messages": {
+      "post": {
+        "tags": ["chat-controller"],
+        "operationId": "sendChatMessage",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChatSendMessageRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": { "schema": { "$ref": "#/components/schemas/ChatMessageResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat/messages/{messageId}/reaction": {
+      "post": {
+        "tags": ["chat-controller"],
+        "operationId": "reactToChatMessage",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/ChatReactionRequest" } }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": { "schema": { "$ref": "#/components/schemas/ChatMessageResponse" } }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["chat-controller"],
+        "operationId": "removeChatMessageReaction",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": { "schema": { "$ref": "#/components/schemas/ChatMessageResponse" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/me": {
+      "get": {
+        "tags": ["user-controller"],
+        "operationId": "getCurrentUser",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "*/*": { "schema": { "$ref": "#/components/schemas/UserResponse" } } }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["user-controller"],
+        "operationId": "updateCurrentUser",
+        "requestBody": {
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/UserUpdateRequest" } }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "*/*": { "schema": { "$ref": "#/components/schemas/UserResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/chat/messages/{messageId}": {
+      "patch": {
+        "tags": ["chat-controller"],
+        "operationId": "editChatMessage",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChatEditMessageRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": { "schema": { "$ref": "#/components/schemas/ChatMessageResponse" } }
+            }
+          }
+        }
       }
     },
     "/api/v1/tether/me": {
       "get": {
+        "tags": ["tether-controller"],
         "operationId": "tetherMe",
         "responses": {
           "200": {
             "description": "OK",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TetherStatusResponse"
-                }
-              }
+              "*/*": { "schema": { "$ref": "#/components/schemas/TetherStatusResponse" } }
             }
           }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
+        }
       }
     },
-    "/api/v1/tether/invitations": {
-      "post": {
-        "operationId": "createTetherInvitation",
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TetherInvitationResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/tether/accept": {
-      "post": {
-        "operationId": "acceptTether",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TetherAcceptRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TetherStatusResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/users/me": {
+    "/api/v1/home/dashboard": {
       "get": {
-        "operationId": "getCurrentUser",
+        "tags": ["home-controller"],
+        "operationId": "getHomeDashboard",
         "responses": {
           "200": {
             "description": "OK",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserResponse"
-                }
-              }
+              "*/*": { "schema": { "$ref": "#/components/schemas/HomeDashboardResponse" } }
             }
           }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      },
-      "patch": {
-        "operationId": "updateCurrentUser",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UserUpdateRequest"
-              }
-            }
-          }
-        },
+        }
+      }
+    },
+    "/api/v1/chat/thread": {
+      "get": {
+        "tags": ["chat-controller"],
+        "operationId": "getChatThread",
         "responses": {
           "200": {
             "description": "OK",
             "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserResponse"
-                }
-              }
+              "*/*": { "schema": { "$ref": "#/components/schemas/ChatThreadResponse" } }
             }
           }
-        },
-        "security": [
-          {
-            "bearer": []
+        }
+      }
+    },
+    "/api/v1/chat/state": {
+      "get": {
+        "tags": ["chat-controller"],
+        "operationId": "getChatState",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "*/*": { "schema": { "$ref": "#/components/schemas/ChatStateResponse" } } }
           }
-        ]
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": ["auth-controller"],
+        "operationId": "authMe",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "*/*": { "schema": { "$ref": "#/components/schemas/UserResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/ping": {
+      "get": {
+        "tags": ["admin-ping-controller"],
+        "operationId": "adminPing",
+        "responses": {
+          "200": { "description": "OK", "content": { "*/*": { "schema": { "type": "string" } } } }
+        }
+      }
+    },
+    "/api/v1/chat/messages/{messageId}/me": {
+      "delete": {
+        "tags": ["chat-controller"],
+        "operationId": "deleteChatMessageForMe",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/chat/messages/{messageId}/everyone": {
+      "delete": {
+        "tags": ["chat-controller"],
+        "operationId": "deleteChatMessageForEveryone",
+        "parameters": [
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": { "schema": { "$ref": "#/components/schemas/ChatMessageResponse" } }
+            }
+          }
+        }
       }
     }
   },
   "components": {
-    "securitySchemes": {
-      "bearer": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT"
-      }
-    },
     "schemas": {
-      "HomeDashboardResponse": {
+      "HomeTodayMomentRequest": {
         "type": "object",
-        "required": ["tether", "latestBub", "safe"],
         "properties": {
-          "tether": {
-            "$ref": "#/components/schemas/HomeTetherCardResponse"
-          },
-          "todayMoment": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/HomeTodayMomentResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "latestBub": {
-            "$ref": "#/components/schemas/HomeLatestBubResponse"
-          },
-          "safe": {
-            "$ref": "#/components/schemas/HomeSafeSummaryResponse"
-          }
+          "photoUrl": { "type": "string", "minLength": 1 },
+          "localDate": { "type": "string", "format": "date" }
+        },
+        "required": ["localDate", "photoUrl"]
+      },
+      "HomeTodayMomentResponse": {
+        "type": "object",
+        "properties": {
+          "momentId": { "type": "string", "format": "uuid" },
+          "photoUrl": { "type": "string" },
+          "localDate": { "type": "string", "format": "date" },
+          "viewerHasPostedToday": { "type": "boolean" },
+          "partnerReaction": { "type": "string" }
         }
       },
-      "HomeLatestBubResponse": {
+      "HomeMoodRequest": {
         "type": "object",
-        "required": ["hasActivity", "copy"],
+        "properties": { "mood": { "type": "string", "maxLength": 20, "minLength": 0 } },
+        "required": ["mood"]
+      },
+      "HomeMoodSummaryResponse": {
+        "type": "object",
+        "properties": { "copy": { "type": "string" }, "mood": { "type": "string" } }
+      },
+      "TetherInvitationResponse": {
+        "type": "object",
         "properties": {
-          "hasActivity": {
-            "type": "boolean"
-          },
-          "copy": {
-            "type": "string"
-          },
-          "occurredAt": {
-            "type": ["string", "null"],
-            "format": "date-time"
-          }
+          "id": { "type": "string", "format": "uuid" },
+          "code": { "type": "string" },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "qrPayload": { "type": "string" }
+        }
+      },
+      "TetherAcceptRequest": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string", "minLength": 1, "pattern": "^BUB-[A-Z0-9]{4}-[A-Z0-9]{4}$" }
+        },
+        "required": ["code"]
+      },
+      "TetherStatusResponse": {
+        "type": "object",
+        "properties": {
+          "hasActiveTether": { "type": "boolean" },
+          "partnerUserId": { "type": "string", "format": "uuid" }
         }
       },
       "HomeMomentReactionRequest": {
         "type": "object",
-        "required": ["reaction"],
-        "properties": {
-          "reaction": {
-            "type": "string"
-          }
-        }
+        "properties": { "reaction": { "type": "string", "minLength": 1 } },
+        "required": ["reaction"]
       },
-      "HomeSafeSummaryResponse": {
+      "ChatTypingRequest": { "type": "object", "properties": { "typing": { "type": "boolean" } } },
+      "ChatPresenceResponse": {
         "type": "object",
-        "required": ["enabled", "copy", "ctaLabel"],
         "properties": {
-          "enabled": {
-            "type": "boolean"
-          },
-          "copy": {
-            "type": "string"
-          },
-          "ctaLabel": {
-            "type": "string"
-          }
+          "status": { "type": "string", "enum": ["ONLINE", "OFFLINE"] },
+          "lastSeenAt": { "type": "string", "format": "date-time" }
         }
       },
-      "HomeTetherCardResponse": {
+      "ChatStateResponse": {
         "type": "object",
-        "required": ["hasActiveTether"],
         "properties": {
-          "hasActiveTether": {
-            "type": "boolean"
-          },
-          "partnerUserId": {
-            "type": ["string", "null"],
-            "format": "uuid"
-          },
-          "partnerDisplayName": {
-            "type": ["string", "null"]
-          },
-          "partnerProfileImageUrl": {
-            "type": ["string", "null"]
-          },
-          "viewerProfileImageUrl": {
-            "type": ["string", "null"]
-          },
-          "tetheredSince": {
-            "type": ["string", "null"],
-            "format": "date-time"
-          },
-          "ctaLabel": {
-            "type": ["string", "null"]
-          }
+          "partnerTyping": { "type": "boolean" },
+          "partnerPresence": { "$ref": "#/components/schemas/ChatPresenceResponse" }
         }
       },
-      "HomeTodayMomentRequest": {
+      "ChatReadRequest": {
         "type": "object",
-        "required": ["photoUrl", "localDate"],
-        "properties": {
-          "photoUrl": {
-            "type": "string"
-          },
-          "localDate": {
-            "type": "string"
-          }
-        }
+        "properties": { "upToMessageId": { "type": "string", "format": "uuid" } },
+        "required": ["upToMessageId"]
       },
-      "HomeTodayMomentResponse": {
+      "ChatSendMessageRequest": {
         "type": "object",
-        "required": ["momentId", "photoUrl", "localDate", "viewerHasPostedToday"],
         "properties": {
-          "momentId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "photoUrl": {
-            "type": "string"
-          },
-          "localDate": {
-            "type": "string"
-          },
-          "viewerHasPostedToday": {
-            "type": "boolean"
-          },
-          "partnerReaction": {
-            "type": ["string", "null"]
-          }
-        }
+          "type": { "type": "string", "enum": ["TEXT", "EMOJI", "GIF"] },
+          "body": { "type": "string" },
+          "gifUrl": { "type": "string" },
+          "gifProviderId": { "type": "string" },
+          "replyToMessageId": { "type": "string", "format": "uuid" }
+        },
+        "required": ["type"]
       },
-      "KycStatus": {
-        "type": "string",
-        "enum": ["NONE", "PENDING", "VERIFIED", "REJECTED"]
-      },
-      "Role": {
-        "type": "string",
-        "enum": ["USER", "ADMIN"]
-      },
-      "TetherAcceptRequest": {
+      "ChatMessageResponse": {
         "type": "object",
-        "required": ["code"],
         "properties": {
-          "code": {
-            "type": "string",
-            "pattern": "^BUB-[A-Z0-9]{4}-[A-Z0-9]{4}$"
+          "id": { "type": "string", "format": "uuid" },
+          "senderUserId": { "type": "string", "format": "uuid" },
+          "viewerMessage": { "type": "boolean" },
+          "type": { "type": "string", "enum": ["TEXT", "EMOJI", "GIF"] },
+          "body": { "type": "string" },
+          "gifUrl": { "type": "string" },
+          "gifProviderId": { "type": "string" },
+          "reply": { "$ref": "#/components/schemas/ChatReplyPreviewResponse" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" },
+          "editedAt": { "type": "string", "format": "date-time" },
+          "deletedForEveryone": { "type": "boolean" },
+          "deliveryState": { "type": "string", "enum": ["DELIVERED", "SEEN"] },
+          "editable": { "type": "boolean" },
+          "deletableForEveryone": { "type": "boolean" },
+          "viewerReaction": { "type": "string" },
+          "reactions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChatReactionSummaryResponse" }
           }
         }
       },
-      "TetherInvitationResponse": {
+      "ChatReactionSummaryResponse": {
         "type": "object",
-        "required": ["id", "code", "expiresAt", "qrPayload"],
         "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "code": {
-            "type": "string"
-          },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "qrPayload": {
-            "type": "string"
-          }
+          "reaction": { "type": "string" },
+          "count": { "type": "integer", "format": "int32" }
         }
       },
-      "TetherStatusResponse": {
+      "ChatReplyPreviewResponse": {
         "type": "object",
-        "required": ["hasActiveTether"],
         "properties": {
-          "hasActiveTether": {
-            "type": "boolean"
-          },
-          "partnerUserId": {
-            "type": ["string", "null"],
-            "format": "uuid"
-          }
+          "id": { "type": "string", "format": "uuid" },
+          "senderUserId": { "type": "string", "format": "uuid" },
+          "snippet": { "type": "string" },
+          "deletedForEveryone": { "type": "boolean" }
         }
       },
-      "UserResponse": {
+      "ChatReactionRequest": {
         "type": "object",
-        "required": ["id", "email", "role", "userType", "kycStatus", "createdAt", "updatedAt"],
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "email": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": ["string", "null"]
-          },
-          "role": {
-            "$ref": "#/components/schemas/Role"
-          },
-          "userType": {
-            "$ref": "#/components/schemas/UserType"
-          },
-          "kycStatus": {
-            "$ref": "#/components/schemas/KycStatus"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
+        "properties": { "reaction": { "type": "string", "minLength": 1 } },
+        "required": ["reaction"]
       },
-      "UserType": {
-        "type": "string",
-        "enum": ["INDIVIDUAL", "ORGANIZATION"]
+      "JsonNullableString": {
+        "type": "object",
+        "properties": { "present": { "type": "boolean" } }
       },
       "UserUpdateRequest": {
         "type": "object",
         "properties": {
-          "email": {
-            "type": ["string", "null"],
-            "format": "email"
-          },
-          "displayName": {
-            "type": ["string", "null"],
-            "maxLength": 120
+          "email": { "$ref": "#/components/schemas/JsonNullableString" },
+          "displayName": { "$ref": "#/components/schemas/JsonNullableString" }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string" },
+          "displayName": { "type": "string" },
+          "role": { "type": "string", "enum": ["USER", "ADMIN"] },
+          "userType": { "type": "string", "enum": ["INDIVIDUAL", "ORGANIZATION"] },
+          "kycStatus": { "type": "string", "enum": ["NONE", "PENDING", "VERIFIED", "REJECTED"] },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ChatEditMessageRequest": {
+        "type": "object",
+        "properties": { "body": { "type": "string", "maxLength": 4000, "minLength": 0 } },
+        "required": ["body"]
+      },
+      "HomeDashboardResponse": {
+        "type": "object",
+        "properties": {
+          "tether": { "$ref": "#/components/schemas/HomeTetherCardResponse" },
+          "todayMoment": { "$ref": "#/components/schemas/HomeTodayMomentResponse" },
+          "latestBub": { "$ref": "#/components/schemas/HomeLatestBubResponse" },
+          "mood": { "$ref": "#/components/schemas/HomeMoodSummaryResponse" }
+        }
+      },
+      "HomeLatestBubResponse": {
+        "type": "object",
+        "properties": {
+          "hasActivity": { "type": "boolean" },
+          "copy": { "type": "string" },
+          "occurredAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "HomeTetherCardResponse": {
+        "type": "object",
+        "properties": {
+          "hasActiveTether": { "type": "boolean" },
+          "partnerUserId": { "type": "string", "format": "uuid" },
+          "partnerDisplayName": { "type": "string" },
+          "partnerProfileImageUrl": { "type": "string" },
+          "viewerProfileImageUrl": { "type": "string" },
+          "tetheredSince": { "type": "string", "format": "date-time" },
+          "ctaLabel": { "type": "string" }
+        }
+      },
+      "ChatThreadResponse": {
+        "type": "object",
+        "properties": {
+          "hasActiveTether": { "type": "boolean" },
+          "tetherConnectionId": { "type": "string", "format": "uuid" },
+          "partnerDisplayName": { "type": "string" },
+          "state": { "$ref": "#/components/schemas/ChatStateResponse" },
+          "messages": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChatMessageResponse" }
           }
         }
       }
-    }
+    },
+    "securitySchemes": { "bearer": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" } }
   }
 }

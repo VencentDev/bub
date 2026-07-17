@@ -4,4 +4,4 @@ public record HomeDashboardResponse(
     HomeTetherCardResponse tether,
     HomeTodayMomentResponse todayMoment,
     HomeLatestBubResponse latestBub,
-    HomeSafeSummaryResponse safe) {}
+    HomeMoodSummaryResponse mood) {}

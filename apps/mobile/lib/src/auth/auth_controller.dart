@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/generated/models/tether_status_response.dart';
 import '../core/dio_provider.dart';
+import '../features/chat/chat_controller.dart';
+import '../features/home/home_dashboard_controller.dart';
 import '../features/tether_onboarding/tether_skip_store.dart';
 import 'auth_state.dart';
 
@@ -14,12 +16,12 @@ class AuthController extends AsyncNotifier<AuthState> {
   }
 
   Future<AuthState> _fetchSession() async {
-    final client = ref.read(restClientProvider).fallback;
-    final user = await client.authMe();
-    final tetherStatus = await client.tetherMe();
+    final client = ref.read(restClientProvider);
+    final user = await client.authController.authMe();
+    final tetherStatus = await client.tetherController.tetherMe();
     final onboardingComplete = await ref
         .read(tetherSkipStoreProvider)
-        .isComplete(user.id);
+        .isComplete(user.id ?? '');
     return AuthState.authenticated(
       user: user,
       tetherStatus: tetherStatus,
@@ -37,6 +39,7 @@ class AuthController extends AsyncNotifier<AuthState> {
 
   Future<void> logout() async {
     await ref.read(authServiceProvider).logout();
+    _invalidateAuthenticatedData();
     state = const AsyncData(AuthState.loggedOut());
   }
 
@@ -53,7 +56,8 @@ class AuthController extends AsyncNotifier<AuthState> {
     if (user == null || nextTetherStatus == null) {
       return;
     }
-    await ref.read(tetherSkipStoreProvider).setComplete(user.id);
+    await ref.read(tetherSkipStoreProvider).setComplete(user.id ?? '');
+    _invalidateAuthenticatedData();
     state = AsyncData(
       AuthState.authenticated(
         user: user,
@@ -75,15 +79,16 @@ class AuthController extends AsyncNotifier<AuthState> {
     state = await AsyncValue.guard(() async {
       final tetherStatus = await ref
           .read(restClientProvider)
-          .fallback
+          .tetherController
           .tetherMe();
       final shouldComplete = markComplete || markSkipped;
-      if (shouldComplete && !tetherStatus.hasActiveTether) {
-        await ref.read(tetherSkipStoreProvider).setComplete(user.id);
+      if (shouldComplete && tetherStatus.hasActiveTether != true) {
+        await ref.read(tetherSkipStoreProvider).setComplete(user.id ?? '');
       }
       final onboardingComplete =
           shouldComplete ||
-          await ref.read(tetherSkipStoreProvider).isComplete(user.id);
+          await ref.read(tetherSkipStoreProvider).isComplete(user.id ?? '');
+      _invalidateAuthenticatedData();
       return AuthState.authenticated(
         user: user,
         tetherStatus: tetherStatus,
@@ -94,6 +99,13 @@ class AuthController extends AsyncNotifier<AuthState> {
 
   Future<void> applyAcceptedTether(TetherStatusResponse tetherStatus) =>
       completeTetherOnboarding(tetherStatus: tetherStatus);
+
+  void _invalidateAuthenticatedData() {
+    ref.invalidate(homeDashboardProvider);
+    ref.invalidate(chatThreadProvider);
+    ref.invalidate(restClientProvider);
+    ref.invalidate(dioProvider);
+  }
 }
 
 final authControllerProvider = AsyncNotifierProvider<AuthController, AuthState>(
