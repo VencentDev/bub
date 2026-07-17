@@ -12,6 +12,7 @@ import 'package:bub/src/auth/auth_controller.dart';
 import 'package:bub/src/auth/auth_state.dart';
 import 'package:bub/src/features/home/home_dashboard_controller.dart';
 import 'package:bub/src/features/home/home_screen.dart';
+import 'package:bub/src/features/home/widgets/home_today_moment_card.dart';
 import 'package:bub/src/features/tether_onboarding/tether_onboarding_screens.dart';
 import 'package:bub/src/api/generated/models/user_type.dart';
 import 'package:bub/src/theme/bub_colors.dart';
@@ -265,8 +266,7 @@ void main() {
           ),
           mood: const HomeMoodSummaryResponse(
             copy: 'How are you feeling?',
-            viewerMood: 'calm',
-            partnerMood: 'sparkly',
+            mood: 'calm',
           ),
         ),
       ),
@@ -304,25 +304,20 @@ void main() {
       tester.getSize(find.byKey(const Key('home-latest-bub-card'))).height,
       greaterThanOrEqualTo(160),
     );
-    await tester.scrollUntilVisible(
-      find.text('Mood'),
-      120,
-      scrollable: find.byType(Scrollable).first,
+    expect(
+      find.byKey(const Key('home-today-moment-mood-pill')),
+      findsOneWidget,
     );
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, -180));
-    await tester.pumpAndSettle();
-    expect(find.text('Mood'), findsOneWidget);
-    expect(find.text('How are you feeling?'), findsOneWidget);
-    expect(find.byKey(const Key('home-mood-partner-value')), findsOneWidget);
-    expect(find.text('sparkly'), findsOneWidget);
-    expect(find.byKey(const Key('home-mood-mine-button')), findsOneWidget);
-    expect(find.text('Mine: calm'), findsOneWidget);
+    expect(find.text('Mood: calm'), findsOneWidget);
+    expect(find.text('Mood'), findsNothing);
+    expect(find.text('How are you feeling?'), findsNothing);
+    expect(find.byKey(const Key('home-mood-card')), findsNothing);
 
-    await tester.tap(find.byKey(const Key('home-mood-mine-button')));
+    await tester.tap(find.byKey(const Key('home-today-moment-mood-pill')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('home-mood-dialog-glass')), findsOneWidget);
     expect(find.byKey(const Key('home-mood-dialog-field')), findsOneWidget);
-    expect(find.text('How are you feeling?'), findsWidgets);
+    expect(find.text('How are you?'), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const Key('home-mood-dialog-field')),
@@ -330,8 +325,160 @@ void main() {
     );
     await tester.tap(find.text('Save mood'));
     await tester.pumpAndSettle();
-    expect(find.text('cozy'), findsOneWidget);
-    expect(find.byKey(const Key('home-mood-mine-button')), findsOneWidget);
+    expect(find.text('Mood: cozy'), findsOneWidget);
+    expect(
+      find.byKey(const Key('home-today-moment-mood-pill')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('tethered home with no mood shows add pill in today moment', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _appWithAuth(
+        AuthState.authenticated(
+          user: _user(),
+          tetherStatus: const TetherStatusResponse(hasActiveTether: true),
+          tetherOnboardingComplete: true,
+        ),
+        homeDashboard: _dashboard(
+          todayMoment: const HomeTodayMomentResponse(
+            momentId: 'moment-id',
+            photoUrl: 'https://cdn.example.com/moment.jpg',
+            localDate: '2026-07-16',
+            viewerHasPostedToday: false,
+          ),
+          mood: const HomeMoodSummaryResponse(copy: 'How are you feeling?'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('home-today-moment-mood-pill')),
+      findsOneWidget,
+    );
+    expect(find.text('Add mood'), findsOneWidget);
+    expect(find.byKey(const Key('home-mood-card')), findsNothing);
+  });
+
+  testWidgets('untethered home keeps mood card and empty moment state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _appWithAuth(
+        AuthState.authenticated(
+          user: _user(),
+          tetherStatus: const TetherStatusResponse(hasActiveTether: false),
+          tetherOnboardingComplete: true,
+        ),
+        homeDashboard: _dashboard(
+          tether: const HomeTetherCardResponse(hasActiveTether: false),
+          todayMoment: null,
+          mood: const HomeMoodSummaryResponse(
+            copy: 'How are you feeling?',
+            mood: 'steady',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining("Once you're tethered"), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('home-mood-card')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.byKey(const Key('home-mood-card')), findsOneWidget);
+    expect(find.text('steady'), findsOneWidget);
+  });
+
+  testWidgets('today moment card uses theme-aware soft gradients', (
+    tester,
+  ) async {
+    Future<BoxDecoration> pumpCard(ThemeData theme) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: BubTheme.light,
+          home: Scaffold(
+            body: Theme(
+              data: theme,
+              child: HomeTodayMomentCard(moment: null, onReact: () {}),
+            ),
+          ),
+        ),
+      );
+
+      return tester
+              .widgetList<DecoratedBox>(
+                find.descendant(
+                  of: find.byKey(const Key('home-today-moment-card')),
+                  matching: find.byType(DecoratedBox),
+                ),
+              )
+              .first
+              .decoration
+          as BoxDecoration;
+    }
+
+    final lightDecoration = await pumpCard(BubTheme.light);
+    expect(
+      (lightDecoration.gradient! as LinearGradient).colors,
+      contains(BubColors.partnerBubbleLight),
+    );
+
+    final darkDecoration = await pumpCard(BubTheme.dark);
+    expect(
+      (darkDecoration.gradient! as LinearGradient).colors,
+      contains(BubColors.deepPurple.withValues(alpha: 0.96)),
+    );
+  });
+
+  testWidgets('glass mood dialog validates and saves trimmed mood', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _appWithAuth(
+        AuthState.authenticated(
+          user: _user(),
+          tetherStatus: const TetherStatusResponse(hasActiveTether: true),
+          tetherOnboardingComplete: true,
+        ),
+        homeDashboard: _dashboard(
+          todayMoment: const HomeTodayMomentResponse(
+            momentId: 'moment-id',
+            photoUrl: 'https://cdn.example.com/moment.jpg',
+            localDate: '2026-07-16',
+            viewerHasPostedToday: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('home-today-moment-mood-pill')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save mood'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mood is required'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('home-mood-dialog-field')),
+      'this mood is too long today',
+    );
+    await tester.tap(find.text('Save mood'));
+    await tester.pumpAndSettle();
+    expect(find.text('Use 20 characters or fewer'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('home-mood-dialog-field')),
+      '  bright  ',
+    );
+    await tester.tap(find.text('Save mood'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mood: bright'), findsOneWidget);
   });
 
   testWidgets('home section renders untethered partner CTA', (tester) async {
@@ -660,11 +807,7 @@ class _FakeHomeDashboardController extends HomeDashboardController {
       tether: dashboard.tether,
       todayMoment: dashboard.todayMoment,
       latestBub: dashboard.latestBub,
-      mood: HomeMoodSummaryResponse(
-        copy: dashboard.mood.copy,
-        viewerMood: mood,
-        partnerMood: dashboard.mood.partnerMood,
-      ),
+      mood: HomeMoodSummaryResponse(copy: dashboard.mood.copy, mood: mood),
     );
     state = AsyncData(dashboard);
   }

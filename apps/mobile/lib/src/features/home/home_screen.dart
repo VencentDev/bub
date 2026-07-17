@@ -391,29 +391,38 @@ class _BubHomeSectionBody extends ConsumerWidget {
           ),
         ),
       ),
-      data: (data) => ListView(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
-        children: [
-          HomePartnerCard(tether: data.tether),
-          const SizedBox(height: 16),
-          HomeTodayMomentCard(
-            moment: data.todayMoment,
-            onReact: data.todayMoment == null
-                ? () {}
-                : () => ref
-                      .read(homeDashboardProvider.notifier)
-                      .reactToTodayMoment(data.todayMoment!.momentId),
-          ),
-          const SizedBox(height: 16),
-          HomeLatestBubCard(latestBub: data.latestBub),
-          const SizedBox(height: 16),
-          HomeMoodCard(
-            mood: data.mood,
-            onSaveMood: (mood) =>
-                ref.read(homeDashboardProvider.notifier).putMood(mood),
-          ),
-        ],
-      ),
+      data: (data) {
+        final showMoodInTodayMoment = data.tether.hasActiveTether;
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
+          children: [
+            HomePartnerCard(tether: data.tether),
+            const SizedBox(height: 16),
+            HomeTodayMomentCard(
+              moment: data.todayMoment,
+              mood: showMoodInTodayMoment ? data.mood : null,
+              showMoodPill: showMoodInTodayMoment,
+              onSaveMood: (mood) =>
+                  ref.read(homeDashboardProvider.notifier).putMood(mood),
+              onReact: data.todayMoment == null
+                  ? () {}
+                  : () => ref
+                        .read(homeDashboardProvider.notifier)
+                        .reactToTodayMoment(data.todayMoment!.momentId),
+            ),
+            const SizedBox(height: 16),
+            HomeLatestBubCard(latestBub: data.latestBub),
+            if (!showMoodInTodayMoment) ...[
+              const SizedBox(height: 16),
+              HomeMoodCard(
+                mood: data.mood,
+                onSaveMood: (mood) =>
+                    ref.read(homeDashboardProvider.notifier).putMood(mood),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 }

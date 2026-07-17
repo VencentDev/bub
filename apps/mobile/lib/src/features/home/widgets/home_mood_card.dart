@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../api/generated/models/home_mood_summary_response.dart';
 import '../../../theme/bub_colors.dart';
+import 'home_card_shell.dart';
+import 'home_mood_dialog.dart';
 
 class HomeMoodCard extends StatelessWidget {
   const HomeMoodCard({super.key, required this.mood, required this.onSaveMood});
@@ -13,7 +15,10 @@ class HomeMoodCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentMood = mood.mood?.trim();
 
-    return _HomeCard(
+    return HomeCardShell(
+      key: const Key('home-mood-card'),
+      treatment: HomeCardTreatment.mood,
+      padding: const EdgeInsets.all(18),
       child: Row(
         children: [
           const Icon(Icons.mood_rounded, color: BubColors.deepPurple),
@@ -73,98 +78,10 @@ class HomeMoodCard extends StatelessWidget {
     BuildContext context, {
     String initialMood = '',
   }) async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => _MoodDialog(initialMood: initialMood),
-    );
+    final result = await showHomeMoodDialog(context, initialMood: initialMood);
 
     if (result != null) {
       onSaveMood(result);
     }
-  }
-}
-
-class _MoodDialog extends StatefulWidget {
-  const _MoodDialog({required this.initialMood});
-
-  final String initialMood;
-
-  @override
-  State<_MoodDialog> createState() => _MoodDialogState();
-}
-
-class _MoodDialogState extends State<_MoodDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialMood);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Mood'),
-      content: Form(
-        key: _formKey,
-        child: TextFormField(
-          key: const Key('home-mood-dialog-field'),
-          controller: _controller,
-          autofocus: true,
-          maxLength: 20,
-          decoration: const InputDecoration(hintText: 'How are you?'),
-          validator: (value) {
-            final mood = value?.trim() ?? '';
-            if (mood.isEmpty) {
-              return 'Mood is required';
-            }
-            if (mood.length > 20) {
-              return 'Use 20 characters or fewer';
-            }
-            return null;
-          },
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () {
-            if (_formKey.currentState?.validate() ?? false) {
-              Navigator.of(context).pop(_controller.text.trim());
-            }
-          },
-          child: const Text('Save'),
-        ),
-      ],
-    );
-  }
-}
-
-class _HomeCard extends StatelessWidget {
-  const _HomeCard({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: BubColors.divider),
-      ),
-      child: Padding(padding: const EdgeInsets.all(18), child: child),
-    );
   }
 }

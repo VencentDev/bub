@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../api/generated/models/home_tether_card_response.dart';
 import '../../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../../theme/bub_colors.dart';
+import 'home_card_shell.dart';
 
 class HomePartnerCard extends StatelessWidget {
   const HomePartnerCard({super.key, required this.tether});
@@ -11,7 +12,10 @@ class HomePartnerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _HomeCard(
+    return HomeCardShell(
+      key: const Key('home-partner-card'),
+      treatment: HomeCardTreatment.partner,
+      padding: const EdgeInsets.all(18),
       child: tether.hasActiveTether
           ? _TetheredPartnerCard(tether: tether)
           : const _UntetheredPartnerCard(),
@@ -187,31 +191,6 @@ class _ProfileNode extends StatelessWidget {
           fontWeight: FontWeight.w900,
         ),
       ),
-    );
-  }
-}
-
-class _HomeCard extends StatelessWidget {
-  const _HomeCard({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: BubColors.divider),
-        boxShadow: [
-          BoxShadow(
-            color: BubColors.deepPurple.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Padding(padding: const EdgeInsets.all(18), child: child),
     );
   }
 }

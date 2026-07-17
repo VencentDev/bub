@@ -58,4 +58,64 @@ class BubColors {
   static const chatBubbleGradient = LinearGradient(
     colors: [deepPurple, purple, pink],
   );
+
+  static LinearGradient homeTodayMomentGradient(Brightness brightness) {
+    return brightness == Brightness.dark
+        ? LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              deepPurple.withValues(alpha: 0.96),
+              darkCard,
+              pink.withValues(alpha: 0.36),
+            ],
+          )
+        : LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [partnerBubbleLight, white, pink.withValues(alpha: 0.12)],
+          );
+  }
+
+  static LinearGradient homePartnerGradient(Brightness brightness) {
+    return brightness == Brightness.dark
+        ? LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [darkCard, Color(0xFF201C3A), Color(0xFF172637)],
+          )
+        : LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [white, Color(0xFFF7F2FF), Color(0xFFEFF8FF)],
+          );
+  }
+
+  static LinearGradient homeLatestBubGradient(Brightness brightness) {
+    return brightness == Brightness.dark
+        ? LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [darkSurface, Color(0xFF20273B), Color(0xFF2B1D46)],
+          )
+        : LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [white, Color(0xFFFFF3F8), Color(0xFFF5F0FF)],
+          );
+  }
+
+  static LinearGradient homeMoodGradient(Brightness brightness) {
+    return brightness == Brightness.dark
+        ? LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [darkCard, Color(0xFF2A1D3B), Color(0xFF3A1E3E)],
+          )
+        : LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [white, Color(0xFFFFF2F8), Color(0xFFF4ECFF)],
+          );
+  }
 }

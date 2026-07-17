@@ -1,23 +1,33 @@
 import 'package:flutter/material.dart';
 
+import '../../../api/generated/models/home_mood_summary_response.dart';
 import '../../../api/generated/models/home_today_moment_response.dart';
 import '../../../theme/bub_colors.dart';
+import 'home_card_shell.dart';
+import 'home_mood_dialog.dart';
 
 class HomeTodayMomentCard extends StatelessWidget {
   const HomeTodayMomentCard({
     super.key,
     required this.moment,
     required this.onReact,
+    this.mood,
+    this.onSaveMood,
+    this.showMoodPill = false,
   });
 
   final HomeTodayMomentResponse? moment;
   final VoidCallback onReact;
+  final HomeMoodSummaryResponse? mood;
+  final ValueChanged<String>? onSaveMood;
+  final bool showMoodPill;
 
   @override
   Widget build(BuildContext context) {
     final current = moment;
-    return _HomeCard(
+    return HomeCardShell(
       key: const Key('home-today-moment-card'),
+      treatment: HomeCardTreatment.todayMoment,
       minHeight: 208,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -27,9 +37,27 @@ class HomeTodayMomentCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Today's Moment",
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        "Today's Moment",
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    if (showMoodPill)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 10),
+                        child: _TodayMoodPill(
+                          mood: mood,
+                          onSaveMood: onSaveMood,
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 if (current == null)
@@ -89,23 +117,72 @@ class HomeTodayMomentCard extends StatelessWidget {
   }
 }
 
-class _HomeCard extends StatelessWidget {
-  const _HomeCard({super.key, required this.child, required this.minHeight});
+class _TodayMoodPill extends StatelessWidget {
+  const _TodayMoodPill({required this.mood, required this.onSaveMood});
 
-  final Widget child;
-  final double minHeight;
+  final HomeMoodSummaryResponse? mood;
+  final ValueChanged<String>? onSaveMood;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: BubColors.divider),
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: minHeight),
-        child: Padding(padding: const EdgeInsets.all(16), child: child),
+    final currentMood = mood?.mood?.trim();
+    final hasMood = currentMood != null && currentMood.isNotEmpty;
+    final label = hasMood ? 'Mood: $currentMood' : 'Add mood';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: const Key('home-today-moment-mood-pill'),
+        borderRadius: BorderRadius.circular(999),
+        onTap: () async {
+          final saveMood = onSaveMood;
+          if (saveMood == null) {
+            return;
+          }
+          final result = await showHomeMoodDialog(
+            context,
+            initialMood: hasMood ? currentMood : '',
+          );
+          if (result != null) {
+            saveMood(result);
+          }
+        },
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: BubColors.white.withValues(alpha: 0.64),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: BubColors.pink.withValues(alpha: 0.26)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.mood_rounded,
+                    color: BubColors.heart,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: BubColors.deepPurple,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

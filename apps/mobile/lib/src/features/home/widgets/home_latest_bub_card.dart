@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../api/generated/models/home_latest_bub_response.dart';
 import '../../../theme/bub_colors.dart';
+import 'home_card_shell.dart';
 
 class HomeLatestBubCard extends StatelessWidget {
   const HomeLatestBubCard({super.key, required this.latestBub});
@@ -10,8 +11,9 @@ class HomeLatestBubCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _HomeCard(
+    return HomeCardShell(
       key: const Key('home-latest-bub-card'),
+      treatment: HomeCardTreatment.latestBub,
       minHeight: latestBub.hasActivity ? 166 : 132,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -120,27 +122,5 @@ class HomeLatestBubCard extends StatelessWidget {
     }
     final hours = minutes ~/ 60;
     return '$hours hours ago';
-  }
-}
-
-class _HomeCard extends StatelessWidget {
-  const _HomeCard({super.key, required this.child, required this.minHeight});
-
-  final Widget child;
-  final double minHeight;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: BubColors.divider),
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: minHeight),
-        child: Padding(padding: const EdgeInsets.all(16), child: child),
-      ),
-    );
   }
 }
