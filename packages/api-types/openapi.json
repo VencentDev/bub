@@ -103,6 +103,38 @@
         ]
       }
     },
+    "/api/v1/home/mood": {
+      "put": {
+        "operationId": "putMood",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HomeMoodRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeMoodSummaryResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/home/today-moment/{momentId}/reaction": {
       "post": {
         "operationId": "reactToTodayMoment",
@@ -286,7 +318,7 @@
     "schemas": {
       "HomeDashboardResponse": {
         "type": "object",
-        "required": ["tether", "latestBub", "safe"],
+        "required": ["tether", "latestBub", "mood"],
         "properties": {
           "tether": {
             "$ref": "#/components/schemas/HomeTetherCardResponse"
@@ -304,8 +336,8 @@
           "latestBub": {
             "$ref": "#/components/schemas/HomeLatestBubResponse"
           },
-          "safe": {
-            "$ref": "#/components/schemas/HomeSafeSummaryResponse"
+          "mood": {
+            "$ref": "#/components/schemas/HomeMoodSummaryResponse"
           }
         }
       },
@@ -334,18 +366,27 @@
           }
         }
       },
-      "HomeSafeSummaryResponse": {
+      "HomeMoodRequest": {
         "type": "object",
-        "required": ["enabled", "copy", "ctaLabel"],
+        "required": ["mood"],
         "properties": {
-          "enabled": {
-            "type": "boolean"
-          },
+          "mood": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1
+          }
+        }
+      },
+      "HomeMoodSummaryResponse": {
+        "type": "object",
+        "required": ["copy"],
+        "properties": {
           "copy": {
             "type": "string"
           },
-          "ctaLabel": {
-            "type": "string"
+          "mood": {
+            "type": ["string", "null"],
+            "maxLength": 20
           }
         }
       },

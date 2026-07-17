@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.vencentdev.backend.IntegrationTestBase;
 import com.vencentdev.backend.modules.home.repository.HomeDailyMomentRepository;
+import com.vencentdev.backend.modules.home.repository.HomeMoodRepository;
 import com.vencentdev.backend.modules.tether.entity.TetherConnection;
 import com.vencentdev.backend.modules.tether.repository.TetherConnectionRepository;
 import com.vencentdev.backend.modules.tether.repository.TetherInvitationRepository;
@@ -29,6 +30,7 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
 
   @Autowired private MockMvc mockMvc;
   @Autowired private HomeDailyMomentRepository moments;
+  @Autowired private HomeMoodRepository moods;
   @Autowired private TetherConnectionRepository connections;
   @Autowired private TetherInvitationRepository invitations;
   @Autowired private UserRepository users;
@@ -36,6 +38,7 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
   @BeforeEach
   void setUp() {
     moments.deleteAll();
+    moods.deleteAll();
     connections.deleteAll();
     invitations.deleteAll();
     users.deleteAll();
@@ -52,8 +55,9 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(jsonPath("$.tether.ctaLabel").value("Tether with someone"))
         .andExpect(jsonPath("$.todayMoment").value(nullValue()))
         .andExpect(jsonPath("$.latestBub.hasActivity").value(false))
-        .andExpect(jsonPath("$.safe.enabled").value(true))
-        .andExpect(jsonPath("$.safe.ctaLabel").value("Open Safe"));
+        .andExpect(jsonPath("$.mood.copy").value("How are you feeling?"))
+        .andExpect(jsonPath("$.mood.viewerMood").value(nullValue()))
+        .andExpect(jsonPath("$.mood.partnerMood").value(nullValue()));
   }
 
   @Test
@@ -70,8 +74,9 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(jsonPath("$.tether.partnerDisplayName").value("Bob"))
         .andExpect(jsonPath("$.tether.tetheredSince").exists())
         .andExpect(jsonPath("$.latestBub.copy").value("No Bubs yet"))
-        .andExpect(
-            jsonPath("$.safe.copy").value("Keep important details ready when you need them."));
+        .andExpect(jsonPath("$.mood.copy").value("How are you feeling?"))
+        .andExpect(jsonPath("$.mood.viewerMood").value(nullValue()))
+        .andExpect(jsonPath("$.mood.partnerMood").value(nullValue()));
   }
 
   @Test
@@ -104,6 +109,49 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.todayMoment.photoUrl").value("https://cdn.example.com/two.jpg"))
         .andExpect(jsonPath("$.todayMoment.viewerHasPostedToday").value(false));
+  }
+
+  @Test
+  void putMoodStoresShortMoodAndReturnsItOnDashboard() throws Exception {
+    users.save(user("alice", "alice@example.com", "Alice"));
+
+    mockMvc
+        .perform(putMood("alice", "cozy"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.copy").value("How are you feeling?"))
+        .andExpect(jsonPath("$.viewerMood").value("cozy"))
+        .andExpect(jsonPath("$.partnerMood").value(nullValue()));
+
+    mockMvc
+        .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.mood.viewerMood").value("cozy"))
+        .andExpect(jsonPath("$.mood.partnerMood").value(nullValue()));
+  }
+
+  @Test
+  void dashboardForTetheredUserReturnsViewerAndPartnerMoods() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    connections.save(TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+
+    mockMvc.perform(putMood("alice", "calm")).andExpect(status().isOk());
+    mockMvc.perform(putMood("bob", "sparkly")).andExpect(status().isOk());
+
+    mockMvc
+        .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.mood.viewerMood").value("calm"))
+        .andExpect(jsonPath("$.mood.partnerMood").value("sparkly"));
+  }
+
+  @Test
+  void putMoodRejectsMoodLongerThanTwentyCharacters() throws Exception {
+    users.save(user("alice", "alice@example.com", "Alice"));
+
+    mockMvc
+        .perform(putMood("alice", "this mood is way too long"))
+        .andExpect(status().isBadRequest());
   }
 
   @Test
@@ -162,6 +210,14 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
     return put("/api/v1/home/today-moment")
         .contentType(MediaType.APPLICATION_JSON)
         .content("{\"photoUrl\":\"" + photoUrl + "\",\"localDate\":\"" + localDate + "\"}")
+        .with(currentUser(subject));
+  }
+
+  private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder putMood(
+      String subject, String mood) {
+    return put("/api/v1/home/mood")
+        .contentType(MediaType.APPLICATION_JSON)
+        .content("{\"mood\":\"" + mood + "\"}")
         .with(currentUser(subject));
   }
 

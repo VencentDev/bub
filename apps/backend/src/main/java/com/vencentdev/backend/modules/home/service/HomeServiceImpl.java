@@ -7,12 +7,15 @@ import com.vencentdev.backend.modules.auth.AuthenticatedUser;
 import com.vencentdev.backend.modules.home.dto.HomeDashboardResponse;
 import com.vencentdev.backend.modules.home.dto.HomeLatestBubResponse;
 import com.vencentdev.backend.modules.home.dto.HomeMomentReactionRequest;
-import com.vencentdev.backend.modules.home.dto.HomeSafeSummaryResponse;
+import com.vencentdev.backend.modules.home.dto.HomeMoodRequest;
+import com.vencentdev.backend.modules.home.dto.HomeMoodSummaryResponse;
 import com.vencentdev.backend.modules.home.dto.HomeTetherCardResponse;
 import com.vencentdev.backend.modules.home.dto.HomeTodayMomentRequest;
 import com.vencentdev.backend.modules.home.dto.HomeTodayMomentResponse;
 import com.vencentdev.backend.modules.home.entity.HomeDailyMoment;
+import com.vencentdev.backend.modules.home.entity.HomeMood;
 import com.vencentdev.backend.modules.home.repository.HomeDailyMomentRepository;
+import com.vencentdev.backend.modules.home.repository.HomeMoodRepository;
 import com.vencentdev.backend.modules.tether.entity.TetherConnection;
 import com.vencentdev.backend.modules.tether.repository.TetherConnectionRepository;
 import com.vencentdev.backend.modules.user.entity.User;
@@ -30,12 +33,12 @@ public class HomeServiceImpl implements HomeService {
 
   private static final String TETHER_CTA = "Tether with someone";
   private static final String NO_BUBS_COPY = "No Bubs yet";
-  private static final String SAFE_COPY = "Keep important details ready when you need them.";
-  private static final String SAFE_CTA = "Open Safe";
+  private static final String MOOD_COPY = "How are you feeling?";
   private static final String HEART_REACTION = "❤️";
 
   private final TetherConnectionRepository connections;
   private final HomeDailyMomentRepository moments;
+  private final HomeMoodRepository moods;
   private final UserRepository users;
   private final UserService userService;
   private final Clock clock;
@@ -44,19 +47,22 @@ public class HomeServiceImpl implements HomeService {
   public HomeServiceImpl(
       TetherConnectionRepository connections,
       HomeDailyMomentRepository moments,
+      HomeMoodRepository moods,
       UserRepository users,
       UserService userService) {
-    this(connections, moments, users, userService, Clock.systemUTC());
+    this(connections, moments, moods, users, userService, Clock.systemUTC());
   }
 
   HomeServiceImpl(
       TetherConnectionRepository connections,
       HomeDailyMomentRepository moments,
+      HomeMoodRepository moods,
       UserRepository users,
       UserService userService,
       Clock clock) {
     this.connections = connections;
     this.moments = moments;
+    this.moods = moods;
     this.users = users;
     this.userService = userService;
     this.clock = clock;
@@ -69,7 +75,7 @@ public class HomeServiceImpl implements HomeService {
     return connections
         .findActiveByUserId(userId)
         .map(connection -> dashboardForTetheredUser(connection, userId))
-        .orElseGet(this::dashboardForUntetheredUser);
+        .orElseGet(() -> dashboardForUntetheredUser(userId));
   }
 
   @Override
@@ -121,6 +127,18 @@ public class HomeServiceImpl implements HomeService {
     return toMomentResponse(moment, userId);
   }
 
+  @Override
+  @Transactional
+  public HomeMoodSummaryResponse putMood(AuthenticatedUser principal, HomeMoodRequest request) {
+    UUID userId = userService.resolveInternalId(principal);
+    User user =
+        users.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    HomeMood mood =
+        moods.findByUserId(userId).orElseGet(() -> HomeMood.builder().user(user).build());
+    mood.setMood(request.mood().trim());
+    return toMoodResponse(moods.save(mood));
+  }
+
   private HomeDashboardResponse dashboardForTetheredUser(TetherConnection connection, UUID userId) {
     HomeTodayMomentResponse todayMoment =
         moments
@@ -129,18 +147,15 @@ public class HomeServiceImpl implements HomeService {
             .orElse(null);
 
     return new HomeDashboardResponse(
-        tetherCard(connection, userId),
-        todayMoment,
-        noBubs(),
-        new HomeSafeSummaryResponse(true, SAFE_COPY, SAFE_CTA));
+        tetherCard(connection, userId), todayMoment, noBubs(), moodForUser(userId));
   }
 
-  private HomeDashboardResponse dashboardForUntetheredUser() {
+  private HomeDashboardResponse dashboardForUntetheredUser(UUID userId) {
     return new HomeDashboardResponse(
         new HomeTetherCardResponse(false, null, null, null, null, null, TETHER_CTA),
         null,
         noBubs(),
-        new HomeSafeSummaryResponse(true, SAFE_COPY, SAFE_CTA));
+        moodForUser(userId));
   }
 
   private TetherConnection activeConnection(UUID userId) {
@@ -184,5 +199,16 @@ public class HomeServiceImpl implements HomeService {
 
   private HomeLatestBubResponse noBubs() {
     return new HomeLatestBubResponse(false, NO_BUBS_COPY, null);
+  }
+
+  private HomeMoodSummaryResponse moodForUser(UUID userId) {
+    return moods
+        .findByUserId(userId)
+        .map(this::toMoodResponse)
+        .orElseGet(() -> new HomeMoodSummaryResponse(MOOD_COPY, null));
+  }
+
+  private HomeMoodSummaryResponse toMoodResponse(HomeMood mood) {
+    return new HomeMoodSummaryResponse(MOOD_COPY, mood.getMood());
   }
 }

@@ -4,6 +4,8 @@ import com.vencentdev.backend.modules.auth.AuthenticatedUser;
 import com.vencentdev.backend.modules.auth.CurrentUser;
 import com.vencentdev.backend.modules.home.dto.HomeDashboardResponse;
 import com.vencentdev.backend.modules.home.dto.HomeMomentReactionRequest;
+import com.vencentdev.backend.modules.home.dto.HomeMoodRequest;
+import com.vencentdev.backend.modules.home.dto.HomeMoodSummaryResponse;
 import com.vencentdev.backend.modules.home.dto.HomeTodayMomentRequest;
 import com.vencentdev.backend.modules.home.dto.HomeTodayMomentResponse;
 import com.vencentdev.backend.modules.home.service.HomeService;
@@ -44,5 +46,11 @@ public class HomeController {
       @PathVariable UUID momentId,
       @Valid @RequestBody HomeMomentReactionRequest request) {
     return homeService.reactToMoment(user, momentId, request);
+  }
+
+  @PutMapping("/mood")
+  public HomeMoodSummaryResponse putMood(
+      @CurrentUser AuthenticatedUser user, @Valid @RequestBody HomeMoodRequest request) {
+    return homeService.putMood(user, request);
   }
 }
