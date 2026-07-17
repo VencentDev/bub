@@ -219,7 +219,7 @@ void main() {
     );
     expect(
       tester.getSize(find.byKey(const Key('home-latest-bub-card'))).height,
-      lessThan(150),
+      lessThan(135),
     );
     expect(find.text('Send your first Bub'), findsWidgets);
     expect(find.byKey(const Key('home-first-bub-button')), findsOneWidget);
@@ -286,6 +286,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('bub-nav-heart')), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -120));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('home-first-bub-button')));
     await tester.pump();
 
@@ -455,6 +457,10 @@ void main() {
     expect(find.byKey(const Key('home-tether-string')), findsOneWidget);
     expect(find.byKey(const Key('home-tether-since-date')), findsOneWidget);
     expect(find.byKey(const Key('home-tether-duration')), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const Key('home-partner-card'))).height,
+      lessThan(165),
+    );
     expect(find.byType(RefreshIndicator), findsOneWidget);
     final refreshList = tester.widget<ListView>(
       find.byKey(const Key('home-dashboard-refresh-list')),
@@ -507,7 +513,7 @@ void main() {
     expect((bubArt.image as AssetImage).assetName, 'assets/onboarding/bub.png');
     expect(
       tester.getSize(find.byKey(const Key('home-latest-bub-card'))).height,
-      greaterThanOrEqualTo(160),
+      lessThan(155),
     );
     expect(find.byKey(const Key('home-today-moment-mood-pill')), findsNothing);
     expect(find.text('Mood: calm'), findsNothing);
@@ -595,6 +601,7 @@ void main() {
           partnerLastSentAt: DateTime(2026, 7, 17, 7, 0),
           viewerLastSentCopy: 'You Bubbed them',
           partnerLastSentCopy: 'Your partner Bubbed you',
+          streakDays: 45,
         ),
         isTethered: true,
         now: DateTime(2026, 7, 17, 9, 0),
@@ -612,6 +619,8 @@ void main() {
     );
     expect(find.text('Your partner Bubbed you'), findsOneWidget);
     expect(find.text('You Bubbed them'), findsOneWidget);
+    expect(find.byKey(const Key('home-latest-bub-streak')), findsOneWidget);
+    expect(find.text('45 days'), findsOneWidget);
     expect(find.text('2 hours ago'), findsOneWidget);
     expect(find.text('30 mins ago'), findsOneWidget);
   });
@@ -927,6 +936,10 @@ void main() {
     expect(
       tester.getSize(find.byKey(const Key('home-tether-cta-button'))).width,
       greaterThan(180),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('home-partner-card'))).height,
+      lessThan(145),
     );
 
     await tester.tap(find.widgetWithText(FilledButton, 'Start tethering'));

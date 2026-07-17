@@ -584,7 +584,8 @@
           "viewerLastSentAt": { "type": "string", "format": "date-time" },
           "partnerLastSentAt": { "type": "string", "format": "date-time" },
           "viewerLastSentCopy": { "type": "string" },
-          "partnerLastSentCopy": { "type": "string" }
+          "partnerLastSentCopy": { "type": "string" },
+          "streakDays": { "type": "integer", "format": "int32" }
         }
       },
       "BubSendResponse": {

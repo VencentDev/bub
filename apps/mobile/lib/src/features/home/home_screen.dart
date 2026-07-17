@@ -270,6 +270,8 @@ class _BubHomeState extends ConsumerState<_BubHome> {
   var _section = _BubHomeSection.home;
   var _bubJellyTrigger = 0;
   var _heartBurstTrigger = 0;
+  DateTime? _lastSeenPartnerBubAt;
+  var _hasSeenPartnerBubSnapshot = false;
   final _bubNavTargetKey = GlobalKey(debugLabel: 'bub-nav-heart-target');
 
   void _selectSection(_BubHomeSection section) {
@@ -283,6 +285,32 @@ class _BubHomeState extends ConsumerState<_BubHome> {
       _section = _BubHomeSection.home;
     });
     ref.read(firstBubTutorialLauncherProvider)(context, _bubNavTargetKey);
+  }
+
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text(
+          'You will need to sign in again to get back to Bub.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) {
+      return;
+    }
+    widget.onLogout();
   }
 
   Future<void> _sendBub() async {
@@ -324,12 +352,41 @@ class _BubHomeState extends ConsumerState<_BubHome> {
   @override
   Widget build(BuildContext context) {
     final bubSendState = ref.watch(bubSendControllerProvider);
+    ref.listen(homeDashboardProvider, (_, next) {
+      final partnerLastSentAt = next.asData?.value.latestBub?.partnerLastSentAt;
+      if (!_hasSeenPartnerBubSnapshot) {
+        _hasSeenPartnerBubSnapshot = true;
+        _lastSeenPartnerBubAt = partnerLastSentAt;
+        return;
+      }
+      if (partnerLastSentAt == null) {
+        return;
+      }
+      final previousPartnerBub = _lastSeenPartnerBubAt;
+      if (previousPartnerBub != null &&
+          !partnerLastSentAt.isAfter(previousPartnerBub)) {
+        return;
+      }
+      _lastSeenPartnerBubAt = partnerLastSentAt;
+      HapticFeedback.heavyImpact();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _heartBurstTrigger += 1;
+      });
+      _showBubToast(
+        context,
+        message: 'They Bubbed you',
+        icon: Icons.favorite_rounded,
+      );
+    });
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
         title: const _BubAppBarLogo(),
         actions: [
-          TextButton(onPressed: widget.onLogout, child: const Text('Logout')),
+          TextButton(onPressed: _confirmLogout, child: const Text('Logout')),
         ],
       ),
       extendBody: true,
@@ -809,8 +866,8 @@ class _BubNavHeartItemState extends State<_BubNavHeartItem>
               opacity: widget.sending ? 0.82 : 1,
               child: Container(
                 key: widget.targetKey,
-                width: 64,
-                height: 64,
+                width: 84,
+                height: 84,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   gradient: BubColors.bubGradient,
@@ -825,8 +882,8 @@ class _BubNavHeartItemState extends State<_BubNavHeartItem>
                 ),
                 child: Image.asset(
                   'assets/onboarding/heart.png',
-                  width: 52,
-                  height: 52,
+                  width: 75,
+                  height: 75,
                   fit: BoxFit.contain,
                 ),
               ),

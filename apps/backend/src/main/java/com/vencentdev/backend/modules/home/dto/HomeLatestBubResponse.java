@@ -9,4 +9,5 @@ public record HomeLatestBubResponse(
     Instant viewerLastSentAt,
     Instant partnerLastSentAt,
     String viewerLastSentCopy,
-    String partnerLastSentCopy) {}
+    String partnerLastSentCopy,
+    int streakDays) {}

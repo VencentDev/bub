@@ -28,6 +28,11 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -45,6 +50,7 @@ public class HomeServiceImpl implements HomeService {
   private static final String MOOD_COPY = "How are you feeling?";
   private static final String HEART_REACTION = "❤️";
   private static final Duration MOMENT_TTL = Duration.ofHours(24);
+  private static final ZoneId BUB_DAY_ZONE = ZoneId.of("Asia/Manila");
 
   private final TetherConnectionRepository connections;
   private final BubEventRepository bubEvents;
@@ -298,7 +304,8 @@ public class HomeServiceImpl implements HomeService {
   }
 
   private HomeLatestBubResponse tetherRequiredBubSummary() {
-    return new HomeLatestBubResponse(false, TETHER_REQUIRED_BUB_COPY, null, null, null, null, null);
+    return new HomeLatestBubResponse(
+        false, TETHER_REQUIRED_BUB_COPY, null, null, null, null, null, 0);
   }
 
   private HomeLatestBubResponse bubSummary(
@@ -318,6 +325,7 @@ public class HomeServiceImpl implements HomeService {
     boolean hasActivity = viewerLastSentAt != null || partnerLastSentAt != null;
     Instant occurredAt = latest(viewerLastSentAt, partnerLastSentAt);
     String copy = hasActivity ? latestCopy(viewerLastSentAt, partnerLastSentAt) : FIRST_BUB_COPY;
+    int streakDays = hasActivity ? bubStreakDays(connection.getId(), viewerId, partnerId) : 0;
 
     return new HomeLatestBubResponse(
         hasActivity,
@@ -326,7 +334,38 @@ public class HomeServiceImpl implements HomeService {
         viewerLastSentAt,
         partnerLastSentAt,
         viewerLastSentAt == null ? null : VIEWER_BUB_COPY,
-        partnerLastSentAt == null ? null : PARTNER_BUB_COPY);
+        partnerLastSentAt == null ? null : PARTNER_BUB_COPY,
+        streakDays);
+  }
+
+  private int bubStreakDays(UUID connectionId, UUID viewerId, UUID partnerId) {
+    Map<LocalDate, Set<UUID>> sendersByDay = new HashMap<>();
+    for (BubEvent event :
+        bubEvents.findByTetherConnectionIdOrderByCreatedAtDescIdDesc(connectionId)) {
+      LocalDate day = LocalDate.ofInstant(event.getCreatedAt(), BUB_DAY_ZONE);
+      sendersByDay
+          .computeIfAbsent(day, ignored -> new HashSet<>())
+          .add(event.getSenderUser().getId());
+    }
+
+    Set<LocalDate> mutualDays = new HashSet<>();
+    Set<UUID> tetherUsers = Set.of(viewerId, partnerId);
+    for (Map.Entry<LocalDate, Set<UUID>> entry : sendersByDay.entrySet()) {
+      if (entry.getValue().containsAll(tetherUsers)) {
+        mutualDays.add(entry.getKey());
+      }
+    }
+    if (mutualDays.isEmpty()) {
+      return 0;
+    }
+
+    LocalDate cursor = LocalDate.now(clock.withZone(BUB_DAY_ZONE));
+    int streak = 0;
+    while (mutualDays.contains(cursor)) {
+      streak += 1;
+      cursor = cursor.minusDays(1);
+    }
+    return streak;
   }
 
   private Instant createdAt(BubEvent event) {

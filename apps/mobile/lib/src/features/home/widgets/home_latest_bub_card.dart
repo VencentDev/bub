@@ -27,18 +27,18 @@ class HomeLatestBubCard extends StatelessWidget {
     return HomeCardShell(
       key: const Key('home-latest-bub-card'),
       treatment: HomeCardTreatment.latestBub,
-      minHeight: hasActivity ? 172 : 142,
+      minHeight: hasActivity ? 150 : 116,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Image.asset(
             'assets/onboarding/bub.png',
             key: const Key('home-latest-bub-art'),
-            width: hasActivity ? 120 : 98,
-            height: hasActivity ? 128 : 104,
+            width: hasActivity ? 88 : 72,
+            height: hasActivity ? 96 : 78,
             fit: BoxFit.contain,
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -53,12 +53,12 @@ class HomeLatestBubCard extends StatelessWidget {
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 19,
+                    fontSize: 17,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
                 if (!hasActivity) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   if (isTethered)
                     FilledButton.icon(
                       key: const Key('home-first-bub-button'),
@@ -66,8 +66,8 @@ class HomeLatestBubCard extends StatelessWidget {
                       icon: const Icon(Icons.favorite_rounded, size: 16),
                       label: const Text('Send your first Bub'),
                       style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 38),
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        minimumSize: const Size(0, 32),
+                        padding: const EdgeInsets.symmetric(horizontal: 11),
                         textStyle: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w900,
@@ -112,12 +112,16 @@ class HomeLatestBubCard extends StatelessWidget {
                       ),
                     ),
                 ] else ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 5),
                   ..._activityRows(),
                 ],
               ],
             ),
           ),
+          if (latestBub.partnerLastSentAt != null) ...[
+            const SizedBox(width: 8),
+            _PartnerBubStreak(streakDays: latestBub.streakDays ?? 0),
+          ],
         ],
       ),
     );
@@ -156,7 +160,7 @@ class HomeLatestBubCard extends StatelessWidget {
     }
     return rows.expand((row) sync* {
       if (rows.indexOf(row) > 0) {
-        yield const SizedBox(height: 6);
+        yield const SizedBox(height: 4);
       }
       yield row;
     }).toList();
@@ -172,6 +176,54 @@ class HomeLatestBubCard extends StatelessWidget {
     }
     final hours = minutes ~/ 60;
     return '$hours hours ago';
+  }
+}
+
+class _PartnerBubStreak extends StatelessWidget {
+  const _PartnerBubStreak({required this.streakDays});
+
+  final int streakDays;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: const Key('home-latest-bub-streak'),
+      width: 80,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            'assets/onboarding/heart.png',
+            key: const Key('home-latest-bub-heart'),
+            width: 75,
+            height: 75,
+            fit: BoxFit.contain,
+          ),
+          Text(
+            '$streakDays',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: BubColors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0,
+              shadows: [
+                Shadow(
+                  color: BubColors.pink.withValues(alpha: 0.95),
+                  blurRadius: 12,
+                ),
+                Shadow(
+                  color: BubColors.deepPurple.withValues(alpha: 0.45),
+                  blurRadius: 20,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -192,8 +244,8 @@ class _BubActivityRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: BubColors.purple, size: 17),
-        const SizedBox(width: 7),
+        Icon(icon, color: BubColors.purple, size: 16),
+        const SizedBox(width: 6),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,14 +256,14 @@ class _BubActivityRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 1),
               Text(
                 relativeTime,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: Theme.of(context).hintColor,
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
                 ),
               ),
