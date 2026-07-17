@@ -195,8 +195,8 @@ class _PartnerBubStreak extends StatelessWidget {
           Image.asset(
             'assets/onboarding/heart.png',
             key: const Key('home-latest-bub-heart'),
-            width: 75,
-            height: 75,
+            width: 120,
+            height: 120,
             fit: BoxFit.contain,
           ),
           Text(

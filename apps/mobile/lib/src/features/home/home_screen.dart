@@ -866,8 +866,8 @@ class _BubNavHeartItemState extends State<_BubNavHeartItem>
               opacity: widget.sending ? 0.82 : 1,
               child: Container(
                 key: widget.targetKey,
-                width: 84,
-                height: 84,
+                width: 64,
+                height: 64,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   gradient: BubColors.bubGradient,
@@ -882,8 +882,8 @@ class _BubNavHeartItemState extends State<_BubNavHeartItem>
                 ),
                 child: Image.asset(
                   'assets/onboarding/heart.png',
-                  width: 75,
-                  height: 75,
+                  width: 85,
+                  height: 85,
                   fit: BoxFit.contain,
                 ),
               ),
