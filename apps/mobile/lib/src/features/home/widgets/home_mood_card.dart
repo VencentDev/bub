@@ -31,7 +31,11 @@ class HomeMoodCard extends StatelessWidget {
                   'Mood',
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
                 ),
-                Text(mood.copy, maxLines: 2, overflow: TextOverflow.ellipsis),
+                Text(
+                  mood.copy ?? 'How are you feeling?',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),

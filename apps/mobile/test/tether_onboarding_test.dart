@@ -1,7 +1,9 @@
-import 'package:bub/src/api/generated/models/kyc_status.dart';
-import 'package:bub/src/api/generated/models/role.dart';
+import 'package:bub/src/api/generated/models/chat_thread_response.dart';
 import 'package:bub/src/api/generated/models/tether_invitation_response.dart';
 import 'package:bub/src/api/generated/models/tether_status_response.dart';
+import 'package:bub/src/api/generated/models/user_response_kyc_status.dart';
+import 'package:bub/src/api/generated/models/user_response_role.dart';
+import 'package:bub/src/api/generated/models/user_response_user_type.dart';
 import 'package:bub/src/api/generated/models/user_response.dart';
 import 'package:bub/src/api/generated/models/home_dashboard_response.dart';
 import 'package:bub/src/api/generated/models/home_latest_bub_response.dart';
@@ -10,11 +12,11 @@ import 'package:bub/src/api/generated/models/home_tether_card_response.dart';
 import 'package:bub/src/api/generated/models/home_today_moment_response.dart';
 import 'package:bub/src/auth/auth_controller.dart';
 import 'package:bub/src/auth/auth_state.dart';
+import 'package:bub/src/features/chat/chat_controller.dart';
 import 'package:bub/src/features/home/home_dashboard_controller.dart';
 import 'package:bub/src/features/home/home_screen.dart';
 import 'package:bub/src/features/home/widgets/home_today_moment_card.dart';
 import 'package:bub/src/features/tether_onboarding/tether_onboarding_screens.dart';
-import 'package:bub/src/api/generated/models/user_type.dart';
 import 'package:bub/src/theme/bub_colors.dart';
 import 'package:bub/src/theme/bub_theme.dart';
 import 'package:flutter/material.dart';
@@ -220,7 +222,10 @@ void main() {
 
     await tester.tap(find.text('Chat'));
     await tester.pumpAndSettle();
-    expect(find.text('Chat section'), findsOneWidget);
+    expect(
+      find.text('Tether someone to start your conversation'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Safe'));
     await tester.pumpAndSettle();
@@ -252,10 +257,10 @@ void main() {
             partnerDisplayName: 'Bobby',
             tetheredSince: DateTime(2026, 7, 1),
           ),
-          todayMoment: const HomeTodayMomentResponse(
+          todayMoment: HomeTodayMomentResponse(
             momentId: 'moment-id',
             photoUrl: 'https://cdn.example.com/moment.jpg',
-            localDate: '2026-07-16',
+            localDate: DateTime(2026, 7, 16),
             viewerHasPostedToday: false,
             partnerReaction: '❤️',
           ),
@@ -343,10 +348,10 @@ void main() {
           tetherOnboardingComplete: true,
         ),
         homeDashboard: _dashboard(
-          todayMoment: const HomeTodayMomentResponse(
+          todayMoment: HomeTodayMomentResponse(
             momentId: 'moment-id',
             photoUrl: 'https://cdn.example.com/moment.jpg',
-            localDate: '2026-07-16',
+            localDate: DateTime(2026, 7, 16),
             viewerHasPostedToday: false,
           ),
           mood: const HomeMoodSummaryResponse(copy: 'How are you feeling?'),
@@ -447,10 +452,10 @@ void main() {
           tetherOnboardingComplete: true,
         ),
         homeDashboard: _dashboard(
-          todayMoment: const HomeTodayMomentResponse(
+          todayMoment: HomeTodayMomentResponse(
             momentId: 'moment-id',
             photoUrl: 'https://cdn.example.com/moment.jpg',
-            localDate: '2026-07-16',
+            localDate: DateTime(2026, 7, 16),
             viewerHasPostedToday: false,
           ),
         ),
@@ -758,6 +763,11 @@ Widget _appWithAuthController(
       homeDashboardProvider.overrideWith(
         () => _FakeHomeDashboardController(homeDashboard ?? _dashboard()),
       ),
+      chatThreadProvider.overrideWith(
+        () => _FakeChatThreadController(
+          const ChatThreadResponse(hasActiveTether: false, messages: []),
+        ),
+      ),
       tetherScannerPreviewProvider.overrideWithValue(
         (context, scanWindow, onPayloadDetected) =>
             const ColoredBox(color: Colors.black),
@@ -807,10 +817,19 @@ class _FakeHomeDashboardController extends HomeDashboardController {
       tether: dashboard.tether,
       todayMoment: dashboard.todayMoment,
       latestBub: dashboard.latestBub,
-      mood: HomeMoodSummaryResponse(copy: dashboard.mood.copy, mood: mood),
+      mood: HomeMoodSummaryResponse(copy: dashboard.mood?.copy, mood: mood),
     );
     state = AsyncData(dashboard);
   }
+}
+
+class _FakeChatThreadController extends ChatThreadController {
+  _FakeChatThreadController(this.thread);
+
+  final ChatThreadResponse thread;
+
+  @override
+  Future<ChatThreadResponse> build() async => thread;
 }
 
 class _FakeAuthController extends AuthController {
@@ -856,9 +875,9 @@ class _FakeAuthController extends AuthController {
 UserResponse _user() => UserResponse(
   id: 'user-id',
   email: 'user@example.com',
-  role: Role.user,
-  userType: UserType.individual,
-  kycStatus: KycStatus.none,
+  role: UserResponseRole.user,
+  userType: UserResponseUserType.individual,
+  kycStatus: UserResponseKycStatus.none,
   createdAt: DateTime.utc(2026),
   updatedAt: DateTime.utc(2026),
 );

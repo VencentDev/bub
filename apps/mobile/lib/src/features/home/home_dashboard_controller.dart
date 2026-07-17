@@ -9,7 +9,7 @@ import '../../core/dio_provider.dart';
 class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
   @override
   Future<HomeDashboardResponse> build() {
-    return ref.read(restClientProvider).fallback.getHomeDashboard();
+    return ref.read(restClientProvider).homeController.getHomeDashboard();
   }
 
   Future<void> refresh() async {
@@ -22,14 +22,14 @@ class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
     state = await AsyncValue.guard(() async {
       await ref
           .read(restClientProvider)
-          .fallback
+          .homeController
           .putTodayMoment(
             body: HomeTodayMomentRequest(
               photoUrl: photoUrl,
-              localDate: localDate,
+              localDate: DateTime.parse(localDate),
             ),
           );
-      return ref.read(restClientProvider).fallback.getHomeDashboard();
+      return ref.read(restClientProvider).homeController.getHomeDashboard();
     });
   }
 
@@ -37,12 +37,12 @@ class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
     state = await AsyncValue.guard(() async {
       await ref
           .read(restClientProvider)
-          .fallback
+          .homeController
           .reactToTodayMoment(
             momentId: momentId,
             body: const HomeMomentReactionRequest(reaction: '❤️'),
           );
-      return ref.read(restClientProvider).fallback.getHomeDashboard();
+      return ref.read(restClientProvider).homeController.getHomeDashboard();
     });
   }
 
@@ -55,9 +55,9 @@ class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
     state = await AsyncValue.guard(() async {
       await ref
           .read(restClientProvider)
-          .fallback
+          .homeController
           .putMood(body: HomeMoodRequest(mood: trimmedMood));
-      return ref.read(restClientProvider).fallback.getHomeDashboard();
+      return ref.read(restClientProvider).homeController.getHomeDashboard();
     });
   }
 

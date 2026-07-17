@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/auth_controller.dart';
 import '../../auth/auth_state.dart';
 import '../../core/env.dart';
+import '../../features/chat/chat_section.dart';
 import '../../features/home/home_dashboard_controller.dart';
 import '../../features/home/widgets/home_latest_bub_card.dart';
 import '../../features/home/widgets/home_mood_card.dart';
@@ -350,6 +351,10 @@ class _BubHomeSectionBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (section == _BubHomeSection.chat) {
+      return const ChatSection();
+    }
+
     if (section != _BubHomeSection.home) {
       return Center(
         child: Padding(
@@ -392,15 +397,29 @@ class _BubHomeSectionBody extends ConsumerWidget {
         ),
       ),
       data: (data) {
-        final showMoodInTodayMoment = data.tether.hasActiveTether;
+        final tether = data.tether;
+        final latestBub = data.latestBub;
+        final mood = data.mood;
+        if (tether == null || latestBub == null || mood == null) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(24, 24, 24, 132),
+              child: Text(
+                'Home could not load',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          );
+        }
+        final showMoodInTodayMoment = tether.hasActiveTether == true;
         return ListView(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
           children: [
-            HomePartnerCard(tether: data.tether),
+            HomePartnerCard(tether: tether),
             const SizedBox(height: 16),
             HomeTodayMomentCard(
               moment: data.todayMoment,
-              mood: showMoodInTodayMoment ? data.mood : null,
+              mood: showMoodInTodayMoment ? mood : null,
               showMoodPill: showMoodInTodayMoment,
               onSaveMood: (mood) =>
                   ref.read(homeDashboardProvider.notifier).putMood(mood),
@@ -408,14 +427,14 @@ class _BubHomeSectionBody extends ConsumerWidget {
                   ? () {}
                   : () => ref
                         .read(homeDashboardProvider.notifier)
-                        .reactToTodayMoment(data.todayMoment!.momentId),
+                        .reactToTodayMoment(data.todayMoment!.momentId ?? ''),
             ),
             const SizedBox(height: 16),
-            HomeLatestBubCard(latestBub: data.latestBub),
+            HomeLatestBubCard(latestBub: latestBub),
             if (!showMoodInTodayMoment) ...[
               const SizedBox(height: 16),
               HomeMoodCard(
-                mood: data.mood,
+                mood: mood,
                 onSaveMood: (mood) =>
                     ref.read(homeDashboardProvider.notifier).putMood(mood),
               ),

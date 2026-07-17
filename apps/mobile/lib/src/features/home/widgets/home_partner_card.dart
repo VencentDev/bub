@@ -16,7 +16,7 @@ class HomePartnerCard extends StatelessWidget {
       key: const Key('home-partner-card'),
       treatment: HomeCardTreatment.partner,
       padding: const EdgeInsets.all(18),
-      child: tether.hasActiveTether
+      child: tether.hasActiveTether == true
           ? _TetheredPartnerCard(tether: tether)
           : const _UntetheredPartnerCard(),
     );

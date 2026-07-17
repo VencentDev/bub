@@ -18,7 +18,7 @@ class AuthState {
     required TetherStatusResponse tetherStatus,
     required bool tetherOnboardingComplete,
   }) : this._(
-         route: tetherStatus.hasActiveTether
+         route: tetherStatus.hasActiveTether == true
              ? AuthRouteState.tethered
              : tetherOnboardingComplete
              ? AuthRouteState.untethered

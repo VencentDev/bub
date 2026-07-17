@@ -11,18 +11,19 @@ class HomeLatestBubCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasActivity = latestBub.hasActivity == true;
     return HomeCardShell(
       key: const Key('home-latest-bub-card'),
       treatment: HomeCardTreatment.latestBub,
-      minHeight: latestBub.hasActivity ? 166 : 132,
+      minHeight: hasActivity ? 166 : 132,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Image.asset(
             'assets/onboarding/bub.png',
             key: const Key('home-latest-bub-art'),
-            width: latestBub.hasActivity ? 120 : 98,
-            height: latestBub.hasActivity ? 128 : 104,
+            width: hasActivity ? 120 : 98,
+            height: hasActivity ? 128 : 104,
             fit: BoxFit.contain,
           ),
           const SizedBox(width: 14),
@@ -31,7 +32,7 @@ class HomeLatestBubCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (latestBub.hasActivity) ...[
+                if (hasActivity) ...[
                   const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -54,7 +55,9 @@ class HomeLatestBubCard extends StatelessWidget {
                   const SizedBox(height: 8),
                 ],
                 Text(
-                  latestBub.hasActivity ? latestBub.copy : 'Tether to send bub',
+                  hasActivity
+                      ? latestBub.copy ?? 'Latest Bub'
+                      : 'Tether to send bub',
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -62,7 +65,7 @@ class HomeLatestBubCard extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                if (!latestBub.hasActivity) ...[
+                if (!hasActivity) ...[
                   const SizedBox(height: 10),
                   DecoratedBox(
                     decoration: BoxDecoration(

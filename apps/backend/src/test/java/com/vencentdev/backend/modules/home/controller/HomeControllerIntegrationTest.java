@@ -56,8 +56,7 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(jsonPath("$.todayMoment").value(nullValue()))
         .andExpect(jsonPath("$.latestBub.hasActivity").value(false))
         .andExpect(jsonPath("$.mood.copy").value("How are you feeling?"))
-        .andExpect(jsonPath("$.mood.viewerMood").value(nullValue()))
-        .andExpect(jsonPath("$.mood.partnerMood").value(nullValue()));
+        .andExpect(jsonPath("$.mood.mood").value(nullValue()));
   }
 
   @Test
@@ -75,8 +74,7 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(jsonPath("$.tether.tetheredSince").exists())
         .andExpect(jsonPath("$.latestBub.copy").value("No Bubs yet"))
         .andExpect(jsonPath("$.mood.copy").value("How are you feeling?"))
-        .andExpect(jsonPath("$.mood.viewerMood").value(nullValue()))
-        .andExpect(jsonPath("$.mood.partnerMood").value(nullValue()));
+        .andExpect(jsonPath("$.mood.mood").value(nullValue()));
   }
 
   @Test
@@ -119,18 +117,16 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .perform(putMood("alice", "cozy"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.copy").value("How are you feeling?"))
-        .andExpect(jsonPath("$.viewerMood").value("cozy"))
-        .andExpect(jsonPath("$.partnerMood").value(nullValue()));
+        .andExpect(jsonPath("$.mood").value("cozy"));
 
     mockMvc
         .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.mood.viewerMood").value("cozy"))
-        .andExpect(jsonPath("$.mood.partnerMood").value(nullValue()));
+        .andExpect(jsonPath("$.mood.mood").value("cozy"));
   }
 
   @Test
-  void dashboardForTetheredUserReturnsViewerAndPartnerMoods() throws Exception {
+  void dashboardForTetheredUserReturnsViewerMoodOnly() throws Exception {
     User alice = users.save(user("alice", "alice@example.com", "Alice"));
     User bob = users.save(user("bob", "bob@example.com", "Bob"));
     connections.save(TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
@@ -141,8 +137,7 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
     mockMvc
         .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.mood.viewerMood").value("calm"))
-        .andExpect(jsonPath("$.mood.partnerMood").value("sparkly"));
+        .andExpect(jsonPath("$.mood.mood").value("calm"));
   }
 
   @Test

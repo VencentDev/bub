@@ -135,7 +135,7 @@ class _EnterTetherScreenState extends ConsumerState<EnterTetherScreen> {
     try {
       final status = await ref
           .read(restClientProvider)
-          .fallback
+          .tetherController
           .acceptTether(body: TetherAcceptRequest(code: code));
       await ref
           .read(authControllerProvider.notifier)
@@ -366,7 +366,7 @@ class _TetherScannerScreenState extends ConsumerState<TetherScannerScreen> {
     try {
       final status = await ref
           .read(restClientProvider)
-          .fallback
+          .tetherController
           .acceptTether(body: TetherAcceptRequest(code: code));
       await ref
           .read(authControllerProvider.notifier)
@@ -621,7 +621,10 @@ class _ScannerGuidePainter extends CustomPainter {
 
 final tetherInvitationProvider =
     FutureProvider.autoDispose<TetherInvitationResponse>(
-      (ref) => ref.read(restClientProvider).fallback.createTetherInvitation(),
+      (ref) => ref
+          .read(restClientProvider)
+          .tetherController
+          .createTetherInvitation(),
     );
 
 class _InviteQr extends StatelessWidget {
@@ -644,7 +647,7 @@ class _InviteQr extends StatelessWidget {
             padding: const EdgeInsets.all(18),
             child: QrImageView(
               key: const Key('tether-qr-code'),
-              data: invite.qrPayload,
+              data: invite.qrPayload ?? '',
               size: 220,
               errorCorrectionLevel: QrErrorCorrectLevel.H,
               backgroundColor: BubColors.white,
@@ -652,7 +655,7 @@ class _InviteQr extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        _TetherCodeContainer(code: invite.code),
+        _TetherCodeContainer(code: invite.code ?? ''),
       ],
     );
   }

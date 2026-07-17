@@ -68,7 +68,7 @@ class HomeTodayMomentCard extends StatelessWidget {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(14),
                     child: Image.network(
-                      current.photoUrl,
+                      current.photoUrl ?? '',
                       key: const Key('home-today-moment-photo'),
                       height: 124,
                       width: double.infinity,
@@ -85,7 +85,7 @@ class HomeTodayMomentCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Expanded(child: Text(current.localDate)),
+                      Expanded(child: Text(_dateLabel(current.localDate))),
                       if (current.partnerReaction != null)
                         Text(
                           current.partnerReaction!,
@@ -115,6 +115,15 @@ class HomeTodayMomentCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _dateLabel(DateTime? date) {
+  if (date == null) {
+    return '';
+  }
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
 }
 
 class _TodayMoodPill extends StatelessWidget {
