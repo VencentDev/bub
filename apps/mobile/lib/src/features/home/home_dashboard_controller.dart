@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../api/generated/models/home_dashboard_response.dart';
 import '../../api/generated/models/home_moment_reaction_request.dart';
+import '../../api/generated/models/home_mood_request.dart';
 import '../../api/generated/models/home_today_moment_request.dart';
 import '../../core/dio_provider.dart';
 
@@ -41,6 +42,21 @@ class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
             momentId: momentId,
             body: const HomeMomentReactionRequest(reaction: '❤️'),
           );
+      return ref.read(restClientProvider).fallback.getHomeDashboard();
+    });
+  }
+
+  Future<void> putMood(String mood) async {
+    final trimmedMood = mood.trim();
+    if (trimmedMood.isEmpty || trimmedMood.length > 20) {
+      return;
+    }
+
+    state = await AsyncValue.guard(() async {
+      await ref
+          .read(restClientProvider)
+          .fallback
+          .putMood(body: HomeMoodRequest(mood: trimmedMood));
       return ref.read(restClientProvider).fallback.getHomeDashboard();
     });
   }

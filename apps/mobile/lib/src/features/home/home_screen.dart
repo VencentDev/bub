@@ -8,8 +8,8 @@ import '../../auth/auth_state.dart';
 import '../../core/env.dart';
 import '../../features/home/home_dashboard_controller.dart';
 import '../../features/home/widgets/home_latest_bub_card.dart';
+import '../../features/home/widgets/home_mood_card.dart';
 import '../../features/home/widgets/home_partner_card.dart';
-import '../../features/home/widgets/home_safe_quick_access_card.dart';
 import '../../features/home/widgets/home_today_moment_card.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
@@ -273,7 +273,8 @@ class _BubHomeState extends ConsumerState<_BubHome> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Bub'),
+        titleSpacing: 0,
+        title: const _BubAppBarLogo(),
         actions: [
           TextButton(onPressed: widget.onLogout, child: const Text('Logout')),
         ],
@@ -296,6 +297,46 @@ class _BubHomeState extends ConsumerState<_BubHome> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _BubAppBarLogo extends StatelessWidget {
+  const _BubAppBarLogo();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final asset = isDark
+        ? 'assets/branding/bub-logo.png'
+        : 'assets/branding/bub-logo-purple.png';
+
+    return SizedBox(
+      key: const Key('bub-app-bar-logo'),
+      height: 30,
+      width: 120,
+      child: ClipRect(
+        child: Align(
+          alignment: Alignment.center,
+          child: SizedBox(
+            height: 30,
+            width: 120,
+            child: FittedBox(
+              alignment: Alignment.center,
+              fit: BoxFit.none,
+              clipBehavior: Clip.hardEdge,
+              child: Image.asset(
+                asset,
+                key: const Key('bub-app-bar-logo-image'),
+                width: 100,
+                height: 100,
+                fit: BoxFit.contain,
+                semanticLabel: 'Bub',
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -366,7 +407,11 @@ class _BubHomeSectionBody extends ConsumerWidget {
           const SizedBox(height: 16),
           HomeLatestBubCard(latestBub: data.latestBub),
           const SizedBox(height: 16),
-          HomeSafeQuickAccessCard(safe: data.safe, onOpenSafe: onOpenSafe),
+          HomeMoodCard(
+            mood: data.mood,
+            onSaveMood: (mood) =>
+                ref.read(homeDashboardProvider.notifier).putMood(mood),
+          ),
         ],
       ),
     );

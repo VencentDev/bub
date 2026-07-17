@@ -107,9 +107,14 @@ class _EnterTetherScreenState extends ConsumerState<EnterTetherScreen> {
           const SizedBox(height: 8),
           TextButton(
             key: const Key('skip-tether-button'),
-            onPressed: () => ref
-                .read(authControllerProvider.notifier)
-                .skipTetherOnboarding(),
+            onPressed: () async {
+              await ref
+                  .read(authControllerProvider.notifier)
+                  .skipTetherOnboarding();
+              if (context.mounted && Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+            },
             child: const Text('Skip for now'),
           ),
         ],
