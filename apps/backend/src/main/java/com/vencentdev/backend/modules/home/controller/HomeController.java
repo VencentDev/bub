@@ -19,7 +19,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/home")
@@ -44,6 +46,14 @@ public class HomeController {
       @Parameter(hidden = true) @CurrentUser AuthenticatedUser user,
       @Valid @RequestBody HomeTodayMomentRequest request) {
     return homeService.upsertTodayMoment(user, request);
+  }
+
+  @PostMapping(value = "/today-moment/photo", consumes = "multipart/form-data")
+  @Operation(operationId = "uploadTodayMomentPhoto")
+  public HomeTodayMomentResponse uploadTodayMomentPhoto(
+      @Parameter(hidden = true) @CurrentUser AuthenticatedUser user,
+      @RequestPart("file") MultipartFile file) {
+    return homeService.uploadTodayMomentPhoto(user, file);
   }
 
   @PostMapping("/today-moment/{momentId}/reaction")

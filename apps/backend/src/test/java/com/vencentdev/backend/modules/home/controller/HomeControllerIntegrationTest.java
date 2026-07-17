@@ -1,16 +1,22 @@
 package com.vencentdev.backend.modules.home.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.vencentdev.backend.IntegrationTestBase;
+import com.vencentdev.backend.modules.home.entity.HomeDailyMoment;
 import com.vencentdev.backend.modules.home.repository.HomeDailyMomentRepository;
 import com.vencentdev.backend.modules.home.repository.HomeMoodRepository;
+import com.vencentdev.backend.modules.home.service.HomeMomentExpiryCleanupService;
+import com.vencentdev.backend.modules.home.service.MomentStorageService;
+import com.vencentdev.backend.modules.home.service.MomentStorageService.StoredMomentPhoto;
 import com.vencentdev.backend.modules.tether.entity.TetherConnection;
 import com.vencentdev.backend.modules.tether.repository.TetherConnectionRepository;
 import com.vencentdev.backend.modules.tether.repository.TetherInvitationRepository;
@@ -19,12 +25,22 @@ import com.vencentdev.backend.modules.user.enums.KycStatus;
 import com.vencentdev.backend.modules.user.enums.Role;
 import com.vencentdev.backend.modules.user.enums.UserType;
 import com.vencentdev.backend.modules.user.repository.UserRepository;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.multipart.MultipartFile;
 
 class HomeControllerIntegrationTest extends IntegrationTestBase {
 
@@ -34,6 +50,7 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
   @Autowired private TetherConnectionRepository connections;
   @Autowired private TetherInvitationRepository invitations;
   @Autowired private UserRepository users;
+  @Autowired private HomeMomentExpiryCleanupService expiryCleanup;
 
   @BeforeEach
   void setUp() {
@@ -42,6 +59,8 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
     connections.deleteAll();
     invitations.deleteAll();
     users.deleteAll();
+    StorageTestConfig.deletedObjectPaths.clear();
+    StorageTestConfig.uploadCounter.set(0);
   }
 
   @Test
@@ -100,13 +119,116 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .perform(putMoment("alice", "https://cdn.example.com/two.jpg", today))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.photoUrl").value("https://cdn.example.com/two.jpg"))
+        .andExpect(jsonPath("$.viewerPhotoUrl").value("https://cdn.example.com/two.jpg"))
         .andExpect(jsonPath("$.localDate").value(today));
+
+    mockMvc
+        .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.todayMoment.photoUrl").value(nullValue()))
+        .andExpect(
+            jsonPath("$.todayMoment.viewerPhotoUrl").value("https://cdn.example.com/two.jpg"))
+        .andExpect(jsonPath("$.todayMoment.viewerHasPostedToday").value(true));
 
     mockMvc
         .perform(get("/api/v1/home/dashboard").with(currentUser("bob")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.todayMoment.photoUrl").value("https://cdn.example.com/two.jpg"))
+        .andExpect(jsonPath("$.todayMoment.viewerPhotoUrl").value(nullValue()))
+        .andExpect(jsonPath("$.todayMoment.partnerCapturedAt").exists())
         .andExpect(jsonPath("$.todayMoment.viewerHasPostedToday").value(false));
+  }
+
+  @Test
+  void uploadTodayMomentPhotoStoresPhotoThroughBackendStorage() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    connections.save(TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    String today = LocalDate.now().toString();
+
+    MockMultipartFile photo =
+        new MockMultipartFile("file", "moment.jpg", MediaType.IMAGE_JPEG_VALUE, "photo".getBytes());
+
+    mockMvc
+        .perform(
+            multipart("/api/v1/home/today-moment/photo").file(photo).with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.photoUrl").value("https://cdn.example.com/uploaded-moment-1.jpg"))
+        .andExpect(jsonPath("$.localDate").value(today))
+        .andExpect(jsonPath("$.viewerHasPostedToday").value(true));
+
+    assertThat(moments.findAll())
+        .singleElement()
+        .satisfies(
+            moment -> {
+              assertThat(moment.getStorageObjectPath()).isEqualTo("moments/uploaded-1.jpg");
+              assertThat(moment.getExpiresAt()).isNotNull();
+            });
+
+    mockMvc
+        .perform(get("/api/v1/home/dashboard").with(currentUser("bob")))
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath("$.todayMoment.photoUrl")
+                .value("https://cdn.example.com/uploaded-moment-1.jpg"))
+        .andExpect(jsonPath("$.todayMoment.viewerPhotoUrl").value(nullValue()))
+        .andExpect(jsonPath("$.todayMoment.partnerCapturedAt").exists())
+        .andExpect(jsonPath("$.todayMoment.viewerHasPostedToday").value(false));
+  }
+
+  @Test
+  void retakingTodayMomentDeletesPreviousStorageObject() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    connections.save(TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    MockMultipartFile photo =
+        new MockMultipartFile("file", "moment.jpg", MediaType.IMAGE_JPEG_VALUE, "photo".getBytes());
+
+    mockMvc
+        .perform(
+            multipart("/api/v1/home/today-moment/photo").file(photo).with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath("$.viewerPhotoUrl").value("https://cdn.example.com/uploaded-moment-1.jpg"));
+    mockMvc
+        .perform(
+            multipart("/api/v1/home/today-moment/photo").file(photo).with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(
+            jsonPath("$.viewerPhotoUrl").value("https://cdn.example.com/uploaded-moment-2.jpg"));
+
+    assertThat(StorageTestConfig.deletedObjectPaths).containsExactly("moments/uploaded-1.jpg");
+    assertThat(moments.findAll())
+        .singleElement()
+        .satisfies(
+            moment -> {
+              assertThat(moment.getPhotoUrl())
+                  .isEqualTo("https://cdn.example.com/uploaded-moment-2.jpg");
+              assertThat(moment.getStorageObjectPath()).isEqualTo("moments/uploaded-2.jpg");
+            });
+  }
+
+  @Test
+  void cleanupDeletesExpiredMomentStorageObjectAndRow() {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    TetherConnection connection =
+        connections.save(
+            TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    moments.save(
+        HomeDailyMoment.builder()
+            .tetherConnection(connection)
+            .createdByUser(alice)
+            .localDate(LocalDate.now())
+            .photoUrl("https://cdn.example.com/expired.jpg")
+            .storageObjectPath("moments/expired.jpg")
+            .expiresAt(Instant.now().minusSeconds(1))
+            .build());
+
+    expiryCleanup.deleteExpiredMoments();
+
+    assertThat(StorageTestConfig.deletedObjectPaths).containsExactly("moments/expired.jpg");
+    assertThat(moments.findAll()).isEmpty();
   }
 
   @Test
@@ -238,5 +360,31 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .userType(UserType.INDIVIDUAL)
         .kycStatus(KycStatus.NONE)
         .build();
+  }
+
+  @TestConfiguration
+  static class StorageTestConfig {
+    static final AtomicInteger uploadCounter = new AtomicInteger();
+    static final List<String> deletedObjectPaths = new ArrayList<>();
+
+    @Bean
+    @Primary
+    MomentStorageService momentStorageService() {
+      return new MomentStorageService() {
+        @Override
+        public StoredMomentPhoto uploadMoment(
+            UUID tetherConnectionId, UUID userId, LocalDate localDate, MultipartFile photo) {
+          int uploadNumber = uploadCounter.incrementAndGet();
+          return new StoredMomentPhoto(
+              "https://cdn.example.com/uploaded-moment-" + uploadNumber + ".jpg",
+              "moments/uploaded-" + uploadNumber + ".jpg");
+        }
+
+        @Override
+        public void deleteMoment(String objectPath) {
+          deletedObjectPaths.add(objectPath);
+        }
+      };
+    }
   }
 }
