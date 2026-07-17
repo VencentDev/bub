@@ -1,3 +1,3 @@
 export const qk = {
-  me: () => ['me'] as const,
+  me: (accountKey?: string) => ['me', accountKey ?? 'anonymous'] as const,
 };

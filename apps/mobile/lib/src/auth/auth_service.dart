@@ -79,7 +79,7 @@ class AuthService {
 
   Future<void> logout() async {
     await _initialize();
-    await _googleSignIn.signOut();
+    await _googleSignIn.disconnect();
     await _store.clear();
   }
 

@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/generated/models/tether_status_response.dart';
 import '../core/dio_provider.dart';
+import '../features/chat/chat_controller.dart';
+import '../features/home/home_dashboard_controller.dart';
 import '../features/tether_onboarding/tether_skip_store.dart';
 import 'auth_state.dart';
 
@@ -37,6 +39,10 @@ class AuthController extends AsyncNotifier<AuthState> {
 
   Future<void> logout() async {
     await ref.read(authServiceProvider).logout();
+    ref.invalidate(homeDashboardProvider);
+    ref.invalidate(chatThreadProvider);
+    ref.invalidate(restClientProvider);
+    ref.invalidate(dioProvider);
     state = const AsyncData(AuthState.loggedOut());
   }
 

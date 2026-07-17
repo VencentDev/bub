@@ -87,6 +87,22 @@ void main() {
     expect(source, contains('validAccessToken() != null'));
   });
 
+  test('auth service revokes Google authorization on logout', () {
+    final source = File('lib/src/auth/auth_service.dart').readAsStringSync();
+
+    expect(source, contains('_googleSignIn.disconnect()'));
+    expect(source, isNot(contains('_googleSignIn.signOut()')));
+  });
+
+  test('auth controller clears authenticated provider caches on logout', () {
+    final source = File('lib/src/auth/auth_controller.dart').readAsStringSync();
+
+    expect(source, contains('ref.invalidate(homeDashboardProvider)'));
+    expect(source, contains('ref.invalidate(chatThreadProvider)'));
+    expect(source, contains('ref.invalidate(restClientProvider)'));
+    expect(source, contains('ref.invalidate(dioProvider)'));
+  });
+
   test('API client uses finite network timeouts', () {
     final container = ProviderContainer(
       overrides: [

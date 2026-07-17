@@ -12,9 +12,12 @@ type Me = paths['/api/v1/users/me']['get']['responses']['200']['content']['appli
 
 export function useMe() {
   const { data: session } = useSession();
+  const accountKey = [session?.provider, session?.user?.email ?? session?.user?.name]
+    .filter(Boolean)
+    .join(':');
 
   return useQuery({
-    queryKey: qk.me(),
+    queryKey: qk.me(accountKey),
     queryFn: () => clientApi<Me>(session?.accessToken, '/api/v1/users/me'),
     enabled: !!session?.accessToken,
   });
