@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.vencentdev.backend.IntegrationTestBase;
+import com.vencentdev.backend.modules.bub.entity.BubEvent;
+import com.vencentdev.backend.modules.bub.repository.BubEventRepository;
 import com.vencentdev.backend.modules.home.entity.HomeDailyMoment;
 import com.vencentdev.backend.modules.home.repository.HomeDailyMomentRepository;
 import com.vencentdev.backend.modules.home.repository.HomeMoodRepository;
@@ -45,6 +47,7 @@ import org.springframework.web.multipart.MultipartFile;
 class HomeControllerIntegrationTest extends IntegrationTestBase {
 
   @Autowired private MockMvc mockMvc;
+  @Autowired private BubEventRepository bubEvents;
   @Autowired private HomeDailyMomentRepository moments;
   @Autowired private HomeMoodRepository moods;
   @Autowired private TetherConnectionRepository connections;
@@ -54,6 +57,7 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
 
   @BeforeEach
   void setUp() {
+    bubEvents.deleteAll();
     moments.deleteAll();
     moods.deleteAll();
     connections.deleteAll();
@@ -74,6 +78,9 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(jsonPath("$.tether.ctaLabel").value("Tether with someone"))
         .andExpect(jsonPath("$.todayMoment").value(nullValue()))
         .andExpect(jsonPath("$.latestBub.hasActivity").value(false))
+        .andExpect(jsonPath("$.latestBub.copy").value("Tether to send bub"))
+        .andExpect(jsonPath("$.latestBub.viewerLastSentAt").value(nullValue()))
+        .andExpect(jsonPath("$.latestBub.partnerLastSentAt").value(nullValue()))
         .andExpect(jsonPath("$.mood.copy").value("How are you feeling?"))
         .andExpect(jsonPath("$.mood.mood").value(nullValue()));
   }
@@ -91,9 +98,67 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(jsonPath("$.tether.partnerUserId").value(bob.getId().toString()))
         .andExpect(jsonPath("$.tether.partnerDisplayName").value("Bob"))
         .andExpect(jsonPath("$.tether.tetheredSince").exists())
-        .andExpect(jsonPath("$.latestBub.copy").value("No Bubs yet"))
+        .andExpect(jsonPath("$.latestBub.hasActivity").value(false))
+        .andExpect(jsonPath("$.latestBub.copy").value("Send your first Bub"))
+        .andExpect(jsonPath("$.latestBub.viewerLastSentAt").value(nullValue()))
+        .andExpect(jsonPath("$.latestBub.partnerLastSentAt").value(nullValue()))
         .andExpect(jsonPath("$.mood.copy").value("How are you feeling?"))
         .andExpect(jsonPath("$.mood.mood").value(nullValue()));
+  }
+
+  @Test
+  void dashboardIncludesLatestDirectionalBubActivity() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    TetherConnection connection =
+        connections.save(
+            TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    bubEvents.save(
+        BubEvent.builder()
+            .tetherConnection(connection)
+            .senderUser(alice)
+            .receiverUser(bob)
+            .build());
+    bubEvents.save(
+        BubEvent.builder()
+            .tetherConnection(connection)
+            .senderUser(bob)
+            .receiverUser(alice)
+            .build());
+
+    mockMvc
+        .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.latestBub.hasActivity").value(true))
+        .andExpect(jsonPath("$.latestBub.viewerLastSentAt").exists())
+        .andExpect(jsonPath("$.latestBub.partnerLastSentAt").exists())
+        .andExpect(jsonPath("$.latestBub.viewerLastSentCopy").value("You Bubbed them"))
+        .andExpect(jsonPath("$.latestBub.partnerLastSentCopy").value("They Bubbed you"));
+  }
+
+  @Test
+  void dashboardIgnoresBubActivityFromInactiveTethers() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    User charlie = users.save(user("charlie", "charlie@example.com", "Charlie"));
+    TetherConnection inactiveConnection =
+        connections.save(
+            TetherConnection.builder().userOne(alice).userTwo(charlie).active(false).build());
+    connections.save(TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    bubEvents.save(
+        BubEvent.builder()
+            .tetherConnection(inactiveConnection)
+            .senderUser(alice)
+            .receiverUser(charlie)
+            .build());
+
+    mockMvc
+        .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.latestBub.hasActivity").value(false))
+        .andExpect(jsonPath("$.latestBub.copy").value("Send your first Bub"))
+        .andExpect(jsonPath("$.latestBub.viewerLastSentAt").value(nullValue()))
+        .andExpect(jsonPath("$.latestBub.partnerLastSentAt").value(nullValue()));
   }
 
   @Test

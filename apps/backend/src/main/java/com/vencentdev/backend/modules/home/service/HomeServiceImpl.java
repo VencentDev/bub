@@ -4,6 +4,8 @@ import com.vencentdev.backend.common.exception.BadRequestException;
 import com.vencentdev.backend.common.exception.ForbiddenException;
 import com.vencentdev.backend.common.exception.ResourceNotFoundException;
 import com.vencentdev.backend.modules.auth.AuthenticatedUser;
+import com.vencentdev.backend.modules.bub.entity.BubEvent;
+import com.vencentdev.backend.modules.bub.repository.BubEventRepository;
 import com.vencentdev.backend.modules.home.dto.HomeDashboardResponse;
 import com.vencentdev.backend.modules.home.dto.HomeLatestBubResponse;
 import com.vencentdev.backend.modules.home.dto.HomeMomentReactionRequest;
@@ -36,12 +38,16 @@ import org.springframework.web.multipart.MultipartFile;
 public class HomeServiceImpl implements HomeService {
 
   private static final String TETHER_CTA = "Tether with someone";
-  private static final String NO_BUBS_COPY = "No Bubs yet";
+  private static final String TETHER_REQUIRED_BUB_COPY = "Tether to send bub";
+  private static final String FIRST_BUB_COPY = "Send your first Bub";
+  private static final String VIEWER_BUB_COPY = "You Bubbed them";
+  private static final String PARTNER_BUB_COPY = "They Bubbed you";
   private static final String MOOD_COPY = "How are you feeling?";
   private static final String HEART_REACTION = "❤️";
   private static final Duration MOMENT_TTL = Duration.ofHours(24);
 
   private final TetherConnectionRepository connections;
+  private final BubEventRepository bubEvents;
   private final HomeDailyMomentRepository moments;
   private final HomeMoodRepository moods;
   private final UserRepository users;
@@ -52,16 +58,26 @@ public class HomeServiceImpl implements HomeService {
   @Autowired
   public HomeServiceImpl(
       TetherConnectionRepository connections,
+      BubEventRepository bubEvents,
       HomeDailyMomentRepository moments,
       HomeMoodRepository moods,
       UserRepository users,
       UserService userService,
       MomentStorageService momentStorageService) {
-    this(connections, moments, moods, users, userService, momentStorageService, Clock.systemUTC());
+    this(
+        connections,
+        bubEvents,
+        moments,
+        moods,
+        users,
+        userService,
+        momentStorageService,
+        Clock.systemUTC());
   }
 
   HomeServiceImpl(
       TetherConnectionRepository connections,
+      BubEventRepository bubEvents,
       HomeDailyMomentRepository moments,
       HomeMoodRepository moods,
       UserRepository users,
@@ -69,6 +85,7 @@ public class HomeServiceImpl implements HomeService {
       MomentStorageService momentStorageService,
       Clock clock) {
     this.connections = connections;
+    this.bubEvents = bubEvents;
     this.moments = moments;
     this.moods = moods;
     this.users = users;
@@ -208,14 +225,17 @@ public class HomeServiceImpl implements HomeService {
             : toMomentResponse(partnerMoment, viewerMoment);
 
     return new HomeDashboardResponse(
-        tetherCard(connection, userId), todayMoment, noBubs(), moodForUser(userId));
+        tetherCard(connection, userId),
+        todayMoment,
+        bubSummary(connection, userId, partner.getId()),
+        moodForUser(userId));
   }
 
   private HomeDashboardResponse dashboardForUntetheredUser(UUID userId) {
     return new HomeDashboardResponse(
         new HomeTetherCardResponse(false, null, null, null, null, null, TETHER_CTA),
         null,
-        noBubs(),
+        tetherRequiredBubSummary(),
         moodForUser(userId));
   }
 
@@ -277,8 +297,60 @@ public class HomeServiceImpl implements HomeService {
         null, null, viewerMoment.getPhotoUrl(), null, viewerMoment.getLocalDate(), true, null);
   }
 
-  private HomeLatestBubResponse noBubs() {
-    return new HomeLatestBubResponse(false, NO_BUBS_COPY, null);
+  private HomeLatestBubResponse tetherRequiredBubSummary() {
+    return new HomeLatestBubResponse(false, TETHER_REQUIRED_BUB_COPY, null, null, null, null, null);
+  }
+
+  private HomeLatestBubResponse bubSummary(
+      TetherConnection connection, UUID viewerId, UUID partnerId) {
+    BubEvent viewerLastSent =
+        bubEvents
+            .findFirstByTetherConnectionIdAndSenderUserIdOrderByCreatedAtDescIdDesc(
+                connection.getId(), viewerId)
+            .orElse(null);
+    BubEvent partnerLastSent =
+        bubEvents
+            .findFirstByTetherConnectionIdAndSenderUserIdOrderByCreatedAtDescIdDesc(
+                connection.getId(), partnerId)
+            .orElse(null);
+    Instant viewerLastSentAt = createdAt(viewerLastSent);
+    Instant partnerLastSentAt = createdAt(partnerLastSent);
+    boolean hasActivity = viewerLastSentAt != null || partnerLastSentAt != null;
+    Instant occurredAt = latest(viewerLastSentAt, partnerLastSentAt);
+    String copy = hasActivity ? latestCopy(viewerLastSentAt, partnerLastSentAt) : FIRST_BUB_COPY;
+
+    return new HomeLatestBubResponse(
+        hasActivity,
+        copy,
+        occurredAt,
+        viewerLastSentAt,
+        partnerLastSentAt,
+        viewerLastSentAt == null ? null : VIEWER_BUB_COPY,
+        partnerLastSentAt == null ? null : PARTNER_BUB_COPY);
+  }
+
+  private Instant createdAt(BubEvent event) {
+    return event == null ? null : event.getCreatedAt();
+  }
+
+  private Instant latest(Instant viewerLastSentAt, Instant partnerLastSentAt) {
+    if (viewerLastSentAt == null) {
+      return partnerLastSentAt;
+    }
+    if (partnerLastSentAt == null) {
+      return viewerLastSentAt;
+    }
+    return viewerLastSentAt.isAfter(partnerLastSentAt) ? viewerLastSentAt : partnerLastSentAt;
+  }
+
+  private String latestCopy(Instant viewerLastSentAt, Instant partnerLastSentAt) {
+    if (viewerLastSentAt == null) {
+      return PARTNER_BUB_COPY;
+    }
+    if (partnerLastSentAt == null) {
+      return VIEWER_BUB_COPY;
+    }
+    return viewerLastSentAt.isAfter(partnerLastSentAt) ? VIEWER_BUB_COPY : PARTNER_BUB_COPY;
   }
 
   private HomeMoodSummaryResponse moodForUser(UUID userId) {
