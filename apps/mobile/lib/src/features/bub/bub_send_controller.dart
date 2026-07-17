@@ -15,7 +15,9 @@ class BubSendController extends AsyncNotifier<void> {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       await ref.read(restClientProvider).bubController.sendBub();
-      await ref.read(homeDashboardProvider.notifier).refresh();
+      await ref
+          .read(homeDashboardProvider.notifier)
+          .refresh(preserveCurrent: true);
     });
 
     if (state case AsyncError(:final error, :final stackTrace)) {

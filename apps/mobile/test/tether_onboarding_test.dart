@@ -326,11 +326,22 @@ void main() {
     await tester.pump();
 
     expect(sendController.sendCount, 1);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('bub-nav-heart')),
+        matching: find.byType(CircularProgressIndicator),
+      ),
+      findsNothing,
+    );
 
     sendController.completeSend();
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 180));
+    expect(find.byKey(const Key('bub-heart-burst-heart')), findsWidgets);
     await tester.pumpAndSettle();
     expect(find.text('Bub sent'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('Bub sent')).dy, lessThan(140));
+    await tester.pump(const Duration(milliseconds: 2200));
   });
 
   testWidgets('Bub nav failure shows a non-blocking error', (tester) async {
@@ -354,7 +365,50 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text("Bub couldn't send. Please try again."), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text("Bub couldn't send. Please try again.")).dy,
+      lessThan(140),
+    );
     expect(find.byKey(const Key('bub-floating-nav')), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 2200));
+  });
+
+  test('dashboard refresh can preserve current data while fetching', () async {
+    final initialDashboard = _dashboard();
+    final nextDashboard = _dashboard(
+      latestBub: HomeLatestBubResponse(
+        hasActivity: true,
+        copy: 'You Bubbed them',
+        viewerLastSentAt: DateTime(2026, 7, 17, 12),
+        viewerLastSentCopy: 'You Bubbed them',
+      ),
+    );
+    final controller = _DelayedHomeDashboardController(initialDashboard);
+    final container = ProviderContainer(
+      overrides: [homeDashboardProvider.overrideWith(() => controller)],
+    );
+    addTearDown(container.dispose);
+
+    expect(
+      await container.read(homeDashboardProvider.future),
+      initialDashboard,
+    );
+
+    controller.delayNextBuild();
+    final refresh = container
+        .read(homeDashboardProvider.notifier)
+        .refresh(preserveCurrent: true);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      container.read(homeDashboardProvider).asData?.value,
+      initialDashboard,
+    );
+
+    controller.completeNextBuild(nextDashboard);
+    await refresh;
+
+    expect(container.read(homeDashboardProvider).asData?.value, nextDashboard);
   });
 
   testWidgets('home section renders dashboard cards and mood quick access', (
@@ -1195,6 +1249,32 @@ class _FakeHomeDashboardController extends HomeDashboardController {
       mood: HomeMoodSummaryResponse(copy: dashboard.mood?.copy, mood: mood),
     );
     state = AsyncData(dashboard);
+  }
+}
+
+class _DelayedHomeDashboardController extends HomeDashboardController {
+  _DelayedHomeDashboardController(this.dashboard);
+
+  HomeDashboardResponse dashboard;
+  Completer<HomeDashboardResponse>? _nextBuild;
+
+  @override
+  Future<HomeDashboardResponse> build() {
+    final nextBuild = _nextBuild;
+    if (nextBuild != null) {
+      return nextBuild.future;
+    }
+    return Future.value(dashboard);
+  }
+
+  void delayNextBuild() {
+    _nextBuild = Completer<HomeDashboardResponse>();
+  }
+
+  void completeNextBuild(HomeDashboardResponse nextDashboard) {
+    dashboard = nextDashboard;
+    _nextBuild?.complete(nextDashboard);
+    _nextBuild = null;
   }
 }
 
