@@ -1,30 +1,27 @@
 import 'package:flutter/material.dart';
 
-import '../../../api/generated/models/home_mood_summary_response.dart';
 import '../../../api/generated/models/home_today_moment_response.dart';
 import '../../../theme/bub_colors.dart';
 import 'home_card_shell.dart';
-import 'home_mood_dialog.dart';
 
 class HomeTodayMomentCard extends StatelessWidget {
   const HomeTodayMomentCard({
     super.key,
     required this.moment,
     required this.onReact,
-    this.mood,
-    this.onSaveMood,
-    this.showMoodPill = false,
+    this.isTethered = false,
   });
 
   final HomeTodayMomentResponse? moment;
   final VoidCallback onReact;
-  final HomeMoodSummaryResponse? mood;
-  final ValueChanged<String>? onSaveMood;
-  final bool showMoodPill;
+  final bool isTethered;
 
   @override
   Widget build(BuildContext context) {
     final current = moment;
+    final partnerPhotoUrl = current?.photoUrl?.trim();
+    final hasPartnerPhoto =
+        partnerPhotoUrl != null && partnerPhotoUrl.isNotEmpty;
     return HomeCardShell(
       key: const Key('home-today-moment-card'),
       treatment: HomeCardTreatment.todayMoment,
@@ -37,81 +34,101 @@ class HomeTodayMomentCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        "Today's Moment",
-                        style: TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    if (showMoodPill)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 10),
-                        child: _TodayMoodPill(
-                          mood: mood,
-                          onSaveMood: onSaveMood,
-                        ),
-                      ),
-                  ],
+                const Text(
+                  "Today's Moment",
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 10),
-                if (current == null)
-                  const Text(
-                    "Once you're tethered, your daily photo moments will sparkle here.",
+                if (isTethered) ...[
+                  _SelfMomentShortcut(moment: current),
+                  const SizedBox(height: 10),
+                ],
+                if (!hasPartnerPhoto)
+                  Text(
+                    isTethered
+                        ? "Your partner hasn't shared their moment today."
+                        : "Once you're tethered, your daily photo moments will sparkle here.",
+                    style: const TextStyle(fontWeight: FontWeight.w500),
                   )
                 else ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Image.network(
-                      current.photoUrl ?? '',
-                      key: const Key('home-today-moment-photo'),
-                      height: 124,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        height: 124,
-                        width: double.infinity,
-                        alignment: Alignment.center,
-                        color: BubColors.partnerBubbleLight,
-                        child: const Icon(Icons.photo_rounded),
+                  Text(_dateLabel(current?.localDate)),
+                  const SizedBox(height: 6),
+                  if (current?.partnerReaction != null)
+                    Text(
+                      current!.partnerReaction!,
+                      style: const TextStyle(fontSize: 22),
+                    )
+                  else
+                    IconButton(
+                      onPressed: onReact,
+                      icon: const Icon(Icons.favorite_rounded),
+                      color: BubColors.heart,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 40,
+                        height: 40,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(child: Text(_dateLabel(current.localDate))),
-                      if (current.partnerReaction != null)
-                        Text(
-                          current.partnerReaction!,
-                          style: const TextStyle(fontSize: 22),
-                        )
-                      else
-                        IconButton(
-                          onPressed: onReact,
-                          icon: const Icon(Icons.favorite_rounded),
-                          color: BubColors.heart,
-                        ),
-                    ],
-                  ),
                 ],
               ],
             ),
           ),
           const SizedBox(width: 14),
-          Image.asset(
-            'assets/illustrations/bears/bear3.png',
-            key: const Key('home-today-moment-bear'),
-            width: 104,
-            height: 136,
-            fit: BoxFit.contain,
+          _PartnerMomentVisual(
+            photoUrl: partnerPhotoUrl,
+            hasPartnerPhoto: hasPartnerPhoto,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PartnerMomentVisual extends StatelessWidget {
+  const _PartnerMomentVisual({
+    required this.photoUrl,
+    required this.hasPartnerPhoto,
+  });
+
+  final String? photoUrl;
+  final bool hasPartnerPhoto;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 124,
+      child: ClipRRect(
+        key: hasPartnerPhoto ? const Key('home-today-moment-photo') : null,
+        borderRadius: BorderRadius.circular(18),
+        child: hasPartnerPhoto
+            ? Image.network(
+                photoUrl!,
+                width: double.infinity,
+                height: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  alignment: Alignment.center,
+                  color: BubColors.partnerBubbleLight,
+                  child: const Icon(
+                    Icons.photo_rounded,
+                    color: BubColors.deepPurple,
+                    size: 30,
+                  ),
+                ),
+              )
+            : DecoratedBox(
+                decoration: BoxDecoration(
+                  color: BubColors.white.withValues(alpha: 0.48),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Image.asset(
+                    'assets/illustrations/bears/bear3.png',
+                    key: const Key('home-today-moment-bear'),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
       ),
     );
   }
@@ -126,69 +143,132 @@ String _dateLabel(DateTime? date) {
   return '${date.year}-$month-$day';
 }
 
-class _TodayMoodPill extends StatelessWidget {
-  const _TodayMoodPill({required this.mood, required this.onSaveMood});
+class _SelfMomentShortcut extends StatelessWidget {
+  const _SelfMomentShortcut({required this.moment});
 
-  final HomeMoodSummaryResponse? mood;
-  final ValueChanged<String>? onSaveMood;
+  final HomeTodayMomentResponse? moment;
 
   @override
   Widget build(BuildContext context) {
-    final currentMood = mood?.mood?.trim();
-    final hasMood = currentMood != null && currentMood.isNotEmpty;
-    final label = hasMood ? 'Mood: $currentMood' : 'Add mood';
+    final photoUrl = moment?.photoUrl?.trim();
+    final hasSelfMoment =
+        moment?.viewerHasPostedToday == true &&
+        photoUrl != null &&
+        photoUrl.isNotEmpty;
 
+    if (!hasSelfMoment) {
+      return const _CameraSnapshotTile();
+    }
+
+    return Transform.rotate(
+      angle: -0.08,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: const Key('home-today-moment-self-polaroid'),
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _showSelfMomentPreview(context, photoUrl),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: BubColors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(5, 5, 5, 13),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  photoUrl,
+                  width: 54,
+                  height: 54,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 54,
+                    height: 54,
+                    alignment: Alignment.center,
+                    color: BubColors.partnerBubbleLight,
+                    child: const Icon(
+                      Icons.photo_rounded,
+                      color: BubColors.deepPurple,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showSelfMomentPreview(BuildContext context, String photoUrl) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(24),
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image.network(
+              photoUrl,
+              key: const Key('home-today-moment-self-preview'),
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                alignment: Alignment.center,
+                color: BubColors.partnerBubbleLight,
+                child: const Icon(
+                  Icons.photo_rounded,
+                  color: BubColors.deepPurple,
+                  size: 36,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CameraSnapshotTile extends StatelessWidget {
+  const _CameraSnapshotTile();
+
+  @override
+  Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        key: const Key('home-today-moment-mood-pill'),
-        borderRadius: BorderRadius.circular(999),
-        onTap: () async {
-          final saveMood = onSaveMood;
-          if (saveMood == null) {
-            return;
-          }
-          final result = await showHomeMoodDialog(
-            context,
-            initialMood: hasMood ? currentMood : '',
-          );
-          if (result != null) {
-            saveMood(result);
-          }
-        },
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: BubColors.white.withValues(alpha: 0.64),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: BubColors.pink.withValues(alpha: 0.26)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.mood_rounded,
-                    color: BubColors.heart,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: BubColors.deepPurple,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ],
+        key: const Key('home-today-moment-camera-tile'),
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {},
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: BubColors.white.withValues(alpha: 0.88),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: BubColors.pink.withValues(alpha: 0.34)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 12,
+                offset: const Offset(0, 5),
               ),
+            ],
+          ),
+          child: const SizedBox.square(
+            dimension: 64,
+            child: Icon(
+              Icons.camera_alt_rounded,
+              color: BubColors.deepPurple,
+              size: 28,
             ),
           ),
         ),

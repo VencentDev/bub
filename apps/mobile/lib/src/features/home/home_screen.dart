@@ -287,6 +287,7 @@ class _BubHomeState extends ConsumerState<_BubHome> {
           Positioned.fill(
             child: _BubHomeSectionBody(
               section: _section,
+              paired: widget.paired,
               onOpenSafe: () => _selectSection(_BubHomeSection.safe),
             ),
           ),
@@ -344,9 +345,14 @@ class _BubAppBarLogo extends StatelessWidget {
 }
 
 class _BubHomeSectionBody extends ConsumerWidget {
-  const _BubHomeSectionBody({required this.section, required this.onOpenSafe});
+  const _BubHomeSectionBody({
+    required this.section,
+    required this.paired,
+    required this.onOpenSafe,
+  });
 
   final _BubHomeSection section;
+  final bool paired;
   final VoidCallback onOpenSafe;
 
   @override
@@ -411,18 +417,16 @@ class _BubHomeSectionBody extends ConsumerWidget {
             ),
           );
         }
-        final showMoodInTodayMoment = tether.hasActiveTether == true;
+        final isTethered = paired && tether.hasActiveTether == true;
         return ListView(
+          cacheExtent: 1200,
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
           children: [
             HomePartnerCard(tether: tether),
             const SizedBox(height: 16),
             HomeTodayMomentCard(
               moment: data.todayMoment,
-              mood: showMoodInTodayMoment ? mood : null,
-              showMoodPill: showMoodInTodayMoment,
-              onSaveMood: (mood) =>
-                  ref.read(homeDashboardProvider.notifier).putMood(mood),
+              isTethered: isTethered,
               onReact: data.todayMoment == null
                   ? () {}
                   : () => ref
@@ -431,14 +435,12 @@ class _BubHomeSectionBody extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             HomeLatestBubCard(latestBub: latestBub),
-            if (!showMoodInTodayMoment) ...[
-              const SizedBox(height: 16),
-              HomeMoodCard(
-                mood: mood,
-                onSaveMood: (mood) =>
-                    ref.read(homeDashboardProvider.notifier).putMood(mood),
-              ),
-            ],
+            const SizedBox(height: 16),
+            HomeMoodCard(
+              mood: mood,
+              onSaveMood: (mood) =>
+                  ref.read(homeDashboardProvider.notifier).putMood(mood),
+            ),
           ],
         );
       },

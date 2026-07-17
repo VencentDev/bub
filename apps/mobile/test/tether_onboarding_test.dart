@@ -58,7 +58,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Tether to send bub'), findsOneWidget);
+    expect(find.text("Today's Moment"), findsOneWidget);
   });
 
   testWidgets('completed untethered user routes to Bub home', (tester) async {
@@ -73,7 +73,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Tether to send bub'), findsOneWidget);
+    expect(find.text("Today's Moment"), findsOneWidget);
   });
 
   testWidgets('authenticated Bub home uses themed logo in app bar', (
@@ -199,7 +199,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Tether to send bub'), findsOneWidget);
+    expect(find.text("Today's Moment"), findsOneWidget);
     expect(find.text('Latest Bub'), findsNothing);
     expect(find.text('No Bubs yet'), findsNothing);
     expect(
@@ -217,6 +217,14 @@ void main() {
       find.text(
         "Once you're tethered, your daily photo moments will sparkle here.",
       ),
+      findsNothing,
+    );
+    expect(
+      find.text("Your partner hasn't shared their moment today."),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('home-today-moment-camera-tile')),
       findsOneWidget,
     );
 
@@ -237,7 +245,7 @@ void main() {
 
     await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
-    expect(find.text('Tether to send bub'), findsOneWidget);
+    expect(find.text("Today's Moment"), findsOneWidget);
   });
 
   testWidgets('home section renders dashboard cards and mood quick access', (
@@ -281,22 +289,19 @@ void main() {
     expect(find.text('Bobby'), findsOneWidget);
     expect(find.textContaining('Tethered since'), findsOneWidget);
     expect(find.byKey(const Key('home-tether-string')), findsOneWidget);
-    final momentBear = tester.widget<Image>(
-      find.byKey(const Key('home-today-moment-bear')),
+    expect(
+      tester
+          .getSize(find.byKey(const Key('home-today-moment-photo')))
+          .aspectRatio,
+      closeTo(1, 0.01),
     );
     expect(
-      (momentBear.image as AssetImage).assetName,
-      'assets/illustrations/bears/bear3.png',
-    );
-    expect(
-      tester.getCenter(find.byKey(const Key('home-today-moment-bear'))).dx,
-      greaterThan(
-        tester.getCenter(find.byKey(const Key('home-today-moment-photo'))).dx,
-      ),
+      tester.getCenter(find.byKey(const Key('home-today-moment-photo'))).dx,
+      greaterThan(tester.getCenter(find.text("Today's Moment")).dx),
     );
     expect(
       tester.getSize(find.byKey(const Key('home-today-moment-card'))).height,
-      greaterThanOrEqualTo(200),
+      lessThan(260),
     );
     expect(find.byKey(const Key('home-today-moment-photo')), findsOneWidget);
     expect(find.text('❤️'), findsOneWidget);
@@ -309,16 +314,23 @@ void main() {
       tester.getSize(find.byKey(const Key('home-latest-bub-card'))).height,
       greaterThanOrEqualTo(160),
     );
+    expect(find.byKey(const Key('home-today-moment-mood-pill')), findsNothing);
+    expect(find.text('Mood: calm'), findsNothing);
     expect(
-      find.byKey(const Key('home-today-moment-mood-pill')),
+      find.byKey(const Key('home-today-moment-camera-tile')),
       findsOneWidget,
     );
-    expect(find.text('Mood: calm'), findsOneWidget);
-    expect(find.text('Mood'), findsNothing);
-    expect(find.text('How are you feeling?'), findsNothing);
-    expect(find.byKey(const Key('home-mood-card')), findsNothing);
 
-    await tester.tap(find.byKey(const Key('home-today-moment-mood-pill')));
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('home-mood-card')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Mood'), findsOneWidget);
+    expect(find.text('How are you feeling?'), findsOneWidget);
+    expect(find.byKey(const Key('home-mood-card')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('home-mood-value')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('home-mood-dialog-glass')), findsOneWidget);
     expect(find.byKey(const Key('home-mood-dialog-field')), findsOneWidget);
@@ -330,14 +342,11 @@ void main() {
     );
     await tester.tap(find.text('Save mood'));
     await tester.pumpAndSettle();
-    expect(find.text('Mood: cozy'), findsOneWidget);
-    expect(
-      find.byKey(const Key('home-today-moment-mood-pill')),
-      findsOneWidget,
-    );
+    expect(find.text('cozy'), findsOneWidget);
+    expect(find.byKey(const Key('home-mood-card')), findsOneWidget);
   });
 
-  testWidgets('tethered home with no mood shows add pill in today moment', (
+  testWidgets('tethered home with no mood shows standalone mood card', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -360,12 +369,56 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('home-today-moment-mood-pill')), findsNothing);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('home-mood-card')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(ListView), const Offset(0, -140));
+    await tester.pumpAndSettle();
+    expect(find.text('Add'), findsOneWidget);
+    expect(find.byKey(const Key('home-mood-card')), findsOneWidget);
+  });
+
+  testWidgets('today moment shows self polaroid when viewer has posted', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _appWithAuth(
+        AuthState.authenticated(
+          user: _user(),
+          tetherStatus: const TetherStatusResponse(hasActiveTether: true),
+          tetherOnboardingComplete: true,
+        ),
+        homeDashboard: _dashboard(
+          todayMoment: HomeTodayMomentResponse(
+            momentId: 'moment-id',
+            photoUrl: 'https://cdn.example.com/moment.jpg',
+            localDate: DateTime(2026, 7, 16),
+            viewerHasPostedToday: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
     expect(
-      find.byKey(const Key('home-today-moment-mood-pill')),
+      find.byKey(const Key('home-today-moment-self-polaroid')),
       findsOneWidget,
     );
-    expect(find.text('Add mood'), findsOneWidget);
-    expect(find.byKey(const Key('home-mood-card')), findsNothing);
+    expect(
+      find.byKey(const Key('home-today-moment-camera-tile')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const Key('home-today-moment-self-polaroid')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('home-today-moment-self-preview')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('untethered home keeps mood card and empty moment state', (
@@ -463,7 +516,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('home-today-moment-mood-pill')));
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('home-mood-empty-button')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(ListView), const Offset(0, -140));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('home-mood-empty-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save mood'));
     await tester.pumpAndSettle();
@@ -483,7 +543,7 @@ void main() {
     );
     await tester.tap(find.text('Save mood'));
     await tester.pumpAndSettle();
-    expect(find.text('Mood: bright'), findsOneWidget);
+    expect(find.text('bright'), findsOneWidget);
   });
 
   testWidgets('home section renders untethered partner CTA', (tester) async {
@@ -733,7 +793,7 @@ void main() {
     await tester.tap(find.byKey(const Key('go-to-bub-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Tether to send bub'), findsOneWidget);
+    expect(find.text("Today's Moment"), findsOneWidget);
   });
 }
 
