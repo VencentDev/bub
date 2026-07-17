@@ -80,6 +80,20 @@
         }
       }
     },
+    "/api/v1/bubs": {
+      "post": {
+        "tags": ["bub-controller"],
+        "operationId": "sendBub",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": { "schema": { "$ref": "#/components/schemas/BubSendResponse" } }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/home/today-moment/{momentId}/reaction": {
       "post": {
         "tags": ["home-controller"],
@@ -402,6 +416,8 @@
         "properties": {
           "momentId": { "type": "string", "format": "uuid" },
           "photoUrl": { "type": "string" },
+          "viewerPhotoUrl": { "type": "string" },
+          "partnerCapturedAt": { "type": "string", "format": "date-time" },
           "localDate": { "type": "string", "format": "date" },
           "viewerHasPostedToday": { "type": "boolean" },
           "partnerReaction": { "type": "string" }
@@ -564,7 +580,22 @@
         "properties": {
           "hasActivity": { "type": "boolean" },
           "copy": { "type": "string" },
-          "occurredAt": { "type": "string", "format": "date-time" }
+          "occurredAt": { "type": "string", "format": "date-time" },
+          "viewerLastSentAt": { "type": "string", "format": "date-time" },
+          "partnerLastSentAt": { "type": "string", "format": "date-time" },
+          "viewerLastSentCopy": { "type": "string" },
+          "partnerLastSentCopy": { "type": "string" },
+          "streakDays": { "type": "integer", "format": "int32" }
+        }
+      },
+      "BubSendResponse": {
+        "type": "object",
+        "properties": {
+          "bubId": { "type": "string", "format": "uuid" },
+          "tetherConnectionId": { "type": "string", "format": "uuid" },
+          "senderUserId": { "type": "string", "format": "uuid" },
+          "receiverUserId": { "type": "string", "format": "uuid" },
+          "sentAt": { "type": "string", "format": "date-time" }
         }
       },
       "HomeTetherCardResponse": {

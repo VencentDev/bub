@@ -16,9 +16,17 @@ class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
     return ref.read(restClientProvider).homeController.getHomeDashboard();
   }
 
-  Future<void> refresh() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(build);
+  Future<void> refresh({bool preserveCurrent = false}) async {
+    final previous = state.asData?.value;
+    if (!preserveCurrent) {
+      state = const AsyncLoading();
+    }
+    final next = await AsyncValue.guard(build);
+    if (preserveCurrent && previous != null && next.hasError) {
+      state = AsyncData(previous);
+      return;
+    }
+    state = next;
   }
 
   Future<void> putTodayMoment(String photoUrl, DateTime date) async {

@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.vencentdev.backend.IntegrationTestBase;
+import com.vencentdev.backend.modules.bub.entity.BubEvent;
+import com.vencentdev.backend.modules.bub.repository.BubEventRepository;
 import com.vencentdev.backend.modules.home.entity.HomeDailyMoment;
 import com.vencentdev.backend.modules.home.repository.HomeDailyMomentRepository;
 import com.vencentdev.backend.modules.home.repository.HomeMoodRepository;
@@ -25,8 +27,12 @@ import com.vencentdev.backend.modules.user.enums.KycStatus;
 import com.vencentdev.backend.modules.user.enums.Role;
 import com.vencentdev.backend.modules.user.enums.UserType;
 import com.vencentdev.backend.modules.user.repository.UserRepository;
+import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -38,22 +44,28 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.multipart.MultipartFile;
 
 class HomeControllerIntegrationTest extends IntegrationTestBase {
 
+  private static final ZoneId BUB_DAY_ZONE = ZoneId.of("Asia/Manila");
+
   @Autowired private MockMvc mockMvc;
+  @Autowired private BubEventRepository bubEvents;
   @Autowired private HomeDailyMomentRepository moments;
   @Autowired private HomeMoodRepository moods;
   @Autowired private TetherConnectionRepository connections;
   @Autowired private TetherInvitationRepository invitations;
   @Autowired private UserRepository users;
   @Autowired private HomeMomentExpiryCleanupService expiryCleanup;
+  @Autowired private JdbcTemplate jdbc;
 
   @BeforeEach
   void setUp() {
+    bubEvents.deleteAll();
     moments.deleteAll();
     moods.deleteAll();
     connections.deleteAll();
@@ -74,6 +86,10 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(jsonPath("$.tether.ctaLabel").value("Tether with someone"))
         .andExpect(jsonPath("$.todayMoment").value(nullValue()))
         .andExpect(jsonPath("$.latestBub.hasActivity").value(false))
+        .andExpect(jsonPath("$.latestBub.copy").value("Tether to send bub"))
+        .andExpect(jsonPath("$.latestBub.viewerLastSentAt").value(nullValue()))
+        .andExpect(jsonPath("$.latestBub.partnerLastSentAt").value(nullValue()))
+        .andExpect(jsonPath("$.latestBub.streakDays").value(0))
         .andExpect(jsonPath("$.mood.copy").value("How are you feeling?"))
         .andExpect(jsonPath("$.mood.mood").value(nullValue()));
   }
@@ -91,9 +107,165 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(jsonPath("$.tether.partnerUserId").value(bob.getId().toString()))
         .andExpect(jsonPath("$.tether.partnerDisplayName").value("Bob"))
         .andExpect(jsonPath("$.tether.tetheredSince").exists())
-        .andExpect(jsonPath("$.latestBub.copy").value("No Bubs yet"))
+        .andExpect(jsonPath("$.latestBub.hasActivity").value(false))
+        .andExpect(jsonPath("$.latestBub.copy").value("Send your first Bub"))
+        .andExpect(jsonPath("$.latestBub.viewerLastSentAt").value(nullValue()))
+        .andExpect(jsonPath("$.latestBub.partnerLastSentAt").value(nullValue()))
+        .andExpect(jsonPath("$.latestBub.streakDays").value(0))
         .andExpect(jsonPath("$.mood.copy").value("How are you feeling?"))
         .andExpect(jsonPath("$.mood.mood").value(nullValue()));
+  }
+
+  @Test
+  void dashboardIncludesLatestDirectionalBubActivity() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    TetherConnection connection =
+        connections.save(
+            TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    bubEvents.save(
+        BubEvent.builder()
+            .tetherConnection(connection)
+            .senderUser(alice)
+            .receiverUser(bob)
+            .build());
+    bubEvents.save(
+        BubEvent.builder()
+            .tetherConnection(connection)
+            .senderUser(bob)
+            .receiverUser(alice)
+            .build());
+
+    mockMvc
+        .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.latestBub.hasActivity").value(true))
+        .andExpect(jsonPath("$.latestBub.viewerLastSentAt").exists())
+        .andExpect(jsonPath("$.latestBub.partnerLastSentAt").exists())
+        .andExpect(jsonPath("$.latestBub.viewerLastSentCopy").value("You Bubbed them"))
+        .andExpect(jsonPath("$.latestBub.partnerLastSentCopy").value("They Bubbed you"))
+        .andExpect(jsonPath("$.latestBub.streakDays").value(1));
+  }
+
+  @Test
+  void dashboardIncludesCurrentBubStreak() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    TetherConnection connection =
+        connections.save(
+            TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    Instant noon = todayAtNoon();
+    saveBubEvent(connection, alice, bob, noon);
+    saveBubEvent(connection, bob, alice, noon.minus(Duration.ofHours(1)));
+    saveBubEvent(connection, alice, bob, noon.minus(Duration.ofDays(1)));
+    saveBubEvent(connection, bob, alice, noon.minus(Duration.ofDays(1)).minus(Duration.ofHours(1)));
+    saveBubEvent(connection, alice, bob, noon.minus(Duration.ofDays(3)));
+    saveBubEvent(connection, bob, alice, noon.minus(Duration.ofDays(3)).minus(Duration.ofHours(1)));
+
+    mockMvc
+        .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.latestBub.hasActivity").value(true))
+        .andExpect(jsonPath("$.latestBub.streakDays").value(2));
+  }
+
+  @Test
+  void dashboardStartsBubStreakOnceBothUsersBubOnSameDay() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    TetherConnection connection =
+        connections.save(
+            TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    Instant noon = todayAtNoon();
+    saveBubEvent(connection, alice, bob, noon);
+    saveBubEvent(connection, bob, alice, noon.plus(Duration.ofMinutes(5)));
+
+    mockMvc
+        .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.latestBub.hasActivity").value(true))
+        .andExpect(jsonPath("$.latestBub.streakDays").value(1));
+  }
+
+  @Test
+  void dashboardStartsBubStreakWhenLocalDaySpansUtcDates() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    TetherConnection connection =
+        connections.save(
+            TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    LocalDate today = LocalDate.now(BUB_DAY_ZONE);
+    saveBubEvent(connection, alice, bob, today.atTime(1, 0).atZone(BUB_DAY_ZONE).toInstant());
+    saveBubEvent(connection, bob, alice, today.atTime(23, 30).atZone(BUB_DAY_ZONE).toInstant());
+
+    mockMvc
+        .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.latestBub.hasActivity").value(true))
+        .andExpect(jsonPath("$.latestBub.streakDays").value(1));
+  }
+
+  @Test
+  void dashboardDoesNotStartBubStreakFromOneSidedBubs() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    TetherConnection connection =
+        connections.save(
+            TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    Instant noon = todayAtNoon();
+    saveBubEvent(connection, alice, bob, noon);
+    saveBubEvent(connection, alice, bob, noon.minus(Duration.ofDays(1)));
+
+    mockMvc
+        .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.latestBub.hasActivity").value(true))
+        .andExpect(jsonPath("$.latestBub.streakDays").value(0));
+  }
+
+  @Test
+  void dashboardResetsBubStreakWhenTodayIsNotMutual() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    TetherConnection connection =
+        connections.save(
+            TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    Instant noon = todayAtNoon();
+    saveBubEvent(connection, alice, bob, noon);
+    saveBubEvent(connection, alice, bob, noon.minus(Duration.ofDays(1)));
+    saveBubEvent(connection, bob, alice, noon.minus(Duration.ofDays(1)).plus(Duration.ofHours(1)));
+
+    mockMvc
+        .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.latestBub.hasActivity").value(true))
+        .andExpect(jsonPath("$.latestBub.streakDays").value(0));
+  }
+
+  @Test
+  void dashboardIgnoresBubActivityFromInactiveTethers() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    User charlie = users.save(user("charlie", "charlie@example.com", "Charlie"));
+    TetherConnection inactiveConnection =
+        connections.save(
+            TetherConnection.builder().userOne(alice).userTwo(charlie).active(false).build());
+    connections.save(TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    bubEvents.save(
+        BubEvent.builder()
+            .tetherConnection(inactiveConnection)
+            .senderUser(alice)
+            .receiverUser(charlie)
+            .build());
+
+    mockMvc
+        .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.latestBub.hasActivity").value(false))
+        .andExpect(jsonPath("$.latestBub.copy").value("Send your first Bub"))
+        .andExpect(jsonPath("$.latestBub.viewerLastSentAt").value(nullValue()))
+        .andExpect(jsonPath("$.latestBub.partnerLastSentAt").value(nullValue()))
+        .andExpect(jsonPath("$.latestBub.streakDays").value(0));
   }
 
   @Test
@@ -360,6 +532,27 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .userType(UserType.INDIVIDUAL)
         .kycStatus(KycStatus.NONE)
         .build();
+  }
+
+  private BubEvent saveBubEvent(
+      TetherConnection connection, User sender, User receiver, Instant createdAt) {
+    BubEvent event =
+        bubEvents.saveAndFlush(
+            BubEvent.builder()
+                .tetherConnection(connection)
+                .senderUser(sender)
+                .receiverUser(receiver)
+                .build());
+    jdbc.update(
+        "update bub_events set created_at = ? where id = ?",
+        Timestamp.from(createdAt),
+        event.getId());
+    event.setCreatedAt(createdAt);
+    return event;
+  }
+
+  private Instant todayAtNoon() {
+    return LocalDate.now(BUB_DAY_ZONE).atTime(LocalTime.NOON).atZone(BUB_DAY_ZONE).toInstant();
   }
 
   @TestConfiguration

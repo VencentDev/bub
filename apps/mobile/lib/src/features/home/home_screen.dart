@@ -1,12 +1,16 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 import '../../auth/auth_controller.dart';
 import '../../auth/auth_state.dart';
 import '../../core/env.dart';
+import '../../features/bub/bub_send_controller.dart';
+import '../../features/bub/first_bub_tutorial.dart';
 import '../../features/chat/chat_section.dart';
 import '../../features/home/home_dashboard_controller.dart';
 import '../../features/home/widgets/home_latest_bub_card.dart';
@@ -264,6 +268,11 @@ class _BubHome extends ConsumerStatefulWidget {
 
 class _BubHomeState extends ConsumerState<_BubHome> {
   var _section = _BubHomeSection.home;
+  var _bubJellyTrigger = 0;
+  var _heartBurstTrigger = 0;
+  DateTime? _lastSeenPartnerBubAt;
+  var _hasSeenPartnerBubSnapshot = false;
+  final _bubNavTargetKey = GlobalKey(debugLabel: 'bub-nav-heart-target');
 
   void _selectSection(_BubHomeSection section) {
     setState(() {
@@ -271,14 +280,113 @@ class _BubHomeState extends ConsumerState<_BubHome> {
     });
   }
 
+  void _startFirstBubTutorial() {
+    setState(() {
+      _section = _BubHomeSection.home;
+    });
+    ref.read(firstBubTutorialLauncherProvider)(context, _bubNavTargetKey);
+  }
+
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text(
+          'You will need to sign in again to get back to Bub.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) {
+      return;
+    }
+    widget.onLogout();
+  }
+
+  Future<void> _sendBub() async {
+    if (!widget.paired) {
+      _showBubToast(
+        context,
+        message: 'Tether with someone to send a Bub.',
+        icon: Icons.favorite_border_rounded,
+      );
+      return;
+    }
+
+    setState(() {
+      _bubJellyTrigger += 1;
+    });
+    try {
+      await ref.read(bubSendControllerProvider.notifier).sendBub();
+      await HapticFeedback.lightImpact();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _heartBurstTrigger += 1;
+      });
+      _showBubToast(context, message: 'Bub sent', icon: Icons.favorite_rounded);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showBubToast(
+        context,
+        message: _bubSendMessage(error),
+        icon: Icons.favorite_border_rounded,
+        isError: true,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bubSendState = ref.watch(bubSendControllerProvider);
+    ref.listen(homeDashboardProvider, (_, next) {
+      final partnerLastSentAt = next.asData?.value.latestBub?.partnerLastSentAt;
+      if (!_hasSeenPartnerBubSnapshot) {
+        _hasSeenPartnerBubSnapshot = true;
+        _lastSeenPartnerBubAt = partnerLastSentAt;
+        return;
+      }
+      if (partnerLastSentAt == null) {
+        return;
+      }
+      final previousPartnerBub = _lastSeenPartnerBubAt;
+      if (previousPartnerBub != null &&
+          !partnerLastSentAt.isAfter(previousPartnerBub)) {
+        return;
+      }
+      _lastSeenPartnerBubAt = partnerLastSentAt;
+      HapticFeedback.heavyImpact();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _heartBurstTrigger += 1;
+      });
+      _showBubToast(
+        context,
+        message: 'They Bubbed you',
+        icon: Icons.favorite_rounded,
+      );
+    });
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
         title: const _BubAppBarLogo(),
         actions: [
-          TextButton(onPressed: widget.onLogout, child: const Text('Logout')),
+          TextButton(onPressed: _confirmLogout, child: const Text('Logout')),
         ],
       ),
       extendBody: true,
@@ -290,13 +398,19 @@ class _BubHomeState extends ConsumerState<_BubHome> {
               section: _section,
               paired: widget.paired,
               onOpenSafe: () => _selectSection(_BubHomeSection.safe),
+              onStartFirstBub: _startFirstBubTutorial,
             ),
           ),
+          Positioned.fill(child: _BubHeartBurst(trigger: _heartBurstTrigger)),
           Align(
             alignment: Alignment.bottomCenter,
             child: _BubFloatingNav(
               selectedSection: _section,
               onSelected: _selectSection,
+              bubTargetKey: _bubNavTargetKey,
+              onBubPressed: _sendBub,
+              sendingBub: bubSendState.isLoading,
+              bubJellyTrigger: _bubJellyTrigger,
             ),
           ),
         ],
@@ -350,11 +464,13 @@ class _BubHomeSectionBody extends ConsumerWidget {
     required this.section,
     required this.paired,
     required this.onOpenSafe,
+    required this.onStartFirstBub,
   });
 
   final _BubHomeSection section;
   final bool paired;
   final VoidCallback onOpenSafe;
+  final VoidCallback onStartFirstBub;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -453,7 +569,11 @@ class _BubHomeSectionBody extends ConsumerWidget {
                           .reactToTodayMoment(data.todayMoment!.momentId ?? ''),
               ),
               const SizedBox(height: 16),
-              HomeLatestBubCard(latestBub: latestBub),
+              HomeLatestBubCard(
+                latestBub: latestBub,
+                isTethered: isTethered,
+                onFirstBubPressed: onStartFirstBub,
+              ),
               const SizedBox(height: 16),
               HomeMoodCard(
                 mood: mood,
@@ -481,14 +601,35 @@ String _momentUploadMessage(Object error) {
   return "Moment couldn't upload. Please try again.";
 }
 
+String _bubSendMessage(Object error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map<String, dynamic>) {
+      final message = data['message'];
+      if (message is String && message.trim().isNotEmpty) {
+        return message;
+      }
+    }
+  }
+  return "Bub couldn't send. Please try again.";
+}
+
 class _BubFloatingNav extends StatelessWidget {
   const _BubFloatingNav({
     required this.selectedSection,
     required this.onSelected,
+    required this.bubTargetKey,
+    required this.onBubPressed,
+    required this.sendingBub,
+    required this.bubJellyTrigger,
   });
 
   final _BubHomeSection selectedSection;
   final ValueChanged<_BubHomeSection> onSelected;
+  final GlobalKey bubTargetKey;
+  final VoidCallback onBubPressed;
+  final bool sendingBub;
+  final int bubJellyTrigger;
 
   @override
   Widget build(BuildContext context) {
@@ -578,7 +719,15 @@ class _BubFloatingNav extends StatelessWidget {
                 ),
               ),
             ),
-            const Positioned(top: 0, child: _BubNavHeartItem()),
+            Positioned(
+              top: 0,
+              child: _BubNavHeartItem(
+                targetKey: bubTargetKey,
+                onTap: sendingBub ? null : onBubPressed,
+                sending: sendingBub,
+                jellyTrigger: bubJellyTrigger,
+              ),
+            ),
           ],
         ),
       ),
@@ -633,38 +782,111 @@ class _BubNavItem extends StatelessWidget {
   }
 }
 
-class _BubNavHeartItem extends StatelessWidget {
-  const _BubNavHeartItem();
+class _BubNavHeartItem extends StatefulWidget {
+  const _BubNavHeartItem({
+    required this.targetKey,
+    required this.onTap,
+    required this.sending,
+    required this.jellyTrigger,
+  });
+
+  final GlobalKey targetKey;
+  final VoidCallback? onTap;
+  final bool sending;
+  final int jellyTrigger;
+
+  @override
+  State<_BubNavHeartItem> createState() => _BubNavHeartItemState();
+}
+
+class _BubNavHeartItemState extends State<_BubNavHeartItem>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _squish;
+  late final Animation<double> _stretch;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 620),
+    );
+    final curve = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    );
+    _squish = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1, end: 1.18), weight: 18),
+      TweenSequenceItem(tween: Tween(begin: 1.18, end: 0.88), weight: 22),
+      TweenSequenceItem(tween: Tween(begin: 0.88, end: 1.08), weight: 24),
+      TweenSequenceItem(tween: Tween(begin: 1.08, end: 1), weight: 36),
+    ]).animate(curve);
+    _stretch = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1, end: 0.82), weight: 18),
+      TweenSequenceItem(tween: Tween(begin: 0.82, end: 1.16), weight: 22),
+      TweenSequenceItem(tween: Tween(begin: 1.16, end: 0.94), weight: 24),
+      TweenSequenceItem(tween: Tween(begin: 0.94, end: 1), weight: 36),
+    ]).animate(curve);
+  }
+
+  @override
+  void didUpdateWidget(covariant _BubNavHeartItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.jellyTrigger != oldWidget.jellyTrigger) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {},
+      key: const Key('bub-nav-heart'),
+      onTap: widget.onTap,
       borderRadius: BorderRadius.circular(32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: BubColors.bubGradient,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: BubColors.pink.withValues(alpha: 0.34),
-                  blurRadius: 18,
-                  offset: const Offset(0, 9),
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              return Transform.scale(
+                scaleX: _squish.value,
+                scaleY: _stretch.value,
+                child: child,
+              );
+            },
+            child: Opacity(
+              opacity: widget.sending ? 0.82 : 1,
+              child: Container(
+                key: widget.targetKey,
+                width: 64,
+                height: 64,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: BubColors.bubGradient,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: BubColors.pink.withValues(alpha: 0.34),
+                      blurRadius: 18,
+                      offset: const Offset(0, 9),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Image.asset(
-              'assets/onboarding/heart.png',
-              key: const Key('bub-nav-heart'),
-              width: 52,
-              height: 52,
-              fit: BoxFit.contain,
+                child: Image.asset(
+                  'assets/onboarding/heart.png',
+                  width: 85,
+                  height: 85,
+                  fit: BoxFit.contain,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 2),
@@ -680,6 +902,319 @@ class _BubNavHeartItem extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _BubHeartBurst extends StatefulWidget {
+  const _BubHeartBurst({required this.trigger});
+
+  final int trigger;
+
+  @override
+  State<_BubHeartBurst> createState() => _BubHeartBurstState();
+}
+
+class _BubHeartBurstState extends State<_BubHeartBurst>
+    with SingleTickerProviderStateMixin {
+  static const _hearts = [
+    _FloatingHeartSpec(x: 0.10, size: 24, delay: 0.00, drift: 24, turn: -0.18),
+    _FloatingHeartSpec(x: 0.22, size: 38, delay: 0.08, drift: -18, turn: 0.16),
+    _FloatingHeartSpec(x: 0.36, size: 28, delay: 0.16, drift: 34, turn: -0.10),
+    _FloatingHeartSpec(x: 0.50, size: 46, delay: 0.04, drift: -8, turn: 0.08),
+    _FloatingHeartSpec(x: 0.64, size: 30, delay: 0.18, drift: 22, turn: -0.16),
+    _FloatingHeartSpec(x: 0.78, size: 40, delay: 0.10, drift: -30, turn: 0.14),
+    _FloatingHeartSpec(x: 0.90, size: 26, delay: 0.22, drift: 16, turn: -0.08),
+  ];
+
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1450),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _BubHeartBurst oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.trigger != oldWidget.trigger) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              return Stack(
+                children: [
+                  for (final spec in _hearts)
+                    _FloatingHeart(
+                      spec: spec,
+                      progress: _controller.value,
+                      screenSize: constraints.biggest,
+                    ),
+                ],
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _FloatingHeart extends StatelessWidget {
+  const _FloatingHeart({
+    required this.spec,
+    required this.progress,
+    required this.screenSize,
+  });
+
+  final _FloatingHeartSpec spec;
+  final double progress;
+  final Size screenSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final localProgress = ((progress - spec.delay) / (1 - spec.delay)).clamp(
+      0.0,
+      1.0,
+    );
+    if (localProgress == 0 || localProgress == 1) {
+      return const SizedBox.shrink();
+    }
+
+    final eased = Curves.easeOutCubic.transform(localProgress);
+    final fade = localProgress < 0.72
+        ? Curves.easeOut.transform((localProgress / 0.72).clamp(0.0, 1.0))
+        : 1 -
+              Curves.easeIn.transform(
+                ((localProgress - 0.72) / 0.28).clamp(0.0, 1.0),
+              );
+    final baseLeft = screenSize.width * spec.x - spec.size / 2;
+    final bottom = 104 + eased * (screenSize.height * 0.68);
+    final left =
+        baseLeft +
+        math.sin(localProgress * math.pi * 1.6) * spec.drift +
+        spec.drift * eased * 0.34;
+
+    return Positioned(
+      left: left,
+      bottom: bottom,
+      child: Opacity(
+        opacity: fade,
+        child: Transform.rotate(
+          angle: spec.turn * math.sin(localProgress * math.pi),
+          child: Transform.scale(
+            scale: 0.72 + Curves.elasticOut.transform(localProgress) * 0.28,
+            child: Image.asset(
+              'assets/onboarding/heart.png',
+              key: const Key('bub-heart-burst-heart'),
+              width: spec.size,
+              height: spec.size,
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FloatingHeartSpec {
+  const _FloatingHeartSpec({
+    required this.x,
+    required this.size,
+    required this.delay,
+    required this.drift,
+    required this.turn,
+  });
+
+  final double x;
+  final double size;
+  final double delay;
+  final double drift;
+  final double turn;
+}
+
+void _showBubToast(
+  BuildContext context, {
+  required String message,
+  required IconData icon,
+  bool isError = false,
+}) {
+  final overlay = Overlay.of(context);
+  final entry = OverlayEntry(
+    builder: (context) =>
+        _BubToastOverlay(message: message, icon: icon, isError: isError),
+  );
+  overlay.insert(entry);
+  Future<void>.delayed(const Duration(milliseconds: 2100), () {
+    if (entry.mounted) {
+      entry.remove();
+    }
+  });
+}
+
+class _BubToastOverlay extends StatefulWidget {
+  const _BubToastOverlay({
+    required this.message,
+    required this.icon,
+    required this.isError,
+  });
+
+  final String message;
+  final IconData icon;
+  final bool isError;
+
+  @override
+  State<_BubToastOverlay> createState() => _BubToastOverlayState();
+}
+
+class _BubToastOverlayState extends State<_BubToastOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  late final Animation<Offset> _offset;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+      reverseDuration: const Duration(milliseconds: 180),
+    );
+    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _offset = Tween<Offset>(
+      begin: const Offset(0, -0.28),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    _controller.forward();
+    Future<void>.delayed(const Duration(milliseconds: 1800), () {
+      if (mounted) {
+        _controller.reverse();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: MediaQuery.paddingOf(context).top + 12,
+      left: 18,
+      right: 18,
+      child: SafeArea(
+        bottom: false,
+        child: IgnorePointer(
+          child: FadeTransition(
+            opacity: _opacity,
+            child: SlideTransition(
+              position: _offset,
+              child: _BubToast(
+                message: widget.message,
+                icon: widget.icon,
+                isError: widget.isError,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BubToast extends StatelessWidget {
+  const _BubToast({
+    required this.message,
+    required this.icon,
+    required this.isError,
+  });
+
+  final String message;
+  final IconData icon;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final backgroundColor = brightness == Brightness.dark
+        ? BubColors.darkDialog.withValues(alpha: 0.96)
+        : BubColors.white.withValues(alpha: 0.98);
+    final borderColor = isError
+        ? BubColors.coral.withValues(alpha: 0.42)
+        : BubColors.pink.withValues(alpha: 0.32);
+    final textColor = brightness == Brightness.dark
+        ? BubColors.textPrimaryDark
+        : BubColors.textPrimaryLight;
+    final iconColor = isError ? BubColors.coral : BubColors.pink;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: BubColors.deepPurple.withValues(alpha: 0.20),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.14),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: iconColor, size: 19),
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                message,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
