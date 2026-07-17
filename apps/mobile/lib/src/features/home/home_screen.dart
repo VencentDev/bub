@@ -3,10 +3,13 @@ import 'dart:ui';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 import '../../auth/auth_controller.dart';
 import '../../auth/auth_state.dart';
 import '../../core/env.dart';
+import '../../features/bub/bub_send_controller.dart';
+import '../../features/bub/first_bub_tutorial.dart';
 import '../../features/chat/chat_section.dart';
 import '../../features/home/home_dashboard_controller.dart';
 import '../../features/home/widgets/home_latest_bub_card.dart';
@@ -264,6 +267,7 @@ class _BubHome extends ConsumerStatefulWidget {
 
 class _BubHomeState extends ConsumerState<_BubHome> {
   var _section = _BubHomeSection.home;
+  final _bubNavTargetKey = GlobalKey(debugLabel: 'bub-nav-heart-target');
 
   void _selectSection(_BubHomeSection section) {
     setState(() {
@@ -271,8 +275,43 @@ class _BubHomeState extends ConsumerState<_BubHome> {
     });
   }
 
+  void _startFirstBubTutorial() {
+    setState(() {
+      _section = _BubHomeSection.home;
+    });
+    ref.read(firstBubTutorialLauncherProvider)(context, _bubNavTargetKey);
+  }
+
+  Future<void> _sendBub() async {
+    if (!widget.paired) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tether with someone to send a Bub.')),
+      );
+      return;
+    }
+
+    try {
+      await ref.read(bubSendControllerProvider.notifier).sendBub();
+      await HapticFeedback.lightImpact();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Bub sent')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_bubSendMessage(error))));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bubSendState = ref.watch(bubSendControllerProvider);
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -290,6 +329,7 @@ class _BubHomeState extends ConsumerState<_BubHome> {
               section: _section,
               paired: widget.paired,
               onOpenSafe: () => _selectSection(_BubHomeSection.safe),
+              onStartFirstBub: _startFirstBubTutorial,
             ),
           ),
           Align(
@@ -297,6 +337,9 @@ class _BubHomeState extends ConsumerState<_BubHome> {
             child: _BubFloatingNav(
               selectedSection: _section,
               onSelected: _selectSection,
+              bubTargetKey: _bubNavTargetKey,
+              onBubPressed: _sendBub,
+              sendingBub: bubSendState.isLoading,
             ),
           ),
         ],
@@ -350,11 +393,13 @@ class _BubHomeSectionBody extends ConsumerWidget {
     required this.section,
     required this.paired,
     required this.onOpenSafe,
+    required this.onStartFirstBub,
   });
 
   final _BubHomeSection section;
   final bool paired;
   final VoidCallback onOpenSafe;
+  final VoidCallback onStartFirstBub;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -453,7 +498,11 @@ class _BubHomeSectionBody extends ConsumerWidget {
                           .reactToTodayMoment(data.todayMoment!.momentId ?? ''),
               ),
               const SizedBox(height: 16),
-              HomeLatestBubCard(latestBub: latestBub),
+              HomeLatestBubCard(
+                latestBub: latestBub,
+                isTethered: isTethered,
+                onFirstBubPressed: onStartFirstBub,
+              ),
               const SizedBox(height: 16),
               HomeMoodCard(
                 mood: mood,
@@ -481,14 +530,33 @@ String _momentUploadMessage(Object error) {
   return "Moment couldn't upload. Please try again.";
 }
 
+String _bubSendMessage(Object error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map<String, dynamic>) {
+      final message = data['message'];
+      if (message is String && message.trim().isNotEmpty) {
+        return message;
+      }
+    }
+  }
+  return "Bub couldn't send. Please try again.";
+}
+
 class _BubFloatingNav extends StatelessWidget {
   const _BubFloatingNav({
     required this.selectedSection,
     required this.onSelected,
+    required this.bubTargetKey,
+    required this.onBubPressed,
+    required this.sendingBub,
   });
 
   final _BubHomeSection selectedSection;
   final ValueChanged<_BubHomeSection> onSelected;
+  final GlobalKey bubTargetKey;
+  final VoidCallback onBubPressed;
+  final bool sendingBub;
 
   @override
   Widget build(BuildContext context) {
@@ -578,7 +646,14 @@ class _BubFloatingNav extends StatelessWidget {
                 ),
               ),
             ),
-            const Positioned(top: 0, child: _BubNavHeartItem()),
+            Positioned(
+              top: 0,
+              child: _BubNavHeartItem(
+                targetKey: bubTargetKey,
+                onTap: sendingBub ? null : onBubPressed,
+                sending: sendingBub,
+              ),
+            ),
           ],
         ),
       ),
@@ -634,37 +709,60 @@ class _BubNavItem extends StatelessWidget {
 }
 
 class _BubNavHeartItem extends StatelessWidget {
-  const _BubNavHeartItem();
+  const _BubNavHeartItem({
+    required this.targetKey,
+    required this.onTap,
+    required this.sending,
+  });
+
+  final GlobalKey targetKey;
+  final VoidCallback? onTap;
+  final bool sending;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {},
+      key: const Key('bub-nav-heart'),
+      onTap: onTap,
       borderRadius: BorderRadius.circular(32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: BubColors.bubGradient,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: BubColors.pink.withValues(alpha: 0.34),
-                  blurRadius: 18,
-                  offset: const Offset(0, 9),
-                ),
-              ],
-            ),
-            child: Image.asset(
-              'assets/onboarding/heart.png',
-              key: const Key('bub-nav-heart'),
-              width: 52,
-              height: 52,
-              fit: BoxFit.contain,
+          AnimatedScale(
+            scale: sending ? 0.94 : 1,
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOut,
+            child: Container(
+              key: targetKey,
+              width: 64,
+              height: 64,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: BubColors.bubGradient,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: BubColors.pink.withValues(alpha: 0.34),
+                    blurRadius: 18,
+                    offset: const Offset(0, 9),
+                  ),
+                ],
+              ),
+              child: sending
+                  ? const SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        color: BubColors.white,
+                      ),
+                    )
+                  : Image.asset(
+                      'assets/onboarding/heart.png',
+                      width: 52,
+                      height: 52,
+                      fit: BoxFit.contain,
+                    ),
             ),
           ),
           const SizedBox(height: 2),

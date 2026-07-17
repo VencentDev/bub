@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bub/src/api/generated/models/chat_thread_response.dart';
 import 'package:bub/src/api/generated/models/tether_invitation_response.dart';
 import 'package:bub/src/api/generated/models/tether_status_response.dart';
@@ -12,14 +14,18 @@ import 'package:bub/src/api/generated/models/home_tether_card_response.dart';
 import 'package:bub/src/api/generated/models/home_today_moment_response.dart';
 import 'package:bub/src/auth/auth_controller.dart';
 import 'package:bub/src/auth/auth_state.dart';
+import 'package:bub/src/features/bub/bub_send_controller.dart';
+import 'package:bub/src/features/bub/first_bub_tutorial.dart';
 import 'package:bub/src/features/chat/chat_controller.dart';
 import 'package:bub/src/features/home/home_dashboard_controller.dart';
 import 'package:bub/src/features/home/home_screen.dart';
+import 'package:bub/src/features/home/widgets/home_latest_bub_card.dart';
 import 'package:bub/src/features/home/widgets/home_today_moment_card.dart';
 import 'package:bub/src/features/tether_onboarding/tether_onboarding_screens.dart';
 import 'package:bub/src/theme/bub_colors.dart';
 import 'package:bub/src/theme/bub_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -174,7 +180,10 @@ void main() {
     );
 
     final centerHeart = tester.widget<Image>(
-      find.byKey(const Key('bub-nav-heart')),
+      find.descendant(
+        of: find.byKey(const Key('bub-nav-heart')),
+        matching: find.byType(Image),
+      ),
     );
     expect(
       (centerHeart.image as AssetImage).assetName,
@@ -212,7 +221,9 @@ void main() {
       tester.getSize(find.byKey(const Key('home-latest-bub-card'))).height,
       lessThan(150),
     );
-    expect(find.text('Ready for the first Bub'), findsOneWidget);
+    expect(find.text('Send your first Bub'), findsWidgets);
+    expect(find.byKey(const Key('home-first-bub-button')), findsOneWidget);
+    expect(find.byKey(const Key('home-first-bub-button')), findsOneWidget);
     expect(
       find.text(
         "Once you're tethered, your daily photo moments will sparkle here.",
@@ -246,6 +257,104 @@ void main() {
     await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
     expect(find.text("Today's Moment"), findsOneWidget);
+  });
+
+  testWidgets('first Bub CTA launches tutorial for the nav heart', (
+    tester,
+  ) async {
+    var launchCount = 0;
+    GlobalKey? launchedTargetKey;
+
+    await tester.pumpWidget(
+      _appWithAuth(
+        AuthState.authenticated(
+          user: _user(),
+          tetherStatus: const TetherStatusResponse(hasActiveTether: true),
+          tetherOnboardingComplete: true,
+        ),
+        overrides: [
+          firstBubTutorialLauncherProvider.overrideWithValue((
+            context,
+            targetKey,
+          ) {
+            launchCount += 1;
+            launchedTargetKey = targetKey;
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('bub-nav-heart')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('home-first-bub-button')));
+    await tester.pump();
+
+    expect(launchCount, 1);
+    expect(launchedTargetKey?.currentContext, isNotNull);
+  });
+
+  testWidgets('Bub nav sends once while a send is in progress', (tester) async {
+    final sendController = _FakeBubSendController();
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async => null,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _appWithAuth(
+        AuthState.authenticated(
+          user: _user(),
+          tetherStatus: const TetherStatusResponse(hasActiveTether: true),
+          tetherOnboardingComplete: true,
+        ),
+        overrides: [
+          bubSendControllerProvider.overrideWith(() => sendController),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('bub-nav-heart')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('bub-nav-heart')));
+    await tester.pump();
+
+    expect(sendController.sendCount, 1);
+
+    sendController.completeSend();
+    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(find.text('Bub sent'), findsOneWidget);
+  });
+
+  testWidgets('Bub nav failure shows a non-blocking error', (tester) async {
+    await tester.pumpWidget(
+      _appWithAuth(
+        AuthState.authenticated(
+          user: _user(),
+          tetherStatus: const TetherStatusResponse(hasActiveTether: true),
+          tetherOnboardingComplete: true,
+        ),
+        overrides: [
+          bubSendControllerProvider.overrideWith(
+            () => _FakeBubSendController(error: StateError('nope')),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('bub-nav-heart')));
+    await tester.pumpAndSettle();
+
+    expect(find.text("Bub couldn't send. Please try again."), findsOneWidget);
+    expect(find.byKey(const Key('bub-floating-nav')), findsOneWidget);
   });
 
   testWidgets('home section renders dashboard cards and mood quick access', (
@@ -384,6 +493,128 @@ void main() {
     expect(find.text('cozy'), findsOneWidget);
     expect(find.byKey(const Key('home-mood-card')), findsOneWidget);
   });
+
+  testWidgets('latest Bub card separates untethered and first Bub states', (
+    tester,
+  ) async {
+    var firstBubTapCount = 0;
+
+    await tester.pumpWidget(
+      _latestBubCardApp(
+        latestBub: const HomeLatestBubResponse(
+          hasActivity: false,
+          copy: 'Tether to send bub',
+        ),
+        isTethered: false,
+        onFirstBubPressed: () => firstBubTapCount += 1,
+      ),
+    );
+
+    expect(find.text('Tether to send bub'), findsOneWidget);
+    expect(find.byKey(const Key('home-first-bub-button')), findsNothing);
+
+    await tester.pumpWidget(
+      _latestBubCardApp(
+        latestBub: const HomeLatestBubResponse(
+          hasActivity: false,
+          copy: 'Send your first Bub',
+        ),
+        isTethered: true,
+        onFirstBubPressed: () => firstBubTapCount += 1,
+      ),
+    );
+
+    expect(find.text('Tether to send bub'), findsNothing);
+    expect(find.text('Send your first Bub'), findsWidgets);
+    await tester.tap(find.byKey(const Key('home-first-bub-button')));
+    expect(firstBubTapCount, 1);
+  });
+
+  testWidgets('latest Bub card renders directional activity rows', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _latestBubCardApp(
+        latestBub: HomeLatestBubResponse(
+          hasActivity: true,
+          viewerLastSentAt: DateTime(2026, 7, 17, 8, 30),
+          partnerLastSentAt: DateTime(2026, 7, 17, 7, 0),
+          viewerLastSentCopy: 'You Bubbed them',
+          partnerLastSentCopy: 'Your partner Bubbed you',
+        ),
+        isTethered: true,
+        now: DateTime(2026, 7, 17, 9, 0),
+      ),
+    );
+
+    expect(find.text('Latest Bub'), findsOneWidget);
+    expect(
+      find.byKey(const Key('home-latest-bub-partner-sent-row')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('home-latest-bub-viewer-sent-row')),
+      findsOneWidget,
+    );
+    expect(find.text('Your partner Bubbed you'), findsOneWidget);
+    expect(find.text('You Bubbed them'), findsOneWidget);
+    expect(find.text('2 hours ago'), findsOneWidget);
+    expect(find.text('30 mins ago'), findsOneWidget);
+  });
+
+  testWidgets(
+    'latest Bub card renders single directional rows without overflow',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 640));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        _latestBubCardApp(
+          latestBub: HomeLatestBubResponse(
+            hasActivity: true,
+            viewerLastSentAt: DateTime(2026, 7, 17, 8, 59),
+            viewerLastSentCopy: 'You Bubbed them',
+          ),
+          isTethered: true,
+          now: DateTime(2026, 7, 17, 9, 0),
+        ),
+      );
+
+      expect(
+        find.byKey(const Key('home-latest-bub-viewer-sent-row')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('home-latest-bub-partner-sent-row')),
+        findsNothing,
+      );
+      expect(find.text('1 mins ago'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(
+        _latestBubCardApp(
+          latestBub: HomeLatestBubResponse(
+            hasActivity: true,
+            partnerLastSentAt: DateTime(2026, 7, 17, 9, 0),
+            partnerLastSentCopy: 'Your partner Bubbed you',
+          ),
+          isTethered: true,
+          now: DateTime(2026, 7, 17, 9, 0),
+        ),
+      );
+
+      expect(
+        find.byKey(const Key('home-latest-bub-partner-sent-row')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('home-latest-bub-viewer-sent-row')),
+        findsNothing,
+      );
+      expect(find.text('Just now'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('tethered home with no mood shows standalone mood card', (
     tester,
@@ -858,12 +1089,14 @@ Widget _appWithAuth(
   Widget? home,
   ThemeData? theme,
   HomeDashboardResponse? homeDashboard,
+  List<dynamic> overrides = const [],
 }) {
   return _appWithAuthController(
     _FakeAuthController(state),
     home: home,
     theme: theme,
     homeDashboard: homeDashboard,
+    overrides: overrides,
   );
 }
 
@@ -872,6 +1105,7 @@ Widget _appWithAuthController(
   Widget? home,
   ThemeData? theme,
   HomeDashboardResponse? homeDashboard,
+  List<dynamic> overrides = const [],
 }) {
   return ProviderScope(
     overrides: [
@@ -888,8 +1122,33 @@ Widget _appWithAuthController(
         (context, scanWindow, onPayloadDetected) =>
             const ColoredBox(color: Colors.black),
       ),
+      ...overrides,
     ],
     child: MaterialApp(theme: theme, home: home ?? const HomeScreen()),
+  );
+}
+
+Widget _latestBubCardApp({
+  required HomeLatestBubResponse latestBub,
+  required bool isTethered,
+  VoidCallback? onFirstBubPressed,
+  DateTime? now,
+}) {
+  return MaterialApp(
+    theme: BubTheme.light,
+    home: Scaffold(
+      body: Center(
+        child: SizedBox(
+          width: 300,
+          child: HomeLatestBubCard(
+            latestBub: latestBub,
+            isTethered: isTethered,
+            onFirstBubPressed: onFirstBubPressed ?? () {},
+            now: now,
+          ),
+        ),
+      ),
+    ),
   );
 }
 
@@ -898,7 +1157,7 @@ HomeDashboardResponse _dashboard({
   HomeTodayMomentResponse? todayMoment,
   HomeLatestBubResponse latestBub = const HomeLatestBubResponse(
     hasActivity: false,
-    copy: 'No Bubs yet',
+    copy: 'Send your first Bub',
   ),
   HomeMoodSummaryResponse mood = const HomeMoodSummaryResponse(
     copy: 'How are you feeling?',
@@ -936,6 +1195,37 @@ class _FakeHomeDashboardController extends HomeDashboardController {
       mood: HomeMoodSummaryResponse(copy: dashboard.mood?.copy, mood: mood),
     );
     state = AsyncData(dashboard);
+  }
+}
+
+class _FakeBubSendController extends BubSendController {
+  _FakeBubSendController({this.error});
+
+  final Object? error;
+  var sendCount = 0;
+  Completer<void>? _sendCompleter;
+
+  @override
+  Future<void> build() async {}
+
+  @override
+  Future<void> sendBub() async {
+    if (state.isLoading) {
+      return;
+    }
+    sendCount += 1;
+    if (error != null) {
+      state = AsyncError(error!, StackTrace.current);
+      throw error!;
+    }
+    _sendCompleter = Completer<void>();
+    state = const AsyncLoading();
+    await _sendCompleter!.future;
+    state = const AsyncData(null);
+  }
+
+  void completeSend() {
+    _sendCompleter?.complete();
   }
 }
 

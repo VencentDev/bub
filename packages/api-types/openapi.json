@@ -416,6 +416,8 @@
         "properties": {
           "momentId": { "type": "string", "format": "uuid" },
           "photoUrl": { "type": "string" },
+          "viewerPhotoUrl": { "type": "string" },
+          "partnerCapturedAt": { "type": "string", "format": "date-time" },
           "localDate": { "type": "string", "format": "date" },
           "viewerHasPostedToday": { "type": "boolean" },
           "partnerReaction": { "type": "string" }
