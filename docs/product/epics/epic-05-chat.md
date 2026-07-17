@@ -72,3 +72,13 @@ As a user, I want online status so that I know whether my partner is available.
 - Shows Online.
 - Shows Offline.
 - Shows Last seen.
+
+## US No tether yet
+
+As a user, I want to see a cute screen and cannot send a message yet when i dont have a tethered account.
+
+### Acceptance Criteria
+
+- Display an empty state screen.
+- Display a message in the middle that says something cathy about "Tether someone to start your coversation"
+- Display tether.png to cover the whole chat section page as empty state screen
