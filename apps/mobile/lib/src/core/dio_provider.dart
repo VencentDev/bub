@@ -23,7 +23,14 @@ final authServiceProvider = Provider<AuthService>(
 /// Dio configured with the API base URL and an interceptor that attaches the
 /// bearer token and transparently refreshes it on a 401.
 final dioProvider = Provider<Dio>((ref) {
-  final dio = Dio(BaseOptions(baseUrl: Env.apiBaseUrl));
+  final dio = Dio(
+    BaseOptions(
+      baseUrl: Env.apiBaseUrl,
+      connectTimeout: const Duration(seconds: 8),
+      sendTimeout: const Duration(seconds: 8),
+      receiveTimeout: const Duration(seconds: 12),
+    ),
+  );
   dio.interceptors.add(_AuthInterceptor(ref.watch(authServiceProvider)));
   return dio;
 });

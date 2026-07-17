@@ -1,9 +1,16 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/auth_controller.dart';
 import '../../auth/auth_state.dart';
 import '../../core/env.dart';
+import '../../features/home/home_dashboard_controller.dart';
+import '../../features/home/widgets/home_latest_bub_card.dart';
+import '../../features/home/widgets/home_partner_card.dart';
+import '../../features/home/widgets/home_safe_quick_access_card.dart';
+import '../../features/home/widgets/home_today_moment_card.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
 
@@ -232,43 +239,339 @@ class _GoogleMark extends StatelessWidget {
   }
 }
 
-class _BubHome extends StatelessWidget {
+enum _BubHomeSection {
+  home('Home section'),
+  chat('Chat section'),
+  safe('Safe section'),
+  settings('Settings section');
+
+  const _BubHomeSection(this.label);
+
+  final String label;
+}
+
+class _BubHome extends ConsumerStatefulWidget {
   const _BubHome({required this.onLogout, required this.paired});
 
   final VoidCallback onLogout;
   final bool paired;
 
   @override
+  ConsumerState<_BubHome> createState() => _BubHomeState();
+}
+
+class _BubHomeState extends ConsumerState<_BubHome> {
+  var _section = _BubHomeSection.home;
+
+  void _selectSection(_BubHomeSection section) {
+    setState(() {
+      _section = section;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Bub'),
-        actions: [TextButton(onPressed: onLogout, child: const Text('Logout'))],
+        actions: [
+          TextButton(onPressed: widget.onLogout, child: const Text('Logout')),
+        ],
       ),
-      body: Center(
+      extendBody: true,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: _BubHomeSectionBody(
+              section: _section,
+              onOpenSafe: () => _selectSection(_BubHomeSection.safe),
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: _BubFloatingNav(
+              selectedSection: _section,
+              onSelected: _selectSection,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BubHomeSectionBody extends ConsumerWidget {
+  const _BubHomeSectionBody({required this.section, required this.onOpenSafe});
+
+  final _BubHomeSection section;
+  final VoidCallback onOpenSafe;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (section != _BubHomeSection.home) {
+      return Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
+          child: Text(
+            section.label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+          ),
+        ),
+      );
+    }
+
+    final dashboard = ref.watch(homeDashboardProvider);
+    return dashboard.when(
+      loading: () => const Center(
+        child: Padding(
+          padding: EdgeInsets.only(bottom: 132),
+          child: CircularProgressIndicator(),
+        ),
+      ),
+      error: (error, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                paired ? "You're tethered" : "You're not tethered yet ❤️",
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                ),
+              const Text(
+                'Home could not load',
+                style: TextStyle(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 12),
-              Text(
-                paired
-                    ? 'Your paired Bub home is ready for the next product stories.'
-                    : 'Pairing, chat, Bubs, moments, and Safe will build from the product stories.',
-                textAlign: TextAlign.center,
+              FilledButton(
+                onPressed: () =>
+                    ref.read(homeDashboardProvider.notifier).refresh(),
+                child: const Text('Retry'),
               ),
             ],
           ),
         ),
+      ),
+      data: (data) => ListView(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
+        children: [
+          HomePartnerCard(tether: data.tether),
+          const SizedBox(height: 16),
+          HomeTodayMomentCard(
+            moment: data.todayMoment,
+            onReact: data.todayMoment == null
+                ? () {}
+                : () => ref
+                      .read(homeDashboardProvider.notifier)
+                      .reactToTodayMoment(data.todayMoment!.momentId),
+          ),
+          const SizedBox(height: 16),
+          HomeLatestBubCard(latestBub: data.latestBub),
+          const SizedBox(height: 16),
+          HomeSafeQuickAccessCard(safe: data.safe, onOpenSafe: onOpenSafe),
+        ],
+      ),
+    );
+  }
+}
+
+class _BubFloatingNav extends StatelessWidget {
+  const _BubFloatingNav({
+    required this.selectedSection,
+    required this.onSelected,
+  });
+
+  final _BubHomeSection selectedSection;
+  final ValueChanged<_BubHomeSection> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final glassColor =
+        (isDark ? const Color(0xFF2A2633) : const Color(0xFFECEAF1)).withValues(
+          alpha: 0.82,
+        );
+    final borderColor = (isDark ? BubColors.white : BubColors.deepPurple)
+        .withValues(alpha: 0.12);
+    final shadowColor = BubColors.deepPurple.withValues(alpha: 0.18);
+
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+      child: SizedBox(
+        key: const Key('bub-floating-nav'),
+        height: 92,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.bottomCenter,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: shadowColor,
+                    blurRadius: 26,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(30),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: glassColor,
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: SizedBox(
+                      height: 68,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _BubNavItem(
+                              icon: Icons.home_rounded,
+                              label: 'Home',
+                              selected: selectedSection == _BubHomeSection.home,
+                              onTap: () => onSelected(_BubHomeSection.home),
+                            ),
+                          ),
+                          Expanded(
+                            child: _BubNavItem(
+                              icon: Icons.chat_bubble_rounded,
+                              label: 'Chat',
+                              selected: selectedSection == _BubHomeSection.chat,
+                              onTap: () => onSelected(_BubHomeSection.chat),
+                            ),
+                          ),
+                          const Expanded(child: SizedBox.shrink()),
+                          Expanded(
+                            child: _BubNavItem(
+                              key: Key('bub-nav-safe-lock'),
+                              icon: Icons.lock_rounded,
+                              label: 'Safe',
+                              selected: selectedSection == _BubHomeSection.safe,
+                              onTap: () => onSelected(_BubHomeSection.safe),
+                            ),
+                          ),
+                          Expanded(
+                            child: _BubNavItem(
+                              icon: Icons.settings_rounded,
+                              label: 'Settings',
+                              selected:
+                                  selectedSection == _BubHomeSection.settings,
+                              onTap: () => onSelected(_BubHomeSection.settings),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const Positioned(top: 0, child: _BubNavHeartItem()),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BubNavItem extends StatelessWidget {
+  const _BubNavItem({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.selected = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedColor = Theme.of(context).colorScheme.primary;
+    final inactiveColor = Theme.of(context).hintColor;
+    final color = selected ? selectedColor : inactiveColor;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(22),
+      child: SizedBox.expand(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                letterSpacing: 0,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BubNavHeartItem extends StatelessWidget {
+  const _BubNavHeartItem();
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {},
+      borderRadius: BorderRadius.circular(32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: BubColors.bubGradient,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: BubColors.pink.withValues(alpha: 0.34),
+                  blurRadius: 18,
+                  offset: const Offset(0, 9),
+                ),
+              ],
+            ),
+            child: Image.asset(
+              'assets/onboarding/heart.png',
+              key: const Key('bub-nav-heart'),
+              width: 52,
+              height: 52,
+              fit: BoxFit.contain,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Bub',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0,
+            ),
+          ),
+        ],
       ),
     );
   }

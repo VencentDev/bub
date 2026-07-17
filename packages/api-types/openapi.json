@@ -49,6 +49,103 @@
         ]
       }
     },
+    "/api/v1/home/dashboard": {
+      "get": {
+        "operationId": "getHomeDashboard",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeDashboardResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/home/today-moment": {
+      "put": {
+        "operationId": "putTodayMoment",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HomeTodayMomentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeTodayMomentResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/home/today-moment/{momentId}/reaction": {
+      "post": {
+        "operationId": "reactToTodayMoment",
+        "parameters": [
+          {
+            "name": "momentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HomeMomentReactionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeTodayMomentResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/tether/me": {
       "get": {
         "operationId": "tetherMe",
@@ -187,6 +284,134 @@
       }
     },
     "schemas": {
+      "HomeDashboardResponse": {
+        "type": "object",
+        "required": ["tether", "latestBub", "safe"],
+        "properties": {
+          "tether": {
+            "$ref": "#/components/schemas/HomeTetherCardResponse"
+          },
+          "todayMoment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HomeTodayMomentResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latestBub": {
+            "$ref": "#/components/schemas/HomeLatestBubResponse"
+          },
+          "safe": {
+            "$ref": "#/components/schemas/HomeSafeSummaryResponse"
+          }
+        }
+      },
+      "HomeLatestBubResponse": {
+        "type": "object",
+        "required": ["hasActivity", "copy"],
+        "properties": {
+          "hasActivity": {
+            "type": "boolean"
+          },
+          "copy": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      },
+      "HomeMomentReactionRequest": {
+        "type": "object",
+        "required": ["reaction"],
+        "properties": {
+          "reaction": {
+            "type": "string"
+          }
+        }
+      },
+      "HomeSafeSummaryResponse": {
+        "type": "object",
+        "required": ["enabled", "copy", "ctaLabel"],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "copy": {
+            "type": "string"
+          },
+          "ctaLabel": {
+            "type": "string"
+          }
+        }
+      },
+      "HomeTetherCardResponse": {
+        "type": "object",
+        "required": ["hasActiveTether"],
+        "properties": {
+          "hasActiveTether": {
+            "type": "boolean"
+          },
+          "partnerUserId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "partnerDisplayName": {
+            "type": ["string", "null"]
+          },
+          "partnerProfileImageUrl": {
+            "type": ["string", "null"]
+          },
+          "viewerProfileImageUrl": {
+            "type": ["string", "null"]
+          },
+          "tetheredSince": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "ctaLabel": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "HomeTodayMomentRequest": {
+        "type": "object",
+        "required": ["photoUrl", "localDate"],
+        "properties": {
+          "photoUrl": {
+            "type": "string"
+          },
+          "localDate": {
+            "type": "string"
+          }
+        }
+      },
+      "HomeTodayMomentResponse": {
+        "type": "object",
+        "required": ["momentId", "photoUrl", "localDate", "viewerHasPostedToday"],
+        "properties": {
+          "momentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "photoUrl": {
+            "type": "string"
+          },
+          "localDate": {
+            "type": "string"
+          },
+          "viewerHasPostedToday": {
+            "type": "boolean"
+          },
+          "partnerReaction": {
+            "type": ["string", "null"]
+          }
+        }
+      },
       "KycStatus": {
         "type": "string",
         "enum": ["NONE", "PENDING", "VERIFIED", "REJECTED"]
