@@ -24,6 +24,8 @@ import com.vencentdev.backend.modules.chat.entity.ChatMessageReaction;
 import com.vencentdev.backend.modules.chat.entity.ChatMessageRead;
 import com.vencentdev.backend.modules.chat.entity.ChatMessageType;
 import com.vencentdev.backend.modules.chat.entity.ChatPresenceState;
+import com.vencentdev.backend.modules.chat.live.ChatLiveEventType;
+import com.vencentdev.backend.modules.chat.live.ChatLivePublisher;
 import com.vencentdev.backend.modules.chat.repository.ChatMessageDeletionRepository;
 import com.vencentdev.backend.modules.chat.repository.ChatMessageReactionRepository;
 import com.vencentdev.backend.modules.chat.repository.ChatMessageReadRepository;
@@ -65,6 +67,7 @@ public class ChatServiceImpl implements ChatService {
   private final ChatPresenceStateRepository presenceStates;
   private final UserRepository users;
   private final UserService userService;
+  private final ChatLivePublisher livePublisher;
   private final Clock clock;
 
   @Autowired
@@ -76,7 +79,8 @@ public class ChatServiceImpl implements ChatService {
       ChatMessageReadRepository reads,
       ChatPresenceStateRepository presenceStates,
       UserRepository users,
-      UserService userService) {
+      UserService userService,
+      ChatLivePublisher livePublisher) {
     this(
         connections,
         messages,
@@ -86,6 +90,7 @@ public class ChatServiceImpl implements ChatService {
         presenceStates,
         users,
         userService,
+        livePublisher,
         Clock.systemUTC());
   }
 
@@ -98,6 +103,7 @@ public class ChatServiceImpl implements ChatService {
       ChatPresenceStateRepository presenceStates,
       UserRepository users,
       UserService userService,
+      ChatLivePublisher livePublisher,
       Clock clock) {
     this.connections = connections;
     this.messages = messages;
@@ -107,6 +113,7 @@ public class ChatServiceImpl implements ChatService {
     this.presenceStates = presenceStates;
     this.users = users;
     this.userService = userService;
+    this.livePublisher = livePublisher;
     this.clock = clock;
   }
 
@@ -141,8 +148,10 @@ public class ChatServiceImpl implements ChatService {
             .deliveredAt(now)
             .build();
     touchPresence(connection, sender, false, now);
-    return toResponse(
-        messages.save(message), userId, responseContext(List.of(message), userId, now));
+    ChatMessageResponse response =
+        toResponse(messages.save(message), userId, responseContext(List.of(message), userId, now));
+    publishToConnection(connection, ChatLiveEventType.MESSAGE_CREATED);
+    return response;
   }
 
   @Override
@@ -165,7 +174,10 @@ public class ChatServiceImpl implements ChatService {
     message.setBody(trimRequired(request.body(), "Body is required"));
     message.setEditedAt(now);
     touchPresence(connection, message.getSenderUser(), false, now);
-    return toResponse(message, userId, responseContext(List.of(message), userId, now));
+    ChatMessageResponse response =
+        toResponse(message, userId, responseContext(List.of(message), userId, now));
+    publishToConnection(connection, ChatLiveEventType.MESSAGE_UPDATED);
+    return response;
   }
 
   @Override
@@ -199,8 +211,10 @@ public class ChatServiceImpl implements ChatService {
       throw new ForbiddenException("Only the sender can delete this message for everyone");
     }
     message.setDeletedForEveryoneAt(Instant.now(clock));
-    return toResponse(
-        message, userId, responseContext(List.of(message), userId, Instant.now(clock)));
+    ChatMessageResponse response =
+        toResponse(message, userId, responseContext(List.of(message), userId, Instant.now(clock)));
+    publishToConnection(connection, ChatLiveEventType.MESSAGE_UPDATED);
+    return response;
   }
 
   @Override
@@ -225,8 +239,10 @@ public class ChatServiceImpl implements ChatService {
             .orElseGet(() -> ChatMessageReaction.builder().message(message).user(user).build());
     entity.setReaction(reaction);
     reactions.save(entity);
-    return toResponse(
-        message, userId, responseContext(List.of(message), userId, Instant.now(clock)));
+    ChatMessageResponse response =
+        toResponse(message, userId, responseContext(List.of(message), userId, Instant.now(clock)));
+    publishToConnection(connection, ChatLiveEventType.MESSAGE_UPDATED);
+    return response;
   }
 
   @Override
@@ -236,8 +252,10 @@ public class ChatServiceImpl implements ChatService {
     TetherConnection connection = activeConnection(userId);
     ChatMessage message = messageInConnection(messageId, connection.getId());
     reactions.findByMessageIdAndUserId(messageId, userId).ifPresent(reactions::delete);
-    return toResponse(
-        message, userId, responseContext(List.of(message), userId, Instant.now(clock)));
+    ChatMessageResponse response =
+        toResponse(message, userId, responseContext(List.of(message), userId, Instant.now(clock)));
+    publishToConnection(connection, ChatLiveEventType.MESSAGE_UPDATED);
+    return response;
   }
 
   @Override
@@ -267,7 +285,9 @@ public class ChatServiceImpl implements ChatService {
                                     .seenAt(now)
                                     .build())));
     touchPresence(connection, user, false, now);
-    return stateFor(connection, userId, now);
+    ChatStateResponse response = stateFor(connection, userId, now);
+    publishToConnection(connection, ChatLiveEventType.STATE_UPDATED);
+    return response;
   }
 
   @Override
@@ -279,7 +299,9 @@ public class ChatServiceImpl implements ChatService {
         users.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
     Instant now = Instant.now(clock);
     touchPresence(connection, user, request.typing(), now);
-    return stateFor(connection, userId, now);
+    ChatStateResponse response = stateFor(connection, userId, now);
+    publishToConnection(connection, ChatLiveEventType.TYPING_UPDATED);
+    return response;
   }
 
   @Override
@@ -422,6 +444,11 @@ public class ChatServiceImpl implements ChatService {
     return users
         .findById(fallbackUserId)
         .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+  }
+
+  private void publishToConnection(TetherConnection connection, ChatLiveEventType type) {
+    livePublisher.publish(connection.getUserOne().getId(), type);
+    livePublisher.publish(connection.getUserTwo().getId(), type);
   }
 
   private ChatMessageResponse toResponse(

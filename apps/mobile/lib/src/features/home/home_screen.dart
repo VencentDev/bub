@@ -382,6 +382,7 @@ class _BubHomeState extends ConsumerState<_BubHome> {
       );
     });
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         titleSpacing: 0,
         title: const _BubAppBarLogo(),

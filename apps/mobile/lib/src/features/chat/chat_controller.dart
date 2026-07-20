@@ -9,11 +9,22 @@ import '../../api/generated/models/chat_state_response.dart';
 import '../../api/generated/models/chat_thread_response.dart';
 import '../../api/generated/models/chat_typing_request.dart';
 import '../../core/dio_provider.dart';
+import '../../core/env.dart';
+import 'chat_live_connection.dart';
 
 class ChatThreadController extends AsyncNotifier<ChatThreadResponse> {
+  ChatLiveConnection? _liveConnection;
+  bool _refreshingFromLive = false;
+
   @override
-  Future<ChatThreadResponse> build() {
-    return ref.read(restClientProvider).chatController.getChatThread();
+  Future<ChatThreadResponse> build() async {
+    ref.onDispose(() => _liveConnection?.dispose());
+    final thread = await ref
+        .read(restClientProvider)
+        .chatController
+        .getChatThread();
+    _syncLiveConnection(thread);
+    return thread;
   }
 
   Future<void> refresh() async {
@@ -137,8 +148,49 @@ class ChatThreadController extends AsyncNotifier<ChatThreadResponse> {
   Future<void> _mutateAndRefresh(Future<Object?> Function() mutation) async {
     state = await AsyncValue.guard(() async {
       await mutation();
-      return ref.read(restClientProvider).chatController.getChatThread();
+      final thread = await ref
+          .read(restClientProvider)
+          .chatController
+          .getChatThread();
+      _syncLiveConnection(thread);
+      return thread;
     });
+  }
+
+  void _syncLiveConnection(ChatThreadResponse thread) {
+    if (thread.hasActiveTether != true) {
+      _liveConnection?.dispose();
+      _liveConnection = null;
+      return;
+    }
+    if (_liveConnection != null) {
+      return;
+    }
+    _liveConnection = ChatLiveConnection(
+      apiBaseUrl: Env.apiBaseUrl,
+      accessToken: ref.read(authServiceProvider).validAccessToken,
+      onEvent: (_) => _refreshFromLive(),
+    );
+    _liveConnection!.connect();
+  }
+
+  Future<void> _refreshFromLive() async {
+    if (_refreshingFromLive) {
+      return;
+    }
+    _refreshingFromLive = true;
+    try {
+      final thread = await ref
+          .read(restClientProvider)
+          .chatController
+          .getChatThread();
+      _syncLiveConnection(thread);
+      state = AsyncData(thread);
+    } catch (_) {
+      // Background live refresh failures should not replace the visible thread.
+    } finally {
+      _refreshingFromLive = false;
+    }
   }
 }
 

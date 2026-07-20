@@ -2,6 +2,9 @@ package com.vencentdev.backend.modules.chat.controller;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -11,6 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.vencentdev.backend.IntegrationTestBase;
+import com.vencentdev.backend.modules.chat.live.ChatLiveEventType;
+import com.vencentdev.backend.modules.chat.live.ChatLivePublisher;
 import com.vencentdev.backend.modules.tether.entity.TetherConnection;
 import com.vencentdev.backend.modules.tether.repository.TetherConnectionRepository;
 import com.vencentdev.backend.modules.tether.repository.TetherInvitationRepository;
@@ -23,6 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 class ChatControllerIntegrationTest extends IntegrationTestBase {
@@ -31,6 +37,7 @@ class ChatControllerIntegrationTest extends IntegrationTestBase {
   @Autowired private TetherConnectionRepository connections;
   @Autowired private TetherInvitationRepository invitations;
   @Autowired private UserRepository users;
+  @MockitoSpyBean private ChatLivePublisher chatLivePublisher;
 
   @BeforeEach
   void setUp() {
@@ -149,6 +156,9 @@ class ChatControllerIntegrationTest extends IntegrationTestBase {
             .getResponse()
             .getContentAsString()
             .replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
+    verify(chatLivePublisher).publish(eq(alice.getId()), eq(ChatLiveEventType.MESSAGE_CREATED));
+    verify(chatLivePublisher).publish(eq(bob.getId()), eq(ChatLiveEventType.MESSAGE_CREATED));
+    clearInvocations(chatLivePublisher);
 
     mockMvc
         .perform(
@@ -159,6 +169,9 @@ class ChatControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.body").value("edited"))
         .andExpect(jsonPath("$.editedAt").exists());
+    verify(chatLivePublisher).publish(eq(alice.getId()), eq(ChatLiveEventType.MESSAGE_UPDATED));
+    verify(chatLivePublisher).publish(eq(bob.getId()), eq(ChatLiveEventType.MESSAGE_UPDATED));
+    clearInvocations(chatLivePublisher);
 
     mockMvc
         .perform(
@@ -176,6 +189,9 @@ class ChatControllerIntegrationTest extends IntegrationTestBase {
                 .with(currentUser("bob")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.viewerReaction").value("🔥"));
+    verify(chatLivePublisher).publish(eq(alice.getId()), eq(ChatLiveEventType.MESSAGE_UPDATED));
+    verify(chatLivePublisher).publish(eq(bob.getId()), eq(ChatLiveEventType.MESSAGE_UPDATED));
+    clearInvocations(chatLivePublisher);
 
     mockMvc
         .perform(
@@ -184,6 +200,9 @@ class ChatControllerIntegrationTest extends IntegrationTestBase {
                 .content("{\"upToMessageId\":\"" + messageId + "\"}")
                 .with(currentUser("bob")))
         .andExpect(status().isOk());
+    verify(chatLivePublisher).publish(eq(alice.getId()), eq(ChatLiveEventType.STATE_UPDATED));
+    verify(chatLivePublisher).publish(eq(bob.getId()), eq(ChatLiveEventType.STATE_UPDATED));
+    clearInvocations(chatLivePublisher);
 
     mockMvc
         .perform(get("/api/v1/chat/thread").with(currentUser("alice")))
@@ -197,6 +216,9 @@ class ChatControllerIntegrationTest extends IntegrationTestBase {
                 .content("{\"typing\":true}")
                 .with(currentUser("bob")))
         .andExpect(status().isOk());
+    verify(chatLivePublisher).publish(eq(alice.getId()), eq(ChatLiveEventType.TYPING_UPDATED));
+    verify(chatLivePublisher).publish(eq(bob.getId()), eq(ChatLiveEventType.TYPING_UPDATED));
+    clearInvocations(chatLivePublisher);
 
     mockMvc
         .perform(get("/api/v1/chat/state").with(currentUser("alice")))
@@ -220,6 +242,8 @@ class ChatControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.deletedForEveryone").value(true))
         .andExpect(jsonPath("$.body").value(nullValue()));
+    verify(chatLivePublisher).publish(eq(alice.getId()), eq(ChatLiveEventType.MESSAGE_UPDATED));
+    verify(chatLivePublisher).publish(eq(bob.getId()), eq(ChatLiveEventType.MESSAGE_UPDATED));
   }
 
   private org.springframework.test.web.servlet.ResultActions send(String subject, String json)
