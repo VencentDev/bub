@@ -1,9 +1,15 @@
 import 'dart:io';
 
 import 'package:bub/main.dart';
+import 'package:bub/src/api/generated/models/chat_thread_response.dart';
+import 'package:bub/src/api/generated/models/tether_status_response.dart';
+import 'package:bub/src/api/generated/models/user_response.dart';
 import 'package:bub/src/auth/auth_service.dart';
+import 'package:bub/src/auth/auth_controller.dart';
+import 'package:bub/src/auth/auth_state.dart';
 import 'package:bub/src/auth/token_store.dart';
 import 'package:bub/src/core/dio_provider.dart';
+import 'package:bub/src/features/chat/chat_controller.dart';
 import 'package:bub/src/theme/bub_colors.dart';
 import 'package:bub/src/theme/bub_theme.dart';
 import 'package:flutter/material.dart';
@@ -71,6 +77,76 @@ void main() {
         .singleWhere((safeArea) => safeArea.minimum.bottom > 0);
     expect(buttonSafeArea.minimum.bottom, 48);
     expect(find.byType(AppBar), findsNothing);
+  });
+
+  testWidgets('chat opens as a full-screen page without the Bub shell chrome', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(() => _TetheredAuthController()),
+          chatThreadProvider.overrideWith(
+            () => _ReadyChatController(
+              const ChatThreadResponse(
+                hasActiveTether: true,
+                partnerDisplayName: 'Bob',
+                messages: [],
+              ),
+            ),
+          ),
+        ],
+        child: const MobileApp(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.text('Chat'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.byKey(const Key('bub-floating-nav')), findsNothing);
+    expect(find.byKey(const Key('chat-fullscreen-header')), findsOneWidget);
+    expect(find.byKey(const Key('chat-composer-field')), findsOneWidget);
+  });
+
+  testWidgets('mobile back from chat returns to the home section', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(() => _TetheredAuthController()),
+          chatThreadProvider.overrideWith(
+            () => _ReadyChatController(
+              const ChatThreadResponse(
+                hasActiveTether: true,
+                partnerDisplayName: 'Bob',
+                messages: [],
+              ),
+            ),
+          ),
+        ],
+        child: const MobileApp(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.text('Chat'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const Key('chat-fullscreen-header')), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('chat-fullscreen-header')), findsNothing);
+    expect(find.byKey(const Key('bub-floating-nav')), findsOneWidget);
+    expect(find.byType(AppBar), findsOneWidget);
   });
 
   test('auth controller provisions the user after login', () {
@@ -190,4 +266,27 @@ void main() {
       isNot(contains(BubColors.coral)),
     );
   });
+}
+
+class _TetheredAuthController extends AuthController {
+  @override
+  Future<AuthState> build() async {
+    return AuthState.authenticated(
+      user: const UserResponse(id: 'user-1', displayName: 'Alice'),
+      tetherStatus: const TetherStatusResponse(
+        hasActiveTether: true,
+        partnerUserId: 'user-2',
+      ),
+      tetherOnboardingComplete: true,
+    );
+  }
+}
+
+class _ReadyChatController extends ChatThreadController {
+  _ReadyChatController(this.thread);
+
+  final ChatThreadResponse thread;
+
+  @override
+  Future<ChatThreadResponse> build() async => thread;
 }

@@ -381,6 +381,13 @@ class _BubHomeState extends ConsumerState<_BubHome> {
         icon: Icons.favorite_rounded,
       );
     });
+    if (_section == _BubHomeSection.chat) {
+      return Scaffold(
+        resizeToAvoidBottomInset: true,
+        body: ChatSection(onBack: () => _selectSection(_BubHomeSection.home)),
+      );
+    }
+
     return Scaffold(
       resizeToAvoidBottomInset: false,
       appBar: AppBar(

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../api/generated/models/chat_edit_message_request.dart';
@@ -63,6 +65,24 @@ class ChatThreadController extends AsyncNotifier<ChatThreadResponse> {
               gifProviderId: gifProviderId?.trim(),
               replyToMessageId: replyToMessageId,
             ),
+          );
+    });
+  }
+
+  Future<void> uploadMedia({
+    required List<File> files,
+    String? replyToMessageId,
+  }) async {
+    if (files.isEmpty) {
+      return;
+    }
+    await _mutateAndRefresh(() {
+      return ref
+          .read(restClientProvider)
+          .chatController
+          .uploadChatMediaMessage(
+            files: files,
+            replyToMessageId: replyToMessageId,
           );
     });
   }
