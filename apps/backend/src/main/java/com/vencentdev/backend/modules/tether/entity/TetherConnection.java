@@ -46,4 +46,10 @@ public class TetherConnection extends AuditableEntity {
   @Column(nullable = false)
   @Builder.Default
   private boolean active = true;
+
+  @Column(name = "user_one_partner_nickname", length = 80)
+  private String userOnePartnerNickname;
+
+  @Column(name = "user_two_partner_nickname", length = 80)
+  private String userTwoPartnerNickname;
 }

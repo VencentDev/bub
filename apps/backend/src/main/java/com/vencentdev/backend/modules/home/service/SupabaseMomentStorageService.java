@@ -196,7 +196,7 @@ public class SupabaseMomentStorageService implements MomentStorageService {
         .toUriString();
   }
 
-  static String normalizeSupabaseProjectUrl(@Nullable String value) {
+  public static String normalizeSupabaseProjectUrl(@Nullable String value) {
     if (!StringUtils.hasText(value)) {
       return value;
     }

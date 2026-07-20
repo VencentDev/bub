@@ -9,5 +9,7 @@ public record HomeTetherCardResponse(
     String partnerDisplayName,
     String partnerProfileImageUrl,
     String viewerProfileImageUrl,
+    String viewerMood,
+    String partnerMood,
     Instant tetheredSince,
     String ctaLabel) {}

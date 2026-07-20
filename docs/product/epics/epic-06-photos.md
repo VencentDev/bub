@@ -25,7 +25,7 @@ As a user, I want a special Safe animation instead of image previews so that pri
 
 ### Acceptance Criteria
 
-- Displays `🐻❤️🐻` instead of the image.
+- Displays `safe-box.png` instead of the image.
 - Shows count text, for example: `5 memories added`.
 - Shows View Safe action.
 - Uses a cute animation.
@@ -50,7 +50,7 @@ As a user, I want to change my Safe password method so that access matches my se
 
 ## US-030 Download Safe Photo
 
-As a user, I want to download a Safe photo so that I can save it locally.
+As a user, I want to download a Safe or quick photo so that I can save it locally.
 
 ### Acceptance Criteria
 

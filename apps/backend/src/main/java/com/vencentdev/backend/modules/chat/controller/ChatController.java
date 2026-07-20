@@ -4,6 +4,7 @@ import com.vencentdev.backend.modules.auth.AuthenticatedUser;
 import com.vencentdev.backend.modules.auth.CurrentUser;
 import com.vencentdev.backend.modules.chat.dto.ChatEditMessageRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatMessageResponse;
+import com.vencentdev.backend.modules.chat.dto.ChatPartnerNicknameRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatReactionRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatReadRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatSendMessageRequest;
@@ -14,7 +15,9 @@ import com.vencentdev.backend.modules.chat.service.ChatService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,7 +26,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/chat")
@@ -47,6 +52,23 @@ public class ChatController {
       @Parameter(hidden = true) @CurrentUser AuthenticatedUser user,
       @Valid @RequestBody ChatSendMessageRequest request) {
     return chatService.send(user, request);
+  }
+
+  @PostMapping(value = "/messages/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @Operation(operationId = "uploadChatMediaMessage")
+  public List<ChatMessageResponse> uploadMedia(
+      @Parameter(hidden = true) @CurrentUser AuthenticatedUser user,
+      @RequestParam("files") List<MultipartFile> files,
+      @RequestParam(value = "replyToMessageId", required = false) UUID replyToMessageId) {
+    return chatService.uploadMedia(user, files, replyToMessageId);
+  }
+
+  @PatchMapping("/partner-nickname")
+  @Operation(operationId = "updateChatPartnerNickname")
+  public ChatThreadResponse updatePartnerNickname(
+      @Parameter(hidden = true) @CurrentUser AuthenticatedUser user,
+      @Valid @RequestBody ChatPartnerNicknameRequest request) {
+    return chatService.updatePartnerNickname(user, request);
   }
 
   @PatchMapping("/messages/{messageId}")

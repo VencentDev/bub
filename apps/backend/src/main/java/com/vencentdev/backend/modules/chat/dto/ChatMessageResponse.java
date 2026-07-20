@@ -22,4 +22,5 @@ public record ChatMessageResponse(
     boolean editable,
     boolean deletableForEveryone,
     String viewerReaction,
-    List<ChatReactionSummaryResponse> reactions) {}
+    List<ChatReactionSummaryResponse> reactions,
+    List<ChatAttachmentResponse> attachments) {}

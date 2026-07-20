@@ -31,40 +31,70 @@ class _TetheredPartnerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final partnerName = tether.partnerDisplayName ?? 'Your Bub';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
-          height: 68,
+          height: 82,
           child: Stack(
+            clipBehavior: Clip.none,
             alignment: Alignment.center,
             children: [
               const Positioned.fill(
                 key: Key('home-tether-string'),
                 child: CustomPaint(painter: _TetherStringPainter()),
               ),
-              const Align(
+              Align(
                 alignment: Alignment.centerLeft,
-                child: _ProfileNode(label: 'You'),
+                child: _ProfileNode(
+                  label: 'You',
+                  mood: tether.viewerMood,
+                  moodKey: const Key('home-tether-viewer-mood'),
+                  moodAlignment: _MoodCloudAlignment.topRight,
+                ),
               ),
               Align(
                 alignment: Alignment.centerRight,
-                child: _ProfileNode(label: _initials(partnerName)),
+                child: _ProfileNode(
+                  label: _initials(partnerName),
+                  mood: tether.partnerMood,
+                  moodKey: const Key('home-tether-partner-mood'),
+                  moodAlignment: _MoodCloudAlignment.topLeft,
+                ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 6),
-        Text(
-          'Been tethered for ${_durationLabel(tether.tetheredSince, DateTime.now())}',
+        const SizedBox(height: 2),
+        DecoratedBox(
           key: const Key('home-tether-duration'),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: BubColors.deepPurple,
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
+          decoration: BoxDecoration(
+            color: isDark
+                ? BubColors.white.withValues(alpha: 0.08)
+                : BubColors.white.withValues(alpha: 0.76),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: isDark
+                  ? BubColors.white.withValues(alpha: 0.12)
+                  : BubColors.deepPurple.withValues(alpha: 0.10),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: Text(
+              'Tethered since ${_dateLabel(tether.tetheredSince)} • ${_durationLabel(tether.tetheredSince, DateTime.now())}',
+              key: const Key('home-tether-since-date'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isDark ? BubColors.white : BubColors.deepPurple,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ),
         ),
       ],
@@ -106,6 +136,14 @@ class _TetheredPartnerCard extends StatelessWidget {
     }
     final years = days ~/ 365;
     return '$years ${years == 1 ? 'year' : 'years'}';
+  }
+
+  static String _dateLabel(DateTime? date) {
+    if (date == null) {
+      return 'today';
+    }
+    final local = date.toLocal();
+    return '${local.month}/${local.day}/${local.year}';
   }
 }
 
@@ -259,38 +297,152 @@ class _UntetheredPartnerCard extends StatelessWidget {
   }
 }
 
+enum _MoodCloudAlignment { topLeft, topRight }
+
 class _ProfileNode extends StatelessWidget {
-  const _ProfileNode({required this.label});
+  const _ProfileNode({
+    required this.label,
+    this.mood,
+    this.moodKey,
+    this.moodAlignment = _MoodCloudAlignment.topRight,
+  });
 
   final String label;
+  final String? mood;
+  final Key? moodKey;
+  final _MoodCloudAlignment moodAlignment;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 60,
-      height: 60,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: BubColors.partnerBubbleLight,
-        shape: BoxShape.circle,
-        border: Border.all(color: BubColors.white, width: 3),
-        boxShadow: [
-          BoxShadow(
-            color: BubColors.deepPurple.withValues(alpha: 0.18),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+    final moodText = mood?.trim();
+    return SizedBox(
+      width: 108,
+      height: 78,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: 60,
+              height: 60,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: BubColors.partnerBubbleLight,
+                shape: BoxShape.circle,
+                border: Border.all(color: BubColors.white, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: BubColors.deepPurple.withValues(alpha: 0.18),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: BubColors.deepPurple,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+          if (moodText != null && moodText.isNotEmpty)
+            _MoodThoughtCloud(
+              key: moodKey,
+              mood: moodText,
+              alignment: moodAlignment,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MoodThoughtCloud extends StatelessWidget {
+  const _MoodThoughtCloud({
+    super.key,
+    required this.mood,
+    required this.alignment,
+  });
+
+  final String mood;
+  final _MoodCloudAlignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final isLeft = alignment == _MoodCloudAlignment.topLeft;
+    return Positioned(
+      top: 0,
+      left: isLeft ? 0 : null,
+      right: isLeft ? null : 0,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: BubColors.white.withValues(alpha: 0.90),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: BubColors.pink.withValues(alpha: 0.26)),
+              boxShadow: [
+                BoxShadow(
+                  color: BubColors.deepPurple.withValues(alpha: 0.14),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              child: Text(
+                mood,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: BubColors.deepPurple,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -5,
+            left: isLeft ? 13 : null,
+            right: isLeft ? null : 13,
+            child: const _MoodThoughtDot(size: 7),
+          ),
+          Positioned(
+            bottom: -10,
+            left: isLeft ? 23 : null,
+            right: isLeft ? null : 23,
+            child: const _MoodThoughtDot(size: 4),
           ),
         ],
       ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: BubColors.deepPurple,
-          fontWeight: FontWeight.w900,
-        ),
+    );
+  }
+}
+
+class _MoodThoughtDot extends StatelessWidget {
+  const _MoodThoughtDot({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: BubColors.white.withValues(alpha: 0.92),
+        shape: BoxShape.circle,
+        border: Border.all(color: BubColors.pink.withValues(alpha: 0.20)),
       ),
+      child: SizedBox.square(dimension: size),
     );
   }
 }

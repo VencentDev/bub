@@ -5,9 +5,11 @@ import com.vencentdev.backend.common.exception.ConflictException;
 import com.vencentdev.backend.common.exception.ForbiddenException;
 import com.vencentdev.backend.common.exception.ResourceNotFoundException;
 import com.vencentdev.backend.modules.auth.AuthenticatedUser;
+import com.vencentdev.backend.modules.chat.dto.ChatAttachmentResponse;
 import com.vencentdev.backend.modules.chat.dto.ChatDeliveryState;
 import com.vencentdev.backend.modules.chat.dto.ChatEditMessageRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatMessageResponse;
+import com.vencentdev.backend.modules.chat.dto.ChatPartnerNicknameRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatPresenceResponse;
 import com.vencentdev.backend.modules.chat.dto.ChatPresenceStatus;
 import com.vencentdev.backend.modules.chat.dto.ChatReactionRequest;
@@ -18,12 +20,17 @@ import com.vencentdev.backend.modules.chat.dto.ChatSendMessageRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatStateResponse;
 import com.vencentdev.backend.modules.chat.dto.ChatThreadResponse;
 import com.vencentdev.backend.modules.chat.dto.ChatTypingRequest;
+import com.vencentdev.backend.modules.chat.entity.ChatAttachmentType;
 import com.vencentdev.backend.modules.chat.entity.ChatMessage;
+import com.vencentdev.backend.modules.chat.entity.ChatMessageAttachment;
 import com.vencentdev.backend.modules.chat.entity.ChatMessageDeletion;
 import com.vencentdev.backend.modules.chat.entity.ChatMessageReaction;
 import com.vencentdev.backend.modules.chat.entity.ChatMessageRead;
 import com.vencentdev.backend.modules.chat.entity.ChatMessageType;
 import com.vencentdev.backend.modules.chat.entity.ChatPresenceState;
+import com.vencentdev.backend.modules.chat.live.ChatLiveEventType;
+import com.vencentdev.backend.modules.chat.live.ChatLivePublisher;
+import com.vencentdev.backend.modules.chat.repository.ChatMessageAttachmentRepository;
 import com.vencentdev.backend.modules.chat.repository.ChatMessageDeletionRepository;
 import com.vencentdev.backend.modules.chat.repository.ChatMessageReactionRepository;
 import com.vencentdev.backend.modules.chat.repository.ChatMessageReadRepository;
@@ -48,6 +55,8 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class ChatServiceImpl implements ChatService {
@@ -55,58 +64,74 @@ public class ChatServiceImpl implements ChatService {
   private static final Duration EDIT_WINDOW = Duration.ofMinutes(10);
   private static final Duration TYPING_WINDOW = Duration.ofSeconds(12);
   private static final Duration ONLINE_WINDOW = Duration.ofMinutes(5);
+  private static final long MAX_MEDIA_BYTES = 25L * 1024L * 1024L;
   private static final Set<String> SUPPORTED_REACTIONS = Set.of("❤️", "😂", "🥺", "😭", "🔥");
 
   private final TetherConnectionRepository connections;
   private final ChatMessageRepository messages;
+  private final ChatMessageAttachmentRepository attachments;
   private final ChatMessageDeletionRepository deletions;
   private final ChatMessageReactionRepository reactions;
   private final ChatMessageReadRepository reads;
   private final ChatPresenceStateRepository presenceStates;
   private final UserRepository users;
   private final UserService userService;
+  private final ChatMediaStorageService mediaStorage;
+  private final ChatLivePublisher livePublisher;
   private final Clock clock;
 
   @Autowired
   public ChatServiceImpl(
       TetherConnectionRepository connections,
       ChatMessageRepository messages,
-      ChatMessageDeletionRepository deletions,
-      ChatMessageReactionRepository reactions,
-      ChatMessageReadRepository reads,
-      ChatPresenceStateRepository presenceStates,
-      UserRepository users,
-      UserService userService) {
-    this(
-        connections,
-        messages,
-        deletions,
-        reactions,
-        reads,
-        presenceStates,
-        users,
-        userService,
-        Clock.systemUTC());
-  }
-
-  ChatServiceImpl(
-      TetherConnectionRepository connections,
-      ChatMessageRepository messages,
+      ChatMessageAttachmentRepository attachments,
       ChatMessageDeletionRepository deletions,
       ChatMessageReactionRepository reactions,
       ChatMessageReadRepository reads,
       ChatPresenceStateRepository presenceStates,
       UserRepository users,
       UserService userService,
+      ChatMediaStorageService mediaStorage,
+      ChatLivePublisher livePublisher) {
+    this(
+        connections,
+        messages,
+        attachments,
+        deletions,
+        reactions,
+        reads,
+        presenceStates,
+        users,
+        userService,
+        mediaStorage,
+        livePublisher,
+        Clock.systemUTC());
+  }
+
+  ChatServiceImpl(
+      TetherConnectionRepository connections,
+      ChatMessageRepository messages,
+      ChatMessageAttachmentRepository attachments,
+      ChatMessageDeletionRepository deletions,
+      ChatMessageReactionRepository reactions,
+      ChatMessageReadRepository reads,
+      ChatPresenceStateRepository presenceStates,
+      UserRepository users,
+      UserService userService,
+      ChatMediaStorageService mediaStorage,
+      ChatLivePublisher livePublisher,
       Clock clock) {
     this.connections = connections;
     this.messages = messages;
+    this.attachments = attachments;
     this.deletions = deletions;
     this.reactions = reactions;
     this.reads = reads;
     this.presenceStates = presenceStates;
     this.users = users;
     this.userService = userService;
+    this.mediaStorage = mediaStorage;
+    this.livePublisher = livePublisher;
     this.clock = clock;
   }
 
@@ -123,6 +148,9 @@ public class ChatServiceImpl implements ChatService {
   @Override
   @Transactional
   public ChatMessageResponse send(AuthenticatedUser principal, ChatSendMessageRequest request) {
+    if (request.type() == ChatMessageType.MEDIA || request.type() == ChatMessageType.BUB) {
+      throw new BadRequestException("Use the dedicated endpoint for this message type");
+    }
     UUID userId = userService.resolveInternalId(principal);
     TetherConnection connection = activeConnection(userId);
     User sender =
@@ -141,8 +169,54 @@ public class ChatServiceImpl implements ChatService {
             .deliveredAt(now)
             .build();
     touchPresence(connection, sender, false, now);
-    return toResponse(
-        messages.save(message), userId, responseContext(List.of(message), userId, now));
+    ChatMessageResponse response =
+        toResponse(messages.save(message), userId, responseContext(List.of(message), userId, now));
+    publishToConnection(connection, ChatLiveEventType.MESSAGE_CREATED);
+    return response;
+  }
+
+  @Override
+  @Transactional
+  public List<ChatMessageResponse> uploadMedia(
+      AuthenticatedUser principal, List<MultipartFile> files, UUID replyToMessageId) {
+    if (files == null || files.isEmpty()) {
+      throw new BadRequestException("At least one media file is required");
+    }
+    UUID userId = userService.resolveInternalId(principal);
+    TetherConnection connection = activeConnection(userId);
+    User sender =
+        users.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+    ChatMessage reply = replyTarget(replyToMessageId, connection.getId());
+    Instant now = Instant.now(clock);
+
+    List<MultipartFile> images = new ArrayList<>();
+    List<MultipartFile> videos = new ArrayList<>();
+    for (MultipartFile file : files) {
+      ChatAttachmentType type = mediaType(file);
+      if (type == ChatAttachmentType.IMAGE) {
+        images.add(file);
+      } else {
+        videos.add(file);
+      }
+    }
+
+    List<ChatMessage> created = new ArrayList<>();
+    if (!images.isEmpty()) {
+      created.add(
+          createMediaMessage(connection, sender, reply, images, ChatAttachmentType.IMAGE, now));
+    }
+    for (MultipartFile video : videos) {
+      created.add(
+          createMediaMessage(
+              connection, sender, reply, List.of(video), ChatAttachmentType.VIDEO, now));
+    }
+
+    touchPresence(connection, sender, false, now);
+    ResponseContext context = responseContext(created, userId, now);
+    List<ChatMessageResponse> response =
+        created.stream().map(message -> toResponse(message, userId, context)).toList();
+    publishToConnection(connection, ChatLiveEventType.MESSAGE_CREATED);
+    return response;
   }
 
   @Override
@@ -165,7 +239,10 @@ public class ChatServiceImpl implements ChatService {
     message.setBody(trimRequired(request.body(), "Body is required"));
     message.setEditedAt(now);
     touchPresence(connection, message.getSenderUser(), false, now);
-    return toResponse(message, userId, responseContext(List.of(message), userId, now));
+    ChatMessageResponse response =
+        toResponse(message, userId, responseContext(List.of(message), userId, now));
+    publishToConnection(connection, ChatLiveEventType.MESSAGE_UPDATED);
+    return response;
   }
 
   @Override
@@ -199,8 +276,10 @@ public class ChatServiceImpl implements ChatService {
       throw new ForbiddenException("Only the sender can delete this message for everyone");
     }
     message.setDeletedForEveryoneAt(Instant.now(clock));
-    return toResponse(
-        message, userId, responseContext(List.of(message), userId, Instant.now(clock)));
+    ChatMessageResponse response =
+        toResponse(message, userId, responseContext(List.of(message), userId, Instant.now(clock)));
+    publishToConnection(connection, ChatLiveEventType.MESSAGE_UPDATED);
+    return response;
   }
 
   @Override
@@ -225,8 +304,10 @@ public class ChatServiceImpl implements ChatService {
             .orElseGet(() -> ChatMessageReaction.builder().message(message).user(user).build());
     entity.setReaction(reaction);
     reactions.save(entity);
-    return toResponse(
-        message, userId, responseContext(List.of(message), userId, Instant.now(clock)));
+    ChatMessageResponse response =
+        toResponse(message, userId, responseContext(List.of(message), userId, Instant.now(clock)));
+    publishToConnection(connection, ChatLiveEventType.MESSAGE_UPDATED);
+    return response;
   }
 
   @Override
@@ -236,8 +317,26 @@ public class ChatServiceImpl implements ChatService {
     TetherConnection connection = activeConnection(userId);
     ChatMessage message = messageInConnection(messageId, connection.getId());
     reactions.findByMessageIdAndUserId(messageId, userId).ifPresent(reactions::delete);
-    return toResponse(
-        message, userId, responseContext(List.of(message), userId, Instant.now(clock)));
+    ChatMessageResponse response =
+        toResponse(message, userId, responseContext(List.of(message), userId, Instant.now(clock)));
+    publishToConnection(connection, ChatLiveEventType.MESSAGE_UPDATED);
+    return response;
+  }
+
+  @Override
+  @Transactional
+  public ChatThreadResponse updatePartnerNickname(
+      AuthenticatedUser principal, ChatPartnerNicknameRequest request) {
+    UUID userId = userService.resolveInternalId(principal);
+    TetherConnection connection = activeConnection(userId);
+    String nickname = normalizedNickname(request.nickname());
+    if (connection.getUserOne().getId().equals(userId)) {
+      connection.setUserOnePartnerNickname(nickname);
+    } else {
+      connection.setUserTwoPartnerNickname(nickname);
+    }
+    connections.save(connection);
+    return threadForConnection(connection, userId);
   }
 
   @Override
@@ -267,7 +366,9 @@ public class ChatServiceImpl implements ChatService {
                                     .seenAt(now)
                                     .build())));
     touchPresence(connection, user, false, now);
-    return stateFor(connection, userId, now);
+    ChatStateResponse response = stateFor(connection, userId, now);
+    publishToConnection(connection, ChatLiveEventType.STATE_UPDATED);
+    return response;
   }
 
   @Override
@@ -279,7 +380,9 @@ public class ChatServiceImpl implements ChatService {
         users.findById(userId).orElseThrow(() -> new ResourceNotFoundException("User not found"));
     Instant now = Instant.now(clock);
     touchPresence(connection, user, request.typing(), now);
-    return stateFor(connection, userId, now);
+    ChatStateResponse response = stateFor(connection, userId, now);
+    publishToConnection(connection, ChatLiveEventType.TYPING_UPDATED);
+    return response;
   }
 
   @Override
@@ -296,9 +399,31 @@ public class ChatServiceImpl implements ChatService {
     return new ChatThreadResponse(
         true,
         connection.getId(),
-        partner(connection, userId).getDisplayName(),
+        partnerDisplayName(connection, userId),
         stateFor(connection, userId, context.now()),
         threadMessages.stream().map(message -> toResponse(message, userId, context)).toList());
+  }
+
+  private String partnerDisplayName(TetherConnection connection, UUID viewerId) {
+    String nickname = partnerNickname(connection, viewerId);
+    if (StringUtils.hasText(nickname)) {
+      return nickname;
+    }
+    return partner(connection, viewerId).getDisplayName();
+  }
+
+  private String partnerNickname(TetherConnection connection, UUID viewerId) {
+    if (connection.getUserOne().getId().equals(viewerId)) {
+      return connection.getUserOnePartnerNickname();
+    }
+    return connection.getUserTwoPartnerNickname();
+  }
+
+  private String normalizedNickname(String nickname) {
+    if (!StringUtils.hasText(nickname)) {
+      return null;
+    }
+    return nickname.trim();
   }
 
   private TetherConnection activeConnection(UUID userId) {
@@ -330,6 +455,63 @@ public class ChatServiceImpl implements ChatService {
       return trimRequired(request.body(), "Body is required");
     }
     return null;
+  }
+
+  private ChatMessage createMediaMessage(
+      TetherConnection connection,
+      User sender,
+      ChatMessage reply,
+      List<MultipartFile> files,
+      ChatAttachmentType attachmentType,
+      Instant deliveredAt) {
+    ChatMessage message =
+        messages.save(
+            ChatMessage.builder()
+                .tetherConnection(connection)
+                .senderUser(sender)
+                .type(ChatMessageType.MEDIA)
+                .replyToMessage(reply)
+                .deliveredAt(deliveredAt)
+                .build());
+    List<ChatMessageAttachment> rows = new ArrayList<>();
+    for (int index = 0; index < files.size(); index++) {
+      MultipartFile file = files.get(index);
+      StoredChatMedia stored =
+          mediaStorage.uploadChatMedia(connection.getId(), sender.getId(), file);
+      rows.add(
+          ChatMessageAttachment.builder()
+              .message(message)
+              .type(attachmentType)
+              .url(stored.publicUrl())
+              .storageObjectPath(stored.storageObjectPath())
+              .contentType(stored.contentType())
+              .sizeBytes(stored.sizeBytes())
+              .position(index)
+              .build());
+    }
+    attachments.saveAll(rows);
+    return message;
+  }
+
+  private ChatAttachmentType mediaType(MultipartFile file) {
+    if (file == null || file.isEmpty()) {
+      throw new BadRequestException("Media file cannot be empty");
+    }
+    if (file.getSize() > MAX_MEDIA_BYTES) {
+      throw new BadRequestException("Media file exceeds the 25 MB limit");
+    }
+    String contentType = trimNullable(file.getContentType());
+    if (contentType == null) {
+      throw new BadRequestException("Media content type is required");
+    }
+    String normalized = contentType.toLowerCase();
+    if (normalized.startsWith("image/")) {
+      return ChatAttachmentType.IMAGE;
+    }
+    if (normalized.startsWith("video/")) {
+      return ChatAttachmentType.VIDEO;
+    }
+    throw new BadRequestException("Unsupported media content type");
   }
 
   private String gifUrlFor(ChatSendMessageRequest request) {
@@ -424,6 +606,11 @@ public class ChatServiceImpl implements ChatService {
         .orElseThrow(() -> new ResourceNotFoundException("User not found"));
   }
 
+  private void publishToConnection(TetherConnection connection, ChatLiveEventType type) {
+    livePublisher.publish(connection.getUserOne().getId(), type);
+    livePublisher.publish(connection.getUserTwo().getId(), type);
+  }
+
   private ChatMessageResponse toResponse(
       ChatMessage message, UUID viewerId, ResponseContext context) {
     boolean deleted = message.getDeletedForEveryoneAt() != null;
@@ -433,7 +620,7 @@ public class ChatServiceImpl implements ChatService {
         message.getSenderUser().getId(),
         viewerMessage,
         message.getType(),
-        deleted ? null : message.getBody(),
+        deleted ? null : bodyForResponse(message, viewerId, viewerMessage),
         deleted ? null : message.getGifUrl(),
         deleted ? null : message.getGifProviderId(),
         replyPreview(message.getReplyToMessage()),
@@ -444,8 +631,13 @@ public class ChatServiceImpl implements ChatService {
         deliveryState(message, viewerMessage, context.readsByMessageId()),
         editable(message, viewerMessage, context.now()),
         viewerMessage && !deleted,
-        context.viewerReactionsByMessageId().get(message.getId()),
-        context.reactionsByMessageId().getOrDefault(message.getId(), List.of()));
+        deleted ? null : context.viewerReactionsByMessageId().get(message.getId()),
+        deleted
+            ? List.of()
+            : context.reactionsByMessageId().getOrDefault(message.getId(), List.of()),
+        deleted
+            ? List.of()
+            : context.attachmentsByMessageId().getOrDefault(message.getId(), List.of()));
   }
 
   private ChatReplyPreviewResponse replyPreview(ChatMessage reply) {
@@ -457,9 +649,38 @@ public class ChatServiceImpl implements ChatService {
         reply.getId(), reply.getSenderUser().getId(), deleted ? null : snippet(reply), deleted);
   }
 
+  private String bodyForResponse(ChatMessage message, UUID viewerId, boolean viewerMessage) {
+    if (message.getType() != ChatMessageType.BUB) {
+      return message.getBody();
+    }
+    TetherConnection connection = message.getTetherConnection();
+    if (viewerMessage) {
+      return "You bubbed " + partnerDisplayName(connection, viewerId);
+    }
+    String senderName = partnerDisplayName(connection, viewerId);
+    return senderName + " bubbed you";
+  }
+
   private String snippet(ChatMessage message) {
+    if (message.getType() == ChatMessageType.BUB) {
+      return "Bub";
+    }
     if (message.getType() == ChatMessageType.GIF) {
       return "GIF";
+    }
+    if (message.getType() == ChatMessageType.MEDIA) {
+      List<ChatAttachmentResponse> rows =
+          responseContext(List.of(message), message.getSenderUser().getId(), Instant.now(clock))
+              .attachmentsByMessageId()
+              .getOrDefault(message.getId(), List.of());
+      if (rows.isEmpty()) {
+        return "Media";
+      }
+      boolean video = rows.stream().anyMatch(row -> row.type() == ChatAttachmentType.VIDEO);
+      if (video) {
+        return "Video";
+      }
+      return rows.size() == 1 ? "Photo" : rows.size() + " photos";
     }
     String body = message.getBody();
     if (body == null || body.length() <= 48) {
@@ -492,7 +713,7 @@ public class ChatServiceImpl implements ChatService {
     List<UUID> ids =
         sourceMessages.stream().map(ChatMessage::getId).filter(id -> id != null).toList();
     if (ids.isEmpty()) {
-      return new ResponseContext(Map.of(), Map.of(), Map.of(), now);
+      return new ResponseContext(Map.of(), Map.of(), Map.of(), Map.of(), now);
     }
 
     Map<UUID, List<ChatMessageRead>> readsByMessageId =
@@ -508,7 +729,24 @@ public class ChatServiceImpl implements ChatService {
                     ChatMessageReaction::getReaction,
                     (left, right) -> right));
     Map<UUID, List<ChatReactionSummaryResponse>> reactionSummaries = reactionSummary(reactionRows);
-    return new ResponseContext(readsByMessageId, viewerReactions, reactionSummaries, now);
+    Map<UUID, List<ChatAttachmentResponse>> attachmentRows =
+        attachments.findByMessageIdInOrderByPositionAsc(ids).stream()
+            .collect(
+                Collectors.groupingBy(
+                    row -> row.getMessage().getId(),
+                    LinkedHashMap::new,
+                    Collectors.mapping(
+                        row ->
+                            new ChatAttachmentResponse(
+                                row.getId(),
+                                row.getType(),
+                                row.getUrl(),
+                                row.getContentType(),
+                                row.getSizeBytes(),
+                                row.getPosition()),
+                        Collectors.toList())));
+    return new ResponseContext(
+        readsByMessageId, viewerReactions, reactionSummaries, attachmentRows, now);
   }
 
   private Map<UUID, List<ChatReactionSummaryResponse>> reactionSummary(
@@ -536,5 +774,6 @@ public class ChatServiceImpl implements ChatService {
       Map<UUID, List<ChatMessageRead>> readsByMessageId,
       Map<UUID, String> viewerReactionsByMessageId,
       Map<UUID, List<ChatReactionSummaryResponse>> reactionsByMessageId,
+      Map<UUID, List<ChatAttachmentResponse>> attachmentsByMessageId,
       Instant now) {}
 }
