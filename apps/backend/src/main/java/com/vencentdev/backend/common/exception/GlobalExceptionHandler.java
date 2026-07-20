@@ -13,6 +13,8 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
@@ -72,6 +74,23 @@ public class GlobalExceptionHandler {
         HttpStatus.SERVICE_UNAVAILABLE, "STORAGE_UNAVAILABLE", exception.getMessage(), List.of());
   }
 
+  @ExceptionHandler(MaxUploadSizeExceededException.class)
+  ResponseEntity<ApiError> handleMaxUploadSize(MaxUploadSizeExceededException exception) {
+    return uploadTooLarge();
+  }
+
+  @ExceptionHandler(MultipartException.class)
+  ResponseEntity<ApiError> handleMultipart(MultipartException exception) {
+    if (isMultipartSizeLimitExceeded(exception)) {
+      return uploadTooLarge();
+    }
+    return error(
+        HttpStatus.BAD_REQUEST,
+        "INVALID_MULTIPART_REQUEST",
+        "Invalid multipart request",
+        List.of());
+  }
+
   @ExceptionHandler(AccessDeniedException.class)
   ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException exception) {
     return error(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access denied", List.of());
@@ -97,5 +116,23 @@ public class GlobalExceptionHandler {
     ApiError body =
         new ApiError(status.value(), code, message, MDC.get("traceId"), Instant.now(), errors);
     return ResponseEntity.status(status).body(body);
+  }
+
+  private ResponseEntity<ApiError> uploadTooLarge() {
+    return error(
+        HttpStatus.PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE", "Uploaded file is too large", List.of());
+  }
+
+  private boolean isMultipartSizeLimitExceeded(Throwable exception) {
+    Throwable current = exception;
+    while (current != null) {
+      String type = current.getClass().getSimpleName();
+      if (type.equals("FileSizeLimitExceededException")
+          || type.equals("SizeLimitExceededException")) {
+        return true;
+      }
+      current = current.getCause();
+    }
+    return false;
   }
 }

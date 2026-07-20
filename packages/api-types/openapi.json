@@ -1,8 +1,20 @@
 {
   "openapi": "3.1.0",
-  "info": { "title": "OpenAPI definition", "version": "v0" },
-  "servers": [{ "url": "http://127.0.0.1:8080", "description": "Generated server url" }],
-  "security": [{ "bearer": [] }],
+  "info": {
+    "title": "OpenAPI definition",
+    "version": "v0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Generated server url"
+    }
+  ],
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
   "paths": {
     "/api/v1/home/today-moment": {
       "put": {
@@ -11,7 +23,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/HomeTodayMomentRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/HomeTodayMomentRequest"
+              }
             }
           },
           "required": true
@@ -20,7 +34,11 @@
           "200": {
             "description": "OK",
             "content": {
-              "*/*": { "schema": { "$ref": "#/components/schemas/HomeTodayMomentResponse" } }
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeTodayMomentResponse"
+                }
+              }
             }
           }
         }
@@ -32,7 +50,11 @@
         "operationId": "putMood",
         "requestBody": {
           "content": {
-            "application/json": { "schema": { "$ref": "#/components/schemas/HomeMoodRequest" } }
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HomeMoodRequest"
+              }
+            }
           },
           "required": true
         },
@@ -40,7 +62,11 @@
           "200": {
             "description": "OK",
             "content": {
-              "*/*": { "schema": { "$ref": "#/components/schemas/HomeMoodSummaryResponse" } }
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeMoodSummaryResponse"
+                }
+              }
             }
           }
         }
@@ -54,7 +80,11 @@
           "201": {
             "description": "Created",
             "content": {
-              "*/*": { "schema": { "$ref": "#/components/schemas/TetherInvitationResponse" } }
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TetherInvitationResponse"
+                }
+              }
             }
           }
         }
@@ -66,7 +96,11 @@
         "operationId": "acceptTether",
         "requestBody": {
           "content": {
-            "application/json": { "schema": { "$ref": "#/components/schemas/TetherAcceptRequest" } }
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TetherAcceptRequest"
+              }
+            }
           },
           "required": true
         },
@@ -74,21 +108,11 @@
           "200": {
             "description": "OK",
             "content": {
-              "*/*": { "schema": { "$ref": "#/components/schemas/TetherStatusResponse" } }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/bubs": {
-      "post": {
-        "tags": ["bub-controller"],
-        "operationId": "sendBub",
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "*/*": { "schema": { "$ref": "#/components/schemas/BubSendResponse" } }
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TetherStatusResponse"
+                }
+              }
             }
           }
         }
@@ -103,13 +127,18 @@
             "name": "momentId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/HomeMomentReactionRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/HomeMomentReactionRequest"
+              }
             }
           },
           "required": true
@@ -118,7 +147,45 @@
           "200": {
             "description": "OK",
             "content": {
-              "*/*": { "schema": { "$ref": "#/components/schemas/HomeTodayMomentResponse" } }
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeTodayMomentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/home/today-moment/photo": {
+      "post": {
+        "tags": ["home-controller"],
+        "operationId": "uploadTodayMomentPhoto",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeTodayMomentResponse"
+                }
+              }
             }
           }
         }
@@ -130,14 +197,24 @@
         "operationId": "setChatTyping",
         "requestBody": {
           "content": {
-            "application/json": { "schema": { "$ref": "#/components/schemas/ChatTypingRequest" } }
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatTypingRequest"
+              }
+            }
           },
           "required": true
         },
         "responses": {
           "200": {
             "description": "OK",
-            "content": { "*/*": { "schema": { "$ref": "#/components/schemas/ChatStateResponse" } } }
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatStateResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -148,14 +225,24 @@
         "operationId": "markChatMessagesRead",
         "requestBody": {
           "content": {
-            "application/json": { "schema": { "$ref": "#/components/schemas/ChatReadRequest" } }
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatReadRequest"
+              }
+            }
           },
           "required": true
         },
         "responses": {
           "200": {
             "description": "OK",
-            "content": { "*/*": { "schema": { "$ref": "#/components/schemas/ChatStateResponse" } } }
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatStateResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -167,7 +254,9 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ChatSendMessageRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/ChatSendMessageRequest"
+              }
             }
           },
           "required": true
@@ -176,7 +265,11 @@
           "200": {
             "description": "OK",
             "content": {
-              "*/*": { "schema": { "$ref": "#/components/schemas/ChatMessageResponse" } }
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageResponse"
+                }
+              }
             }
           }
         }
@@ -191,12 +284,19 @@
             "name": "messageId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
           "content": {
-            "application/json": { "schema": { "$ref": "#/components/schemas/ChatReactionRequest" } }
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatReactionRequest"
+              }
+            }
           },
           "required": true
         },
@@ -204,7 +304,11 @@
           "200": {
             "description": "OK",
             "content": {
-              "*/*": { "schema": { "$ref": "#/components/schemas/ChatMessageResponse" } }
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageResponse"
+                }
+              }
             }
           }
         }
@@ -217,14 +321,90 @@
             "name": "messageId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "OK",
             "content": {
-              "*/*": { "schema": { "$ref": "#/components/schemas/ChatMessageResponse" } }
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat/messages/media": {
+      "post": {
+        "tags": ["chat-controller"],
+        "operationId": "uploadChatMediaMessage",
+        "parameters": [
+          {
+            "name": "replyToMessageId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                },
+                "required": ["files"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChatMessageResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bubs": {
+      "post": {
+        "tags": ["bub-controller"],
+        "operationId": "sendBub",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/BubSendResponse"
+                }
+              }
             }
           }
         }
@@ -237,7 +417,13 @@
         "responses": {
           "200": {
             "description": "OK",
-            "content": { "*/*": { "schema": { "$ref": "#/components/schemas/UserResponse" } } }
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
           }
         }
       },
@@ -246,14 +432,24 @@
         "operationId": "updateCurrentUser",
         "requestBody": {
           "content": {
-            "application/json": { "schema": { "$ref": "#/components/schemas/UserUpdateRequest" } }
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdateRequest"
+              }
+            }
           },
           "required": true
         },
         "responses": {
           "200": {
             "description": "OK",
-            "content": { "*/*": { "schema": { "$ref": "#/components/schemas/UserResponse" } } }
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -267,13 +463,18 @@
             "name": "messageId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ChatEditMessageRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/ChatEditMessageRequest"
+              }
             }
           },
           "required": true
@@ -282,7 +483,11 @@
           "200": {
             "description": "OK",
             "content": {
-              "*/*": { "schema": { "$ref": "#/components/schemas/ChatMessageResponse" } }
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageResponse"
+                }
+              }
             }
           }
         }
@@ -296,7 +501,11 @@
           "200": {
             "description": "OK",
             "content": {
-              "*/*": { "schema": { "$ref": "#/components/schemas/TetherStatusResponse" } }
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TetherStatusResponse"
+                }
+              }
             }
           }
         }
@@ -310,7 +519,11 @@
           "200": {
             "description": "OK",
             "content": {
-              "*/*": { "schema": { "$ref": "#/components/schemas/HomeDashboardResponse" } }
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeDashboardResponse"
+                }
+              }
             }
           }
         }
@@ -324,7 +537,11 @@
           "200": {
             "description": "OK",
             "content": {
-              "*/*": { "schema": { "$ref": "#/components/schemas/ChatThreadResponse" } }
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatThreadResponse"
+                }
+              }
             }
           }
         }
@@ -337,7 +554,13 @@
         "responses": {
           "200": {
             "description": "OK",
-            "content": { "*/*": { "schema": { "$ref": "#/components/schemas/ChatStateResponse" } } }
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatStateResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -349,7 +572,13 @@
         "responses": {
           "200": {
             "description": "OK",
-            "content": { "*/*": { "schema": { "$ref": "#/components/schemas/UserResponse" } } }
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -359,7 +588,16 @@
         "tags": ["admin-ping-controller"],
         "operationId": "adminPing",
         "responses": {
-          "200": { "description": "OK", "content": { "*/*": { "schema": { "type": "string" } } } }
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -372,10 +610,17 @@
             "name": "messageId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
-        "responses": { "200": { "description": "OK" } }
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
       }
     },
     "/api/v1/chat/messages/{messageId}/everyone": {
@@ -387,14 +632,21 @@
             "name": "messageId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "OK",
             "content": {
-              "*/*": { "schema": { "$ref": "#/components/schemas/ChatMessageResponse" } }
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageResponse"
+                }
+              }
             }
           }
         }
@@ -406,224 +658,524 @@
       "HomeTodayMomentRequest": {
         "type": "object",
         "properties": {
-          "photoUrl": { "type": "string", "minLength": 1 },
-          "localDate": { "type": "string", "format": "date" }
+          "photoUrl": {
+            "type": "string",
+            "minLength": 1
+          },
+          "localDate": {
+            "type": "string",
+            "format": "date"
+          }
         },
         "required": ["localDate", "photoUrl"]
       },
       "HomeTodayMomentResponse": {
         "type": "object",
         "properties": {
-          "momentId": { "type": "string", "format": "uuid" },
-          "photoUrl": { "type": "string" },
-          "viewerPhotoUrl": { "type": "string" },
-          "partnerCapturedAt": { "type": "string", "format": "date-time" },
-          "localDate": { "type": "string", "format": "date" },
-          "viewerHasPostedToday": { "type": "boolean" },
-          "partnerReaction": { "type": "string" }
+          "momentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "photoUrl": {
+            "type": "string"
+          },
+          "viewerPhotoUrl": {
+            "type": "string"
+          },
+          "partnerCapturedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "localDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "viewerHasPostedToday": {
+            "type": "boolean"
+          },
+          "partnerReaction": {
+            "type": "string"
+          }
         }
       },
       "HomeMoodRequest": {
         "type": "object",
-        "properties": { "mood": { "type": "string", "maxLength": 20, "minLength": 0 } },
+        "properties": {
+          "mood": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 0
+          }
+        },
         "required": ["mood"]
       },
       "HomeMoodSummaryResponse": {
         "type": "object",
-        "properties": { "copy": { "type": "string" }, "mood": { "type": "string" } }
+        "properties": {
+          "copy": {
+            "type": "string"
+          },
+          "mood": {
+            "type": "string"
+          }
+        }
       },
       "TetherInvitationResponse": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "code": { "type": "string" },
-          "expiresAt": { "type": "string", "format": "date-time" },
-          "qrPayload": { "type": "string" }
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "qrPayload": {
+            "type": "string"
+          }
         }
       },
       "TetherAcceptRequest": {
         "type": "object",
         "properties": {
-          "code": { "type": "string", "minLength": 1, "pattern": "^BUB-[A-Z0-9]{4}-[A-Z0-9]{4}$" }
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^BUB-[A-Z0-9]{4}-[A-Z0-9]{4}$"
+          }
         },
         "required": ["code"]
       },
       "TetherStatusResponse": {
         "type": "object",
         "properties": {
-          "hasActiveTether": { "type": "boolean" },
-          "partnerUserId": { "type": "string", "format": "uuid" }
+          "hasActiveTether": {
+            "type": "boolean"
+          },
+          "partnerUserId": {
+            "type": "string",
+            "format": "uuid"
+          }
         }
       },
       "HomeMomentReactionRequest": {
         "type": "object",
-        "properties": { "reaction": { "type": "string", "minLength": 1 } },
+        "properties": {
+          "reaction": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "required": ["reaction"]
       },
-      "ChatTypingRequest": { "type": "object", "properties": { "typing": { "type": "boolean" } } },
+      "ChatTypingRequest": {
+        "type": "object",
+        "properties": {
+          "typing": {
+            "type": "boolean"
+          }
+        }
+      },
       "ChatPresenceResponse": {
         "type": "object",
         "properties": {
-          "status": { "type": "string", "enum": ["ONLINE", "OFFLINE"] },
-          "lastSeenAt": { "type": "string", "format": "date-time" }
+          "status": {
+            "type": "string",
+            "enum": ["ONLINE", "OFFLINE"]
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "ChatStateResponse": {
         "type": "object",
         "properties": {
-          "partnerTyping": { "type": "boolean" },
-          "partnerPresence": { "$ref": "#/components/schemas/ChatPresenceResponse" }
+          "partnerTyping": {
+            "type": "boolean"
+          },
+          "partnerPresence": {
+            "$ref": "#/components/schemas/ChatPresenceResponse"
+          }
         }
       },
       "ChatReadRequest": {
         "type": "object",
-        "properties": { "upToMessageId": { "type": "string", "format": "uuid" } },
+        "properties": {
+          "upToMessageId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
         "required": ["upToMessageId"]
       },
       "ChatSendMessageRequest": {
         "type": "object",
         "properties": {
-          "type": { "type": "string", "enum": ["TEXT", "EMOJI", "GIF"] },
-          "body": { "type": "string" },
-          "gifUrl": { "type": "string" },
-          "gifProviderId": { "type": "string" },
-          "replyToMessageId": { "type": "string", "format": "uuid" }
+          "type": {
+            "type": "string",
+            "enum": ["TEXT", "EMOJI", "GIF", "MEDIA"]
+          },
+          "body": {
+            "type": "string"
+          },
+          "gifUrl": {
+            "type": "string"
+          },
+          "gifProviderId": {
+            "type": "string"
+          },
+          "replyToMessageId": {
+            "type": "string",
+            "format": "uuid"
+          }
         },
         "required": ["type"]
+      },
+      "ChatAttachmentResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["IMAGE", "VIDEO"]
+          },
+          "url": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       },
       "ChatMessageResponse": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "senderUserId": { "type": "string", "format": "uuid" },
-          "viewerMessage": { "type": "boolean" },
-          "type": { "type": "string", "enum": ["TEXT", "EMOJI", "GIF"] },
-          "body": { "type": "string" },
-          "gifUrl": { "type": "string" },
-          "gifProviderId": { "type": "string" },
-          "reply": { "$ref": "#/components/schemas/ChatReplyPreviewResponse" },
-          "createdAt": { "type": "string", "format": "date-time" },
-          "updatedAt": { "type": "string", "format": "date-time" },
-          "editedAt": { "type": "string", "format": "date-time" },
-          "deletedForEveryone": { "type": "boolean" },
-          "deliveryState": { "type": "string", "enum": ["DELIVERED", "SEEN"] },
-          "editable": { "type": "boolean" },
-          "deletableForEveryone": { "type": "boolean" },
-          "viewerReaction": { "type": "string" },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "senderUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "viewerMessage": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["TEXT", "EMOJI", "GIF", "MEDIA"]
+          },
+          "body": {
+            "type": "string"
+          },
+          "gifUrl": {
+            "type": "string"
+          },
+          "gifProviderId": {
+            "type": "string"
+          },
+          "reply": {
+            "$ref": "#/components/schemas/ChatReplyPreviewResponse"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "editedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deletedForEveryone": {
+            "type": "boolean"
+          },
+          "deliveryState": {
+            "type": "string",
+            "enum": ["DELIVERED", "SEEN"]
+          },
+          "editable": {
+            "type": "boolean"
+          },
+          "deletableForEveryone": {
+            "type": "boolean"
+          },
+          "viewerReaction": {
+            "type": "string"
+          },
           "reactions": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ChatReactionSummaryResponse" }
+            "items": {
+              "$ref": "#/components/schemas/ChatReactionSummaryResponse"
+            }
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatAttachmentResponse"
+            }
           }
         }
       },
       "ChatReactionSummaryResponse": {
         "type": "object",
         "properties": {
-          "reaction": { "type": "string" },
-          "count": { "type": "integer", "format": "int32" }
+          "reaction": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int32"
+          }
         }
       },
       "ChatReplyPreviewResponse": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "senderUserId": { "type": "string", "format": "uuid" },
-          "snippet": { "type": "string" },
-          "deletedForEveryone": { "type": "boolean" }
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "senderUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "deletedForEveryone": {
+            "type": "boolean"
+          }
         }
       },
       "ChatReactionRequest": {
         "type": "object",
-        "properties": { "reaction": { "type": "string", "minLength": 1 } },
+        "properties": {
+          "reaction": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "required": ["reaction"]
+      },
+      "BubSendResponse": {
+        "type": "object",
+        "properties": {
+          "bubId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tetherConnectionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "senderUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "receiverUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sentAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       },
       "JsonNullableString": {
         "type": "object",
-        "properties": { "present": { "type": "boolean" } }
+        "properties": {
+          "present": {
+            "type": "boolean"
+          }
+        }
       },
       "UserUpdateRequest": {
         "type": "object",
         "properties": {
-          "email": { "$ref": "#/components/schemas/JsonNullableString" },
-          "displayName": { "$ref": "#/components/schemas/JsonNullableString" }
+          "email": {
+            "$ref": "#/components/schemas/JsonNullableString"
+          },
+          "displayName": {
+            "$ref": "#/components/schemas/JsonNullableString"
+          }
         }
       },
       "UserResponse": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "email": { "type": "string" },
-          "displayName": { "type": "string" },
-          "role": { "type": "string", "enum": ["USER", "ADMIN"] },
-          "userType": { "type": "string", "enum": ["INDIVIDUAL", "ORGANIZATION"] },
-          "kycStatus": { "type": "string", "enum": ["NONE", "PENDING", "VERIFIED", "REJECTED"] },
-          "createdAt": { "type": "string", "format": "date-time" },
-          "updatedAt": { "type": "string", "format": "date-time" }
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["USER", "ADMIN"]
+          },
+          "userType": {
+            "type": "string",
+            "enum": ["INDIVIDUAL", "ORGANIZATION"]
+          },
+          "kycStatus": {
+            "type": "string",
+            "enum": ["NONE", "PENDING", "VERIFIED", "REJECTED"]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "ChatEditMessageRequest": {
         "type": "object",
-        "properties": { "body": { "type": "string", "maxLength": 4000, "minLength": 0 } },
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 0
+          }
+        },
         "required": ["body"]
       },
       "HomeDashboardResponse": {
         "type": "object",
         "properties": {
-          "tether": { "$ref": "#/components/schemas/HomeTetherCardResponse" },
-          "todayMoment": { "$ref": "#/components/schemas/HomeTodayMomentResponse" },
-          "latestBub": { "$ref": "#/components/schemas/HomeLatestBubResponse" },
-          "mood": { "$ref": "#/components/schemas/HomeMoodSummaryResponse" }
+          "tether": {
+            "$ref": "#/components/schemas/HomeTetherCardResponse"
+          },
+          "todayMoment": {
+            "$ref": "#/components/schemas/HomeTodayMomentResponse"
+          },
+          "latestBub": {
+            "$ref": "#/components/schemas/HomeLatestBubResponse"
+          },
+          "mood": {
+            "$ref": "#/components/schemas/HomeMoodSummaryResponse"
+          }
         }
       },
       "HomeLatestBubResponse": {
         "type": "object",
         "properties": {
-          "hasActivity": { "type": "boolean" },
-          "copy": { "type": "string" },
-          "occurredAt": { "type": "string", "format": "date-time" },
-          "viewerLastSentAt": { "type": "string", "format": "date-time" },
-          "partnerLastSentAt": { "type": "string", "format": "date-time" },
-          "viewerLastSentCopy": { "type": "string" },
-          "partnerLastSentCopy": { "type": "string" },
-          "streakDays": { "type": "integer", "format": "int32" }
-        }
-      },
-      "BubSendResponse": {
-        "type": "object",
-        "properties": {
-          "bubId": { "type": "string", "format": "uuid" },
-          "tetherConnectionId": { "type": "string", "format": "uuid" },
-          "senderUserId": { "type": "string", "format": "uuid" },
-          "receiverUserId": { "type": "string", "format": "uuid" },
-          "sentAt": { "type": "string", "format": "date-time" }
+          "hasActivity": {
+            "type": "boolean"
+          },
+          "copy": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "viewerLastSentAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "partnerLastSentAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "viewerLastSentCopy": {
+            "type": "string"
+          },
+          "partnerLastSentCopy": {
+            "type": "string"
+          },
+          "streakDays": {
+            "type": "integer",
+            "format": "int32"
+          }
         }
       },
       "HomeTetherCardResponse": {
         "type": "object",
         "properties": {
-          "hasActiveTether": { "type": "boolean" },
-          "partnerUserId": { "type": "string", "format": "uuid" },
-          "partnerDisplayName": { "type": "string" },
-          "partnerProfileImageUrl": { "type": "string" },
-          "viewerProfileImageUrl": { "type": "string" },
-          "tetheredSince": { "type": "string", "format": "date-time" },
-          "ctaLabel": { "type": "string" }
+          "hasActiveTether": {
+            "type": "boolean"
+          },
+          "partnerUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerDisplayName": {
+            "type": "string"
+          },
+          "partnerProfileImageUrl": {
+            "type": "string"
+          },
+          "viewerProfileImageUrl": {
+            "type": "string"
+          },
+          "tetheredSince": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ctaLabel": {
+            "type": "string"
+          }
         }
       },
       "ChatThreadResponse": {
         "type": "object",
         "properties": {
-          "hasActiveTether": { "type": "boolean" },
-          "tetherConnectionId": { "type": "string", "format": "uuid" },
-          "partnerDisplayName": { "type": "string" },
-          "state": { "$ref": "#/components/schemas/ChatStateResponse" },
+          "hasActiveTether": {
+            "type": "boolean"
+          },
+          "tetherConnectionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerDisplayName": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ChatStateResponse"
+          },
           "messages": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ChatMessageResponse" }
+            "items": {
+              "$ref": "#/components/schemas/ChatMessageResponse"
+            }
           }
         }
       }
     },
-    "securitySchemes": { "bearer": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" } }
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
   }
 }
