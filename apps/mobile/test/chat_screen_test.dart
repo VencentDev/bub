@@ -862,11 +862,17 @@ void main() {
       findsOneWidget,
     );
 
+    chatController.current = _threadWithViewerBubMessage();
     sendCompleter.complete();
     await tester.pumpAndSettle();
     expect(
       find.byKey(const Key('chat-safe-notice-pending-bub-0')),
       findsNothing,
+    );
+    expect(find.text('You bubbed Bob'), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-safe-notice-bub-viewer-bub-message')),
+      findsOneWidget,
     );
   });
 }
@@ -991,6 +997,23 @@ ChatThreadResponse _threadWithBubMessage() {
         type: ChatMessageResponseType.bub,
         body: 'Bubba bubbed you',
         createdAt: baseTime.add(const Duration(minutes: 1)),
+      ),
+    ],
+  );
+}
+
+ChatThreadResponse _threadWithViewerBubMessage() {
+  final baseTime = DateTime(2026, 7, 20, 9);
+  return ChatThreadResponse(
+    hasActiveTether: true,
+    partnerDisplayName: 'Bob',
+    messages: [
+      ChatMessageResponse(
+        id: 'viewer-bub-message',
+        viewerMessage: true,
+        type: ChatMessageResponseType.bub,
+        body: 'You bubbed Bob',
+        createdAt: baseTime,
       ),
     ],
   );

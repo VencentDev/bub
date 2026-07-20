@@ -313,6 +313,7 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
     });
     try {
       await ref.read(bubSendControllerProvider.notifier).sendBub();
+      await ref.read(chatThreadProvider.notifier).refresh();
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
