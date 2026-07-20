@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.vencentdev.backend.IntegrationTestBase;
 import com.vencentdev.backend.modules.bub.repository.BubEventRepository;
+import com.vencentdev.backend.modules.chat.entity.ChatMessageType;
+import com.vencentdev.backend.modules.chat.repository.ChatMessageRepository;
 import com.vencentdev.backend.modules.tether.entity.TetherConnection;
 import com.vencentdev.backend.modules.tether.repository.TetherConnectionRepository;
 import com.vencentdev.backend.modules.tether.repository.TetherInvitationRepository;
@@ -25,12 +27,14 @@ class BubControllerIntegrationTest extends IntegrationTestBase {
 
   @Autowired private MockMvc mockMvc;
   @Autowired private BubEventRepository bubEvents;
+  @Autowired private ChatMessageRepository chatMessages;
   @Autowired private TetherConnectionRepository connections;
   @Autowired private TetherInvitationRepository invitations;
   @Autowired private UserRepository users;
 
   @BeforeEach
   void setUp() {
+    chatMessages.deleteAll();
     bubEvents.deleteAll();
     connections.deleteAll();
     invitations.deleteAll();
@@ -63,6 +67,53 @@ class BubControllerIntegrationTest extends IntegrationTestBase {
               assertThat(event.getReceiverUser().getId()).isEqualTo(bob.getId());
               assertThat(event.getCreatedAt()).isNotNull();
             });
+    assertThat(chatMessages.findAll())
+        .singleElement()
+        .satisfies(
+            message -> {
+              assertThat(message.getTetherConnection().getId()).isEqualTo(connection.getId());
+              assertThat(message.getSenderUser().getId()).isEqualTo(alice.getId());
+              assertThat(message.getType()).isEqualTo(ChatMessageType.BUB);
+              assertThat(message.getBody()).isNull();
+              assertThat(message.getDeliveredAt()).isNotNull();
+            });
+  }
+
+  @Test
+  void sentBubAppearsInChatWithViewerSpecificNicknameCopy() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    connections.save(
+        TetherConnection.builder()
+            .userOne(alice)
+            .userTwo(bob)
+            .userTwoPartnerNickname("Bubba")
+            .active(true)
+            .build());
+
+    mockMvc
+        .perform(post("/api/v1/bubs").with(currentUser("alice")))
+        .andExpect(status().isCreated());
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                    "/api/v1/chat/thread")
+                .with(currentUser("bob")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.messages[0].type").value("BUB"))
+        .andExpect(jsonPath("$.messages[0].viewerMessage").value(false))
+        .andExpect(jsonPath("$.messages[0].body").value("Bubba bubbed you"));
+
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                    "/api/v1/chat/thread")
+                .with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.messages[0].type").value("BUB"))
+        .andExpect(jsonPath("$.messages[0].viewerMessage").value(true))
+        .andExpect(jsonPath("$.messages[0].body").value("You bubbed Bob"));
   }
 
   @Test

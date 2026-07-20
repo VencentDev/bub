@@ -9,6 +9,7 @@ import com.vencentdev.backend.modules.chat.dto.ChatAttachmentResponse;
 import com.vencentdev.backend.modules.chat.dto.ChatDeliveryState;
 import com.vencentdev.backend.modules.chat.dto.ChatEditMessageRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatMessageResponse;
+import com.vencentdev.backend.modules.chat.dto.ChatPartnerNicknameRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatPresenceResponse;
 import com.vencentdev.backend.modules.chat.dto.ChatPresenceStatus;
 import com.vencentdev.backend.modules.chat.dto.ChatReactionRequest;
@@ -54,6 +55,7 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -146,8 +148,8 @@ public class ChatServiceImpl implements ChatService {
   @Override
   @Transactional
   public ChatMessageResponse send(AuthenticatedUser principal, ChatSendMessageRequest request) {
-    if (request.type() == ChatMessageType.MEDIA) {
-      throw new BadRequestException("Use the media upload endpoint for media messages");
+    if (request.type() == ChatMessageType.MEDIA || request.type() == ChatMessageType.BUB) {
+      throw new BadRequestException("Use the dedicated endpoint for this message type");
     }
     UUID userId = userService.resolveInternalId(principal);
     TetherConnection connection = activeConnection(userId);
@@ -323,6 +325,22 @@ public class ChatServiceImpl implements ChatService {
 
   @Override
   @Transactional
+  public ChatThreadResponse updatePartnerNickname(
+      AuthenticatedUser principal, ChatPartnerNicknameRequest request) {
+    UUID userId = userService.resolveInternalId(principal);
+    TetherConnection connection = activeConnection(userId);
+    String nickname = normalizedNickname(request.nickname());
+    if (connection.getUserOne().getId().equals(userId)) {
+      connection.setUserOnePartnerNickname(nickname);
+    } else {
+      connection.setUserTwoPartnerNickname(nickname);
+    }
+    connections.save(connection);
+    return threadForConnection(connection, userId);
+  }
+
+  @Override
+  @Transactional
   public ChatStateResponse markRead(AuthenticatedUser principal, ChatReadRequest request) {
     UUID userId = userService.resolveInternalId(principal);
     TetherConnection connection = activeConnection(userId);
@@ -381,9 +399,31 @@ public class ChatServiceImpl implements ChatService {
     return new ChatThreadResponse(
         true,
         connection.getId(),
-        partner(connection, userId).getDisplayName(),
+        partnerDisplayName(connection, userId),
         stateFor(connection, userId, context.now()),
         threadMessages.stream().map(message -> toResponse(message, userId, context)).toList());
+  }
+
+  private String partnerDisplayName(TetherConnection connection, UUID viewerId) {
+    String nickname = partnerNickname(connection, viewerId);
+    if (StringUtils.hasText(nickname)) {
+      return nickname;
+    }
+    return partner(connection, viewerId).getDisplayName();
+  }
+
+  private String partnerNickname(TetherConnection connection, UUID viewerId) {
+    if (connection.getUserOne().getId().equals(viewerId)) {
+      return connection.getUserOnePartnerNickname();
+    }
+    return connection.getUserTwoPartnerNickname();
+  }
+
+  private String normalizedNickname(String nickname) {
+    if (!StringUtils.hasText(nickname)) {
+      return null;
+    }
+    return nickname.trim();
   }
 
   private TetherConnection activeConnection(UUID userId) {
@@ -580,7 +620,7 @@ public class ChatServiceImpl implements ChatService {
         message.getSenderUser().getId(),
         viewerMessage,
         message.getType(),
-        deleted ? null : message.getBody(),
+        deleted ? null : bodyForResponse(message, viewerId, viewerMessage),
         deleted ? null : message.getGifUrl(),
         deleted ? null : message.getGifProviderId(),
         replyPreview(message.getReplyToMessage()),
@@ -609,7 +649,22 @@ public class ChatServiceImpl implements ChatService {
         reply.getId(), reply.getSenderUser().getId(), deleted ? null : snippet(reply), deleted);
   }
 
+  private String bodyForResponse(ChatMessage message, UUID viewerId, boolean viewerMessage) {
+    if (message.getType() != ChatMessageType.BUB) {
+      return message.getBody();
+    }
+    TetherConnection connection = message.getTetherConnection();
+    if (viewerMessage) {
+      return "You bubbed " + partnerDisplayName(connection, viewerId);
+    }
+    String senderName = partnerDisplayName(connection, viewerId);
+    return senderName + " bubbed you";
+  }
+
   private String snippet(ChatMessage message) {
+    if (message.getType() == ChatMessageType.BUB) {
+      return "Bub";
+    }
     if (message.getType() == ChatMessageType.GIF) {
       return "GIF";
     }

@@ -4,6 +4,7 @@ import com.vencentdev.backend.modules.auth.AuthenticatedUser;
 import com.vencentdev.backend.modules.auth.CurrentUser;
 import com.vencentdev.backend.modules.chat.dto.ChatEditMessageRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatMessageResponse;
+import com.vencentdev.backend.modules.chat.dto.ChatPartnerNicknameRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatReactionRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatReadRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatSendMessageRequest;
@@ -60,6 +61,14 @@ public class ChatController {
       @RequestParam("files") List<MultipartFile> files,
       @RequestParam(value = "replyToMessageId", required = false) UUID replyToMessageId) {
     return chatService.uploadMedia(user, files, replyToMessageId);
+  }
+
+  @PatchMapping("/partner-nickname")
+  @Operation(operationId = "updateChatPartnerNickname")
+  public ChatThreadResponse updatePartnerNickname(
+      @Parameter(hidden = true) @CurrentUser AuthenticatedUser user,
+      @Valid @RequestBody ChatPartnerNicknameRequest request) {
+    return chatService.updatePartnerNickname(user, request);
   }
 
   @PatchMapping("/messages/{messageId}")

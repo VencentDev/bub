@@ -3,6 +3,7 @@ package com.vencentdev.backend.modules.chat.service;
 import com.vencentdev.backend.modules.auth.AuthenticatedUser;
 import com.vencentdev.backend.modules.chat.dto.ChatEditMessageRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatMessageResponse;
+import com.vencentdev.backend.modules.chat.dto.ChatPartnerNicknameRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatReactionRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatReadRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatSendMessageRequest;
@@ -32,6 +33,9 @@ public interface ChatService {
       AuthenticatedUser principal, UUID messageId, ChatReactionRequest request);
 
   ChatMessageResponse removeReaction(AuthenticatedUser principal, UUID messageId);
+
+  ChatThreadResponse updatePartnerNickname(
+      AuthenticatedUser principal, ChatPartnerNicknameRequest request);
 
   ChatStateResponse markRead(AuthenticatedUser principal, ChatReadRequest request);
 

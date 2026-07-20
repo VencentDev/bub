@@ -392,6 +392,34 @@
         }
       }
     },
+    "/api/v1/chat/partner-nickname": {
+      "patch": {
+        "tags": ["chat-controller"],
+        "operationId": "updateChatPartnerNickname",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatPartnerNicknameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatThreadResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/bubs": {
       "post": {
         "tags": ["bub-controller"],
@@ -880,7 +908,7 @@
           },
           "type": {
             "type": "string",
-            "enum": ["TEXT", "EMOJI", "GIF", "MEDIA"]
+            "enum": ["TEXT", "EMOJI", "GIF", "MEDIA", "BUB"]
           },
           "body": {
             "type": "string"
@@ -976,6 +1004,16 @@
           }
         },
         "required": ["reaction"]
+      },
+      "ChatPartnerNicknameRequest": {
+        "type": "object",
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 0
+          }
+        }
       },
       "BubSendResponse": {
         "type": "object",
@@ -1134,6 +1172,12 @@
             "type": "string"
           },
           "viewerProfileImageUrl": {
+            "type": "string"
+          },
+          "viewerMood": {
+            "type": "string"
+          },
+          "partnerMood": {
             "type": "string"
           },
           "tetheredSince": {

@@ -239,7 +239,7 @@ public class HomeServiceImpl implements HomeService {
 
   private HomeDashboardResponse dashboardForUntetheredUser(UUID userId) {
     return new HomeDashboardResponse(
-        new HomeTetherCardResponse(false, null, null, null, null, null, TETHER_CTA),
+        new HomeTetherCardResponse(false, null, null, null, null, null, null, null, TETHER_CTA),
         null,
         tetherRequiredBubSummary(),
         moodForUser(userId));
@@ -259,6 +259,8 @@ public class HomeServiceImpl implements HomeService {
         partner.getDisplayName(),
         null,
         null,
+        moodValue(userId),
+        moodValue(partner.getId()),
         connection.getCreatedAt(),
         null);
   }
@@ -401,6 +403,10 @@ public class HomeServiceImpl implements HomeService {
 
   private HomeMoodSummaryResponse toMoodResponse(HomeMood mood) {
     return new HomeMoodSummaryResponse(MOOD_COPY, mood.getMood());
+  }
+
+  private String moodValue(UUID userId) {
+    return moods.findByUserId(userId).map(HomeMood::getMood).orElse(null);
   }
 
   private Instant expiresAt() {

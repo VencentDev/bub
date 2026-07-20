@@ -14,6 +14,7 @@ import com.vencentdev.backend.IntegrationTestBase;
 import com.vencentdev.backend.modules.bub.entity.BubEvent;
 import com.vencentdev.backend.modules.bub.repository.BubEventRepository;
 import com.vencentdev.backend.modules.home.entity.HomeDailyMoment;
+import com.vencentdev.backend.modules.home.entity.HomeMood;
 import com.vencentdev.backend.modules.home.repository.HomeDailyMomentRepository;
 import com.vencentdev.backend.modules.home.repository.HomeMoodRepository;
 import com.vencentdev.backend.modules.home.service.HomeMomentExpiryCleanupService;
@@ -99,6 +100,8 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
     User alice = users.save(user("alice", "alice@example.com", "Alice"));
     User bob = users.save(user("bob", "bob@example.com", "Bob"));
     connections.save(TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    moods.save(HomeMood.builder().user(alice).mood("calm").build());
+    moods.save(HomeMood.builder().user(bob).mood("cozy").build());
 
     mockMvc
         .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
@@ -106,6 +109,8 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(jsonPath("$.tether.hasActiveTether").value(true))
         .andExpect(jsonPath("$.tether.partnerUserId").value(bob.getId().toString()))
         .andExpect(jsonPath("$.tether.partnerDisplayName").value("Bob"))
+        .andExpect(jsonPath("$.tether.viewerMood").value("calm"))
+        .andExpect(jsonPath("$.tether.partnerMood").value("cozy"))
         .andExpect(jsonPath("$.tether.tetheredSince").exists())
         .andExpect(jsonPath("$.latestBub.hasActivity").value(false))
         .andExpect(jsonPath("$.latestBub.copy").value("Send your first Bub"))
@@ -113,7 +118,7 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(jsonPath("$.latestBub.partnerLastSentAt").value(nullValue()))
         .andExpect(jsonPath("$.latestBub.streakDays").value(0))
         .andExpect(jsonPath("$.mood.copy").value("How are you feeling?"))
-        .andExpect(jsonPath("$.mood.mood").value(nullValue()));
+        .andExpect(jsonPath("$.mood.mood").value("calm"));
   }
 
   @Test

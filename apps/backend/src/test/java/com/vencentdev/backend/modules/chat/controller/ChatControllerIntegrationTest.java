@@ -124,6 +124,32 @@ class ChatControllerIntegrationTest extends IntegrationTestBase {
   }
 
   @Test
+  void partnerNicknameOverridesOnlyTheCurrentUsersThreadDisplayName() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    connections.save(TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+
+    mockMvc
+        .perform(
+            patch("/api/v1/chat/partner-nickname")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"nickname\":\"  Bubba  \"}")
+                .with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.partnerDisplayName").value("Bubba"));
+
+    mockMvc
+        .perform(get("/api/v1/chat/thread").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.partnerDisplayName").value("Bubba"));
+
+    mockMvc
+        .perform(get("/api/v1/chat/thread").with(currentUser("bob")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.partnerDisplayName").value("Alice"));
+  }
+
+  @Test
   void rejectsInvalidSendsAndCrossTetherReplies() throws Exception {
     User alice = users.save(user("alice", "alice@example.com", "Alice"));
     User bob = users.save(user("bob", "bob@example.com", "Bob"));
@@ -145,6 +171,14 @@ class ChatControllerIntegrationTest extends IntegrationTestBase {
             post("/api/v1/chat/messages")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"type\":\"GIF\"}")
+                .with(currentUser("alice")))
+        .andExpect(status().isBadRequest());
+
+    mockMvc
+        .perform(
+            post("/api/v1/chat/messages")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"type\":\"BUB\"}")
                 .with(currentUser("alice")))
         .andExpect(status().isBadRequest());
 
