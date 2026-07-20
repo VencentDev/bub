@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +18,8 @@ import '../../api/generated/models/chat_presence_response_status.dart';
 import '../../api/generated/models/chat_reaction_summary_response.dart';
 import '../../api/generated/models/chat_send_message_request_type.dart';
 import '../../api/generated/models/chat_thread_response.dart';
+import '../../features/bub/bub_heart_burst.dart';
+import '../../features/bub/bub_send_controller.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
 import 'chat_controller.dart';
@@ -35,9 +39,11 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
   final _composerFocus = FocusNode();
   ChatMessageResponse? _replyTo;
   final _safeNotices = <_LocalChatNotice>[];
+  final _pendingBubNotices = <_LocalChatNotice>[];
   var _stagedMedia = const <File>[];
   var _stagedMediaIds = const <String>{};
-  var _pendingUploadMedia = const <File>[];
+  var _pendingTextMessages = const <_PendingTextMessage>[];
+  var _pendingMediaMessages = const <_PendingMediaMessage>[];
   _AttachmentMode? _stagedMediaMode;
   var _inlineMedia = const <ChatMediaItem>[];
   var _inlineMediaMode = _AttachmentMode.quick;
@@ -46,16 +52,26 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
   var _inlineMediaLoading = false;
   var _composerHasText = false;
   var _showEmojiPicker = false;
+  var _bubTapCount = 0;
+  var _bubBurstTrigger = 0;
+  var _sendingTapBub = false;
+  var _pendingTextSequence = 0;
+  var _pendingMediaSequence = 0;
+  var _pendingBubSequence = 0;
+  DateTime? _lastBubTapAt;
+  ChatThreadResponse? _lastThread;
 
   @override
   void initState() {
     super.initState();
     _composer.addListener(_handleComposerChanged);
+    _composerFocus.addListener(_handleComposerFocusChanged);
   }
 
   @override
   void dispose() {
     _composer.removeListener(_handleComposerChanged);
+    _composerFocus.removeListener(_handleComposerFocusChanged);
     _composer.dispose();
     _composerFocus.dispose();
     super.dispose();
@@ -76,6 +92,16 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
     }
   }
 
+  void _handleComposerFocusChanged() {
+    if (!_composerFocus.hasFocus || !_showInlineMediaPicker) {
+      return;
+    }
+    setState(() {
+      _showInlineMediaPicker = false;
+      _inlineMediaExpanded = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final thread = ref.watch(chatThreadProvider);
@@ -83,13 +109,19 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
       canPop: false,
       onPopInvokedWithResult: (_, _) => _handleBack(),
       child: thread.when(
-        loading: () => const Center(
-          child: Padding(
-            key: Key('chat-loading'),
-            padding: EdgeInsets.only(bottom: 132),
-            child: CircularProgressIndicator(),
-          ),
-        ),
+        loading: () {
+          final lastThread = _lastThread;
+          if (lastThread != null) {
+            return _buildLoadedThread(lastThread);
+          }
+          return const Center(
+            child: Padding(
+              key: Key('chat-loading'),
+              padding: EdgeInsets.only(bottom: 132),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        },
         error: (_, _) => Center(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
@@ -111,70 +143,112 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
             ),
           ),
         ),
-        data: (data) {
-          if (data.hasActiveTether != true) {
-            return const _UntetheredChatEmptyState();
-          }
-          return Column(
-            children: [
-              _ChatHeader(thread: data, onBack: widget.onBack),
-              Expanded(
-                child: _MessageList(
-                  messages: data.messages ?? const [],
-                  localNotices: _safeNotices,
-                  pendingUploadMedia: _pendingUploadMedia,
-                ),
-              ),
-              SafeArea(
-                top: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _ChatComposer(
-                      controller: _composer,
-                      focusNode: _composerFocus,
-                      replyTo: _replyTo,
-                      inlineMedia: _inlineMedia,
-                      inlineMediaMode: _inlineMediaMode,
-                      showInlineMediaPicker: _showInlineMediaPicker,
-                      inlineMediaExpanded: _inlineMediaExpanded,
-                      inlineMediaLoading: _inlineMediaLoading,
-                      stagedMedia: _stagedMedia,
-                      stagedMediaIds: _stagedMediaIds,
-                      hasText: _composerHasText || _stagedMedia.isNotEmpty,
-                      onCancelReply: () => setState(() => _replyTo = null),
-                      onSend: _sendComposer,
-                      onAttachment: _toggleInlineMediaPicker,
-                      onInlineMediaModeChanged: _setInlineMediaMode,
-                      onInlineMediaSelected: _toggleInlineMediaSelection,
-                      onToggleInlineMediaExpanded: () => setState(
-                        () => _inlineMediaExpanded = !_inlineMediaExpanded,
-                      ),
-                      onRemoveStagedMedia: _removeStagedMedia,
-                      onQuickReaction: _sendQuickReaction,
-                      onToggleEmojiPicker: () =>
-                          setState(() => _showEmojiPicker = !_showEmojiPicker),
-                    ),
-                    if (_showEmojiPicker)
-                      SizedBox(
-                        key: const Key('chat-emoji-picker'),
-                        height: 248,
-                        child: EmojiPicker(
-                          textEditingController: _composer,
-                          config: const Config(height: 248),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
+        data: _buildLoadedThread,
       ),
     );
   }
 
+  Widget _buildLoadedThread(ChatThreadResponse data) {
+    _lastThread = data;
+    if (data.hasActiveTether != true) {
+      return const _UntetheredChatEmptyState();
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxInlineMediaGridHeight = math.max(
+          96.0,
+          constraints.maxHeight - 220,
+        );
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            GestureDetector(
+              key: const Key('chat-bub-tap-zone'),
+              behavior: HitTestBehavior.translucent,
+              onTap: _handleBubTap,
+              child: Column(
+                children: [
+                  _ChatHeader(
+                    thread: data,
+                    onBack: widget.onBack,
+                    quickImages: _quickImages(data.messages ?? const []),
+                    onSaveNickname: _savePartnerNickname,
+                  ),
+                  Expanded(
+                    child: _MessageList(
+                      messages: data.messages ?? const [],
+                      localNotices: [..._safeNotices, ..._pendingBubNotices],
+                      pendingTextMessages: _pendingTextMessages,
+                      pendingMediaMessages: _pendingMediaMessages,
+                    ),
+                  ),
+                  SafeArea(
+                    top: false,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _ChatComposer(
+                          controller: _composer,
+                          focusNode: _composerFocus,
+                          replyTo: _replyTo,
+                          inlineMedia: _inlineMedia,
+                          inlineMediaMode: _inlineMediaMode,
+                          showInlineMediaPicker: _showInlineMediaPicker,
+                          inlineMediaExpanded: _inlineMediaExpanded,
+                          inlineMediaLoading: _inlineMediaLoading,
+                          maxInlineMediaGridHeight: maxInlineMediaGridHeight,
+                          stagedMedia: _stagedMedia,
+                          stagedMediaIds: _stagedMediaIds,
+                          hasText: _composerHasText || _stagedMedia.isNotEmpty,
+                          onCancelReply: () => setState(() => _replyTo = null),
+                          onSend: _sendComposer,
+                          onAttachment: _toggleInlineMediaPicker,
+                          onInlineMediaModeChanged: _setInlineMediaMode,
+                          onInlineMediaSelected: _toggleInlineMediaSelection,
+                          onToggleInlineMediaExpanded: () => setState(
+                            () => _inlineMediaExpanded = !_inlineMediaExpanded,
+                          ),
+                          onRemoveStagedMedia: _removeStagedMedia,
+                          onQuickReaction: _sendQuickReaction,
+                          onToggleEmojiPicker: () => setState(
+                            () => _showEmojiPicker = !_showEmojiPicker,
+                          ),
+                        ),
+                        if (_showEmojiPicker)
+                          SizedBox(
+                            key: const Key('chat-emoji-picker'),
+                            height: 248,
+                            child: EmojiPicker(
+                              textEditingController: _composer,
+                              config: const Config(height: 248),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned.fill(
+              child: BubHeartBurst(
+                trigger: _bubBurstTrigger,
+                heartKey: const Key('chat-bub-heart-burst-heart'),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _handleBack() {
+    if (_showInlineMediaPicker) {
+      setState(() {
+        _showInlineMediaPicker = false;
+        _inlineMediaExpanded = false;
+      });
+      return;
+    }
     if (_showEmojiPicker) {
       setState(() => _showEmojiPicker = false);
       return;
@@ -189,6 +263,72 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
       return;
     }
     Navigator.maybePop(context);
+  }
+
+  List<ChatAttachmentResponse> _quickImages(
+    List<ChatMessageResponse> messages,
+  ) {
+    return [
+      for (final message in messages)
+        for (final attachment in message.attachments ?? const [])
+          if (attachment.type == ChatAttachmentResponseType.image) attachment,
+    ];
+  }
+
+  Future<void> _savePartnerNickname(String nickname) {
+    return ref
+        .read(chatThreadProvider.notifier)
+        .updatePartnerNickname(nickname);
+  }
+
+  void _handleBubTap() {
+    final now = DateTime.now();
+    final lastTap = _lastBubTapAt;
+    _lastBubTapAt = now;
+    if (lastTap == null ||
+        now.difference(lastTap) > const Duration(milliseconds: 700)) {
+      _bubTapCount = 1;
+      return;
+    }
+    _bubTapCount += 1;
+    if (_bubTapCount < 3) {
+      return;
+    }
+    _bubTapCount = 0;
+    _sendTapBub();
+  }
+
+  Future<void> _sendTapBub() async {
+    if (_sendingTapBub) {
+      return;
+    }
+    final pendingNotice = _LocalChatNotice(
+      id: 'pending-bub-${_pendingBubSequence++}',
+      label: 'You bubbed ${_lastThread?.partnerDisplayName ?? 'them'}',
+    );
+    setState(() {
+      _sendingTapBub = true;
+      _bubBurstTrigger += 1;
+      _pendingBubNotices.add(pendingNotice);
+    });
+    try {
+      await ref.read(bubSendControllerProvider.notifier).sendBub();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Bub couldn't send. Please try again.")),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sendingTapBub = false;
+          _pendingBubNotices.removeWhere(
+            (notice) => notice.id == pendingNotice.id,
+          );
+        });
+      }
+    }
   }
 
   Future<void> _sendComposer() async {
@@ -207,14 +347,33 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
     _composer.clear();
     setState(() => _showEmojiPicker = false);
     final replyId = _replyTo?.id;
-    setState(() => _replyTo = null);
-    await ref
-        .read(chatThreadProvider.notifier)
-        .sendMessage(
-          type: ChatSendMessageRequestType.text,
-          body: text,
-          replyToMessageId: replyId,
-        );
+    final pendingMessage = _PendingTextMessage(
+      id: 'pending-text-${_pendingTextSequence++}',
+      body: text,
+      createdAt: DateTime.now(),
+    );
+    setState(() {
+      _replyTo = null;
+      _pendingTextMessages = [..._pendingTextMessages, pendingMessage];
+    });
+    try {
+      await ref
+          .read(chatThreadProvider.notifier)
+          .sendMessage(
+            type: ChatSendMessageRequestType.text,
+            body: text,
+            replyToMessageId: replyId,
+          );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _pendingTextMessages = [
+            for (final message in _pendingTextMessages)
+              if (message.id != pendingMessage.id) message,
+          ];
+        });
+      }
+    }
   }
 
   Future<void> _toggleInlineMediaPicker() async {
@@ -222,6 +381,9 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
     if (_showInlineMediaPicker) {
       setState(() => _showInlineMediaPicker = false);
       return;
+    }
+    if (_composerFocus.hasFocus) {
+      _composerFocus.unfocus();
     }
     setState(() {
       _showInlineMediaPicker = true;
@@ -325,9 +487,14 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
       return;
     }
     final replyId = _replyTo?.id;
+    final pendingMessage = _PendingMediaMessage(
+      id: 'pending-media-${_pendingMediaSequence++}',
+      files: files,
+      createdAt: DateTime.now(),
+    );
     setState(() {
       _replyTo = null;
-      _pendingUploadMedia = files;
+      _pendingMediaMessages = [..._pendingMediaMessages, pendingMessage];
     });
     try {
       await ref
@@ -335,7 +502,12 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
           .uploadMedia(files: files, replyToMessageId: replyId);
     } finally {
       if (mounted) {
-        setState(() => _pendingUploadMedia = const []);
+        setState(() {
+          _pendingMediaMessages = [
+            for (final message in _pendingMediaMessages)
+              if (message.id != pendingMessage.id) message,
+          ];
+        });
       }
     }
   }
@@ -411,10 +583,17 @@ class _UntetheredChatEmptyState extends StatelessWidget {
 }
 
 class _ChatHeader extends StatelessWidget {
-  const _ChatHeader({required this.thread, required this.onBack});
+  const _ChatHeader({
+    required this.thread,
+    required this.onBack,
+    required this.quickImages,
+    required this.onSaveNickname,
+  });
 
   final ChatThreadResponse thread;
   final VoidCallback? onBack;
+  final List<ChatAttachmentResponse> quickImages;
+  final Future<void> Function(String nickname) onSaveNickname;
 
   @override
   Widget build(BuildContext context) {
@@ -491,7 +670,8 @@ class _ChatHeader extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  onPressed: () {},
+                  key: const Key('chat-header-more-button'),
+                  onPressed: () => _showMenu(context),
                   icon: const Icon(Icons.more_vert_rounded),
                 ),
               ],
@@ -519,18 +699,358 @@ class _ChatHeader extends StatelessWidget {
     final minute = local.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
   }
+
+  Future<void> _showMenu(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                key: const Key('chat-menu-nicknames'),
+                leading: const Icon(Icons.badge_outlined),
+                title: const Text('Nicknames'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showNicknameDialog(context);
+                },
+              ),
+              ListTile(
+                key: const Key('chat-menu-images'),
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Images'),
+                subtitle: Text('${quickImages.length} sent'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openQuickImagesPage(context);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showNicknameDialog(BuildContext context) async {
+    final controller = TextEditingController(text: thread.partnerDisplayName);
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.34),
+      builder: (dialogContext) =>
+          _NicknameDialog(controller: controller, onSave: onSaveNickname),
+    );
+  }
+
+  void _openQuickImagesPage(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _QuickImagesPage(images: quickImages),
+      ),
+    );
+  }
+}
+
+class _NicknameDialog extends StatelessWidget {
+  const _NicknameDialog({required this.controller, required this.onSave});
+
+  final TextEditingController controller;
+  final Future<void> Function(String nickname) onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panelColor = (isDark ? BubColors.darkDialog : BubColors.white)
+        .withValues(alpha: isDark ? 0.74 : 0.70);
+    final textColor = isDark ? BubColors.white : BubColors.textPrimaryLight;
+    final softTextColor = isDark
+        ? BubColors.textSecondaryDark
+        : BubColors.textSecondaryLight;
+    final inputFill = (isDark ? BubColors.darkSurface : BubColors.white)
+        .withValues(alpha: isDark ? 0.58 : 0.72);
+
+    return Dialog(
+      key: const Key('chat-nickname-dialog'),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 26, vertical: 24),
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+            top: -22,
+            right: 8,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    BubColors.pink.withValues(alpha: isDark ? 0.38 : 0.22),
+                    BubColors.pink.withValues(alpha: 0),
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const SizedBox(width: 96, height: 96),
+            ),
+          ),
+          Positioned(
+            bottom: -24,
+            left: -8,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    BubColors.violet.withValues(alpha: isDark ? 0.30 : 0.20),
+                    BubColors.violet.withValues(alpha: 0),
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const SizedBox(width: 92, height: 92),
+            ),
+          ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: panelColor,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? [
+                            BubColors.white.withValues(alpha: 0.10),
+                            BubColors.darkDialog.withValues(alpha: 0.72),
+                            BubColors.pink.withValues(alpha: 0.10),
+                          ]
+                        : [
+                            BubColors.white.withValues(alpha: 0.82),
+                            const Color(0xFFFFF4FA).withValues(alpha: 0.62),
+                            const Color(0xFFF5EEFF).withValues(alpha: 0.70),
+                          ],
+                  ),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: BubColors.white.withValues(
+                      alpha: isDark ? 0.14 : 0.70,
+                    ),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: BubColors.deepPurple.withValues(
+                        alpha: isDark ? 0.40 : 0.15,
+                      ),
+                      blurRadius: 30,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              gradient: BubColors.bubGradient,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: BubColors.pink.withValues(alpha: 0.24),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 7),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.badge_rounded,
+                              color: BubColors.white,
+                              size: 21,
+                            ),
+                          ),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Nickname',
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 21,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0,
+                                  ),
+                                ),
+                                const SizedBox(height: 1),
+                                Text(
+                                  'Shown only in your chat.',
+                                  style: TextStyle(
+                                    color: softTextColor,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            tooltip: 'Close',
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close_rounded),
+                            color: softTextColor,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        key: const Key('chat-nickname-field'),
+                        controller: controller,
+                        autofocus: true,
+                        maxLength: 80,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Partner nickname',
+                          prefixIcon: Icon(
+                            Icons.favorite_rounded,
+                            color: BubColors.pink.withValues(alpha: 0.78),
+                          ),
+                          counterStyle: TextStyle(color: softTextColor),
+                          fillColor: inputFill,
+                          filled: true,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            borderSide: BorderSide(
+                              color: BubColors.white.withValues(
+                                alpha: isDark ? 0.10 : 0.62,
+                              ),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            borderSide: BorderSide(
+                              color: BubColors.white.withValues(
+                                alpha: isDark ? 0.10 : 0.62,
+                              ),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            borderSide: const BorderSide(
+                              color: BubColors.pink,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: softTextColor,
+                                side: BorderSide(
+                                  color: BubColors.white.withValues(
+                                    alpha: isDark ? 0.12 : 0.58,
+                                  ),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(17),
+                                ),
+                                minimumSize: const Size.fromHeight(44),
+                              ),
+                              child: const Text('Cancel'),
+                            ),
+                          ),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: BubColors.bubGradient,
+                                borderRadius: BorderRadius.circular(17),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: BubColors.pink.withValues(
+                                      alpha: 0.24,
+                                    ),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 7),
+                                  ),
+                                ],
+                              ),
+                              child: FilledButton(
+                                key: const Key('chat-nickname-save'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(17),
+                                  ),
+                                  minimumSize: const Size.fromHeight(44),
+                                ),
+                                onPressed: () async {
+                                  await onSave(controller.text);
+                                  if (context.mounted) {
+                                    Navigator.pop(context);
+                                  }
+                                },
+                                child: const Text('Save'),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _MessageList extends ConsumerWidget {
   const _MessageList({
     required this.messages,
     required this.localNotices,
-    required this.pendingUploadMedia,
+    required this.pendingTextMessages,
+    required this.pendingMediaMessages,
   });
 
   final List<ChatMessageResponse> messages;
   final List<_LocalChatNotice> localNotices;
-  final List<File> pendingUploadMedia;
+  final List<_PendingTextMessage> pendingTextMessages;
+  final List<_PendingMediaMessage> pendingMediaMessages;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -538,8 +1058,10 @@ class _MessageList extends ConsumerWidget {
     final items = [
       for (final message in messages) _ChatTimelineItem.message(message),
       for (final notice in localNotices) _ChatTimelineItem.notice(notice),
-      if (pendingUploadMedia.isNotEmpty)
-        _ChatTimelineItem.pendingMedia(pendingUploadMedia),
+      for (final pendingText in pendingTextMessages)
+        _ChatTimelineItem.pendingText(pendingText),
+      for (final pendingMedia in pendingMediaMessages)
+        _ChatTimelineItem.pendingMedia(pendingMedia),
     ];
     return ListView.separated(
       reverse: true,
@@ -553,9 +1075,31 @@ class _MessageList extends ConsumerWidget {
         }
         final pendingMedia = item.pendingMedia;
         if (pendingMedia != null) {
-          return _PendingMediaUploadBubble(files: pendingMedia);
+          return _MessageBubble(
+            message: pendingMedia.toMessageResponse(),
+            showDeliveryState: false,
+            showSendingState: true,
+            onReply: () {},
+          );
+        }
+        final pendingText = item.pendingText;
+        if (pendingText != null) {
+          return _MessageBubble(
+            message: pendingText.toMessageResponse(),
+            showDeliveryState: false,
+            showSendingState: true,
+            onReply: () {},
+          );
         }
         final message = item.message!;
+        if (message.type == ChatMessageResponseType.bub) {
+          return _LocalChatNoticeDivider(
+            notice: _LocalChatNotice(
+              id: 'bub-${message.id ?? chronologicalIndex}',
+              label: message.body ?? 'Bub',
+            ),
+          );
+        }
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -603,19 +1147,81 @@ class _MessageList extends ConsumerWidget {
 class _ChatTimelineItem {
   const _ChatTimelineItem.message(this.message)
     : notice = null,
+      pendingText = null,
       pendingMedia = null;
 
   const _ChatTimelineItem.notice(this.notice)
     : message = null,
+      pendingText = null,
+      pendingMedia = null;
+
+  const _ChatTimelineItem.pendingText(this.pendingText)
+    : message = null,
+      notice = null,
       pendingMedia = null;
 
   const _ChatTimelineItem.pendingMedia(this.pendingMedia)
     : message = null,
-      notice = null;
+      notice = null,
+      pendingText = null;
 
   final ChatMessageResponse? message;
   final _LocalChatNotice? notice;
-  final List<File>? pendingMedia;
+  final _PendingTextMessage? pendingText;
+  final _PendingMediaMessage? pendingMedia;
+}
+
+class _PendingTextMessage {
+  const _PendingTextMessage({
+    required this.id,
+    required this.body,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String body;
+  final DateTime createdAt;
+
+  ChatMessageResponse toMessageResponse() {
+    return ChatMessageResponse(
+      id: id,
+      viewerMessage: true,
+      type: ChatMessageResponseType.text,
+      body: body,
+      createdAt: createdAt,
+    );
+  }
+}
+
+class _PendingMediaMessage {
+  const _PendingMediaMessage({
+    required this.id,
+    required this.files,
+    required this.createdAt,
+  });
+
+  final String id;
+  final List<File> files;
+  final DateTime createdAt;
+
+  ChatMessageResponse toMessageResponse() {
+    return ChatMessageResponse(
+      id: id,
+      viewerMessage: true,
+      type: ChatMessageResponseType.media,
+      createdAt: createdAt,
+      attachments: [
+        for (final (index, file) in files.indexed)
+          ChatAttachmentResponse(
+            id: '$id-$index',
+            type: _isVideoPath(file.path)
+                ? ChatAttachmentResponseType.video
+                : ChatAttachmentResponseType.image,
+            url: file.path,
+          ),
+      ],
+    );
+  }
 }
 
 class _LocalChatNoticeDivider extends StatelessWidget {
@@ -748,27 +1354,29 @@ class _PendingMediaUploadTile extends StatelessWidget {
       ),
     );
   }
+}
 
-  bool _isVideoPath(String path) {
-    final lower = path.toLowerCase();
-    return lower.endsWith('.mp4') ||
-        lower.endsWith('.mov') ||
-        lower.endsWith('.m4v') ||
-        lower.endsWith('.webm') ||
-        lower.endsWith('.avi') ||
-        lower.endsWith('.mkv');
-  }
+bool _isVideoPath(String path) {
+  final lower = path.toLowerCase();
+  return lower.endsWith('.mp4') ||
+      lower.endsWith('.mov') ||
+      lower.endsWith('.m4v') ||
+      lower.endsWith('.webm') ||
+      lower.endsWith('.avi') ||
+      lower.endsWith('.mkv');
 }
 
 class _MessageBubble extends ConsumerStatefulWidget {
   const _MessageBubble({
     required this.message,
     required this.showDeliveryState,
+    this.showSendingState = false,
     required this.onReply,
   });
 
   final ChatMessageResponse message;
   final bool showDeliveryState;
+  final bool showSendingState;
   final VoidCallback onReply;
 
   @override
@@ -924,7 +1532,32 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                       ),
                     ),
                   ),
-                  if (widget.showDeliveryState)
+                  if (widget.showSendingState)
+                    Padding(
+                      key: Key(
+                        'chat-sending-indicator-${message.id ?? 'unknown'}',
+                      ),
+                      padding: const EdgeInsets.only(top: 2, right: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          SizedBox.square(
+                            dimension: 10,
+                            child: CircularProgressIndicator(strokeWidth: 1.6),
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Sending',
+                            style: TextStyle(
+                              color: BubColors.textSecondaryLight,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (widget.showDeliveryState)
                     Padding(
                       key: Key(
                         'chat-delivery-checks-${message.id ?? 'unknown'}',
@@ -1382,24 +2015,43 @@ class _ImagePreviewCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           child: ColoredBox(
             color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
-            child: imageUrl == null || imageUrl.isEmpty
-                ? const SizedBox(
-                    width: 198,
-                    height: 150,
-                    child: Icon(Icons.photo_rounded),
-                  )
-                : Image.network(
-                    imageUrl,
-                    width: 198,
-                    height: 150,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const Icon(Icons.photo_rounded),
-                  ),
+            child: _previewImage(imageUrl),
           ),
         ),
       ),
     );
   }
+
+  Widget _previewImage(String? imageUrl) {
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return const SizedBox(
+        width: 198,
+        height: 150,
+        child: Icon(Icons.photo_rounded),
+      );
+    }
+    if (_isNetworkMediaUrl(imageUrl)) {
+      return Image.network(
+        imageUrl,
+        width: 198,
+        height: 150,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const Icon(Icons.photo_rounded),
+      );
+    }
+    return Image.file(
+      File(imageUrl),
+      width: 198,
+      height: 150,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => const Icon(Icons.photo_rounded),
+    );
+  }
+}
+
+bool _isNetworkMediaUrl(String url) {
+  final lower = url.toLowerCase();
+  return lower.startsWith('http://') || lower.startsWith('https://');
 }
 
 class _VideoAttachmentTile extends StatelessWidget {
@@ -1433,6 +2085,144 @@ class _VideoAttachmentTile extends StatelessWidget {
             foregroundColor: BubColors.pink,
             child: Icon(Icons.play_arrow_rounded, size: 30),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickImagesPage extends StatelessWidget {
+  const _QuickImagesPage({required this.images});
+
+  final List<ChatAttachmentResponse> images;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      key: const Key('chat-quick-images-page'),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(
+        child: Column(
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: isDark
+                        ? BubColors.pink.withValues(alpha: 0.36)
+                        : BubColors.deepPurple.withValues(alpha: 0.10),
+                  ),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(4, 6, 16, 10),
+                child: Row(
+                  children: [
+                    IconButton(
+                      key: const Key('chat-quick-images-back-button'),
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'Images',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 21,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                          Text(
+                            '${images.length} shared in this tether',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: images.isEmpty
+                  ? const Center(
+                      child: Icon(Icons.photo_library_outlined, size: 40),
+                    )
+                  : GridView.builder(
+                      padding: const EdgeInsets.all(12),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 0.86,
+                          ),
+                      itemCount: images.length,
+                      itemBuilder: (context, index) {
+                        final image = images[index];
+                        return _QuickImageTile(
+                          key: Key('chat-quick-image-${image.id ?? index}'),
+                          image: image,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => _MediaViewerPage(
+                                attachments: images,
+                                initialIndex: index,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickImageTile extends StatelessWidget {
+  const _QuickImageTile({super.key, required this.image, required this.onTap});
+
+  final ChatAttachmentResponse image;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = image.url;
+    final colorScheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: ColoredBox(
+          color: colorScheme.surfaceContainerHighest,
+          child: url == null || url.isEmpty
+              ? const Center(child: Icon(Icons.photo_outlined))
+              : Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) =>
+                      const Center(child: Icon(Icons.photo_outlined)),
+                ),
         ),
       ),
     );
@@ -1798,6 +2588,7 @@ class _ChatComposer extends StatelessWidget {
     required this.showInlineMediaPicker,
     required this.inlineMediaExpanded,
     required this.inlineMediaLoading,
+    required this.maxInlineMediaGridHeight,
     required this.stagedMedia,
     required this.stagedMediaIds,
     required this.hasText,
@@ -1820,6 +2611,7 @@ class _ChatComposer extends StatelessWidget {
   final bool showInlineMediaPicker;
   final bool inlineMediaExpanded;
   final bool inlineMediaLoading;
+  final double maxInlineMediaGridHeight;
   final List<File> stagedMedia;
   final Set<String> stagedMediaIds;
   final bool hasText;
@@ -1961,6 +2753,7 @@ class _ChatComposer extends StatelessWidget {
                   selectedItemIds: stagedMediaIds,
                   expanded: inlineMediaExpanded,
                   loading: inlineMediaLoading,
+                  maxGridHeight: maxInlineMediaGridHeight,
                   onModeChanged: onInlineMediaModeChanged,
                   onSelected: onInlineMediaSelected,
                   onToggleExpanded: onToggleInlineMediaExpanded,
@@ -1988,6 +2781,7 @@ class _InlineMediaPicker extends StatelessWidget {
     required this.selectedItemIds,
     required this.expanded,
     required this.loading,
+    required this.maxGridHeight,
     required this.onModeChanged,
     required this.onSelected,
     required this.onToggleExpanded,
@@ -1998,6 +2792,7 @@ class _InlineMediaPicker extends StatelessWidget {
   final Set<String> selectedItemIds;
   final bool expanded;
   final bool loading;
+  final double maxGridHeight;
   final ValueChanged<_AttachmentMode> onModeChanged;
   final ValueChanged<ChatMediaItem> onSelected;
   final VoidCallback onToggleExpanded;
@@ -2005,6 +2800,7 @@ class _InlineMediaPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final gridHeight = _gridHeightFor(context);
     return DecoratedBox(
       key: const Key('chat-inline-media-picker'),
       decoration: BoxDecoration(
@@ -2048,50 +2844,61 @@ class _InlineMediaPicker extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            AnimatedContainer(
+            ConstrainedBox(
               key: const Key('chat-inline-media-grid-frame'),
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              height: expanded ? MediaQuery.sizeOf(context).height * 0.54 : 238,
-              child: loading
-                  ? const Center(
-                      key: Key('chat-inline-media-loading'),
-                      child: SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+              constraints: BoxConstraints(maxHeight: gridHeight),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                height: gridHeight,
+                child: loading
+                    ? const Center(
+                        key: Key('chat-inline-media-loading'),
+                        child: SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : items.isEmpty
+                    ? const Center(
+                        key: Key('chat-inline-media-empty'),
+                        child: Icon(Icons.photo_library_outlined),
+                      )
+                    : GridView.builder(
+                        key: const Key('chat-inline-media-grid'),
+                        padding: EdgeInsets.zero,
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              mainAxisSpacing: 4,
+                              crossAxisSpacing: 4,
+                            ),
+                        itemBuilder: (context, index) {
+                          final item = items[index];
+                          final selected = selectedItemIds.contains(item.id);
+                          return _InlineMediaItem(
+                            key: Key('chat-inline-media-item-${item.id}'),
+                            item: item,
+                            selected: selected,
+                            onTap: () => onSelected(item),
+                          );
+                        },
+                        itemCount: items.length,
                       ),
-                    )
-                  : items.isEmpty
-                  ? const Center(
-                      key: Key('chat-inline-media-empty'),
-                      child: Icon(Icons.photo_library_outlined),
-                    )
-                  : GridView.builder(
-                      key: const Key('chat-inline-media-grid'),
-                      padding: EdgeInsets.zero,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            mainAxisSpacing: 4,
-                            crossAxisSpacing: 4,
-                          ),
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-                        final selected = selectedItemIds.contains(item.id);
-                        return _InlineMediaItem(
-                          key: Key('chat-inline-media-item-${item.id}'),
-                          item: item,
-                          selected: selected,
-                          onTap: () => onSelected(item),
-                        );
-                      },
-                      itemCount: items.length,
-                    ),
+              ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  double _gridHeightFor(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final desiredHeight = expanded ? mediaQuery.size.height * 0.54 : 238.0;
+    final upperBound = math.max(96.0, maxGridHeight);
+    final lowerBound = math.min(120.0, upperBound);
+    return desiredHeight.clamp(lowerBound, upperBound).toDouble();
   }
 }
 

@@ -16,6 +16,7 @@ import 'package:bub/src/api/generated/models/chat_thread_response.dart';
 import 'package:bub/src/features/chat/chat_controller.dart';
 import 'package:bub/src/features/chat/chat_media_picker.dart';
 import 'package:bub/src/features/chat/chat_section.dart';
+import 'package:bub/src/features/bub/bub_send_controller.dart';
 import 'package:bub/src/theme/bub_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -80,6 +81,18 @@ void main() {
     expect(find.byKey(const Key('chat-message-row-partner')), findsOneWidget);
   });
 
+  testWidgets('bub messages render as timeline notices', (tester) async {
+    await tester.pumpWidget(_app(AsyncData(_threadWithBubMessage())));
+    await tester.pump();
+
+    expect(find.text('Bubba bubbed you'), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-safe-notice-bub-bub-message')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('chat-message-row-bub-message')), findsNothing);
+  });
+
   testWidgets('blank send is ignored and valid text send clears input', (
     tester,
   ) async {
@@ -102,6 +115,44 @@ void main() {
 
     expect(controller.sentBodies, ['hello']);
     expect(find.text('hello'), findsNothing);
+  });
+
+  testWidgets('text send renders locally with sending indicator', (
+    tester,
+  ) async {
+    final sendCompleter = Completer<void>();
+    final controller = _FakeChatController(
+      _thread(),
+      sendCompleter: sendCompleter,
+    );
+    await tester.pumpWidget(_appWithController(controller));
+    await tester.pump();
+
+    await tester.enterText(
+      find.byKey(const Key('chat-composer-field')),
+      'hello',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('chat-send-button')));
+    await tester.pump();
+
+    expect(controller.sentBodies, ['hello']);
+    expect(find.text('hello'), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-message-row-pending-text-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('chat-sending-indicator-pending-text-0')),
+      findsOneWidget,
+    );
+
+    sendCompleter.complete();
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('chat-message-row-pending-text-0')),
+      findsNothing,
+    );
   });
 
   testWidgets(
@@ -222,6 +273,60 @@ void main() {
     expect(expandedHeight, greaterThan(collapsedHeight));
   });
 
+  testWidgets('composer focus hides inline media picker', (tester) async {
+    tester.view.physicalSize = const Size(390, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
+
+    final controller = _FakeChatController(_thread());
+    final picker = _FakeChatMediaPicker(
+      media: [
+        for (var index = 0; index < 24; index += 1)
+          ChatMediaItem(id: 'item-$index', file: File('/tmp/item-$index.png')),
+      ],
+    );
+    await tester.pumpWidget(
+      _appWithController(controller, mediaPicker: picker),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chat-inline-media-picker')), findsOneWidget);
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.tap(find.byKey(const Key('chat-composer-field')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('chat-inline-media-picker')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('opening inline media picker hides keyboard', (tester) async {
+    final controller = _FakeChatController(_thread());
+    final picker = _FakeChatMediaPicker(
+      media: [ChatMediaItem(id: 'one', file: File('/tmp/one.png'))],
+    );
+    await tester.pumpWidget(
+      _appWithController(controller, mediaPicker: picker),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-composer-field')));
+    await tester.pump();
+    var editable = tester.widget<EditableText>(find.byType(EditableText));
+    expect(editable.focusNode.hasFocus, isTrue);
+
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await tester.pumpAndSettle();
+
+    editable = tester.widget<EditableText>(find.byType(EditableText));
+    expect(editable.focusNode.hasFocus, isFalse);
+    expect(find.byKey(const Key('chat-inline-media-picker')), findsOneWidget);
+  });
+
   testWidgets('inline media picker resolves files only after selection', (
     tester,
   ) async {
@@ -325,36 +430,50 @@ void main() {
     expect(picker.recentMediaCount, 1);
   });
 
-  testWidgets('quick media upload shows an animated pending placeholder', (
-    tester,
-  ) async {
-    final uploadCompleter = Completer<void>();
-    final controller = _FakeChatController(
-      _thread(),
-      uploadCompleter: uploadCompleter,
-    );
-    final picker = _FakeChatMediaPicker(
-      media: [ChatMediaItem(id: 'one', file: File('/tmp/one.png'))],
-    );
-    await tester.pumpWidget(
-      _appWithController(controller, mediaPicker: picker),
-    );
-    await tester.pump();
+  testWidgets(
+    'quick media upload renders as local outgoing media while sending',
+    (tester) async {
+      final uploadCompleter = Completer<void>();
+      final controller = _FakeChatController(
+        _thread(),
+        uploadCompleter: uploadCompleter,
+      );
+      final picker = _FakeChatMediaPicker(
+        media: [ChatMediaItem(id: 'one', file: File('/tmp/one.png'))],
+      );
+      await tester.pumpWidget(
+        _appWithController(controller, mediaPicker: picker),
+      );
+      await tester.pump();
 
-    await tester.tap(find.byKey(const Key('chat-attachment-button')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('chat-inline-media-item-one')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('chat-send-button')));
-    await tester.pump();
+      await tester.tap(find.byKey(const Key('chat-attachment-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('chat-inline-media-item-one')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('chat-send-button')));
+      await tester.pump();
 
-    expect(find.byKey(const Key('chat-pending-media-upload')), findsOneWidget);
+      expect(controller.uploadedPaths, ['/tmp/one.png']);
+      expect(find.byKey(const Key('chat-staged-media-tray')), findsNothing);
+      expect(find.byKey(const Key('chat-pending-media-upload')), findsNothing);
+      expect(
+        find.byKey(const Key('chat-image-stack-pending-media-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('chat-sending-indicator-pending-media-0')),
+        findsOneWidget,
+      );
 
-    uploadCompleter.complete();
-    await tester.pumpAndSettle();
+      uploadCompleter.complete();
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('chat-pending-media-upload')), findsNothing);
-  });
+      expect(
+        find.byKey(const Key('chat-image-stack-pending-media-0')),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('composer keeps focus while typing and clearing text', (
     tester,
@@ -408,6 +527,84 @@ void main() {
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(backCount, 1);
+  });
+
+  testWidgets('mobile back hides inline media picker before leaving chat', (
+    tester,
+  ) async {
+    var backCount = 0;
+    final controller = _FakeChatController(_thread());
+    final picker = _FakeChatMediaPicker(
+      media: [ChatMediaItem(id: 'one', file: File('/tmp/one.png'))],
+    );
+    await tester.pumpWidget(
+      _appWithController(
+        controller,
+        mediaPicker: picker,
+        onBack: () => backCount += 1,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chat-inline-media-picker')), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('chat-inline-media-picker')), findsNothing);
+    expect(backCount, 0);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(backCount, 1);
+  });
+
+  testWidgets('chat menu opens full-page gallery for all tether images', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(AsyncData(_threadWithMedia())));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-header-more-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-menu-images')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('chat-quick-images-page')), findsOneWidget);
+    expect(find.byKey(const Key('chat-quick-image-image-1')), findsOneWidget);
+    expect(find.byKey(const Key('chat-quick-image-image-2')), findsOneWidget);
+    expect(find.byKey(const Key('chat-quick-image-image-3')), findsOneWidget);
+    expect(find.byKey(const Key('chat-quick-image-video-1')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('chat-quick-images-back-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chat-quick-images-page')), findsNothing);
+    expect(find.byKey(const Key('chat-fullscreen-header')), findsOneWidget);
+  });
+
+  testWidgets('chat menu saves a partner nickname for the header', (
+    tester,
+  ) async {
+    final controller = _FakeChatController(_thread());
+    await tester.pumpWidget(_appWithController(controller));
+    await tester.pump();
+    expect(find.text('Bob'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('chat-header-more-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-menu-nicknames')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('chat-nickname-field')),
+      'Bubba',
+    );
+    await tester.tap(find.byKey(const Key('chat-nickname-save')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bubba'), findsOneWidget);
+    expect(find.text('Bob'), findsNothing);
   });
 
   testWidgets('delivery checks only render below latest outgoing message', (
@@ -619,6 +816,59 @@ void main() {
     expect(find.byKey(const Key('chat-media-viewer')), findsOneWidget);
     expect(find.byKey(const Key('chat-video-loading')), findsOneWidget);
   });
+
+  testWidgets('triple tapping chat sends a Bub with immediate hearts', (
+    tester,
+  ) async {
+    final chatController = _FakeChatController(_thread());
+    final bubController = _FakeBubSendController();
+    await tester.pumpWidget(
+      _appWithController(chatController, bubSendController: bubController),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-bub-tap-zone')));
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.tap(find.byKey(const Key('chat-bub-tap-zone')));
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.tap(find.byKey(const Key('chat-bub-tap-zone')));
+    await tester.pump();
+
+    expect(bubController.sendCount, 1);
+    expect(find.byKey(const Key('chat-bub-heart-burst-heart')), findsWidgets);
+  });
+
+  testWidgets('triple tapping chat displays local Bub notice while sending', (
+    tester,
+  ) async {
+    final sendCompleter = Completer<void>();
+    final chatController = _FakeChatController(_thread());
+    final bubController = _FakeBubSendController(sendCompleter: sendCompleter);
+    await tester.pumpWidget(
+      _appWithController(chatController, bubSendController: bubController),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-bub-tap-zone')));
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.tap(find.byKey(const Key('chat-bub-tap-zone')));
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.tap(find.byKey(const Key('chat-bub-tap-zone')));
+    await tester.pump();
+
+    expect(find.text('You bubbed Bob'), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-safe-notice-pending-bub-0')),
+      findsOneWidget,
+    );
+
+    sendCompleter.complete();
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('chat-safe-notice-pending-bub-0')),
+      findsNothing,
+    );
+  });
 }
 
 Widget _app(AsyncValue<ChatThreadResponse> state) {
@@ -637,10 +887,13 @@ Widget _appWithController(
   _FakeChatController controller, {
   VoidCallback? onBack,
   ChatMediaPicker? mediaPicker,
+  BubSendController? bubSendController,
 }) {
   return ProviderScope(
     overrides: [
       chatThreadProvider.overrideWith(() => controller),
+      if (bubSendController != null)
+        bubSendControllerProvider.overrideWith(() => bubSendController),
       if (mediaPicker != null)
         chatMediaPickerProvider.overrideWithValue(mediaPicker),
     ],
@@ -713,6 +966,30 @@ ChatThreadResponse _threadWithOutgoingRun() {
         type: ChatMessageResponseType.text,
         body: 'two',
         deliveryState: ChatMessageResponseDeliveryState.seen,
+        createdAt: baseTime.add(const Duration(minutes: 1)),
+      ),
+    ],
+  );
+}
+
+ChatThreadResponse _threadWithBubMessage() {
+  final baseTime = DateTime(2026, 7, 20, 9);
+  return ChatThreadResponse(
+    hasActiveTether: true,
+    partnerDisplayName: 'Bubba',
+    messages: [
+      ChatMessageResponse(
+        id: 'mine',
+        viewerMessage: true,
+        type: ChatMessageResponseType.text,
+        body: 'hi',
+        createdAt: baseTime,
+      ),
+      ChatMessageResponse(
+        id: 'bub-message',
+        viewerMessage: false,
+        type: ChatMessageResponseType.bub,
+        body: 'Bubba bubbed you',
         createdAt: baseTime.add(const Duration(minutes: 1)),
       ),
     ],
@@ -871,6 +1148,19 @@ ChatThreadResponse _threadWithMedia() {
           ),
         ],
       ),
+      ChatMessageResponse(
+        id: 'partner-image',
+        viewerMessage: false,
+        type: ChatMessageResponseType.media,
+        createdAt: baseTime.add(const Duration(minutes: 2)),
+        attachments: const [
+          ChatAttachmentResponse(
+            id: 'image-3',
+            type: ChatAttachmentResponseType.image,
+            url: 'https://example.com/three.png',
+          ),
+        ],
+      ),
     ],
   );
 }
@@ -904,16 +1194,21 @@ class _StateChatController extends ChatThreadController {
 }
 
 class _FakeChatController extends ChatThreadController {
-  _FakeChatController(this.initial, {this.uploadCompleter});
+  _FakeChatController(
+    ChatThreadResponse initial, {
+    this.sendCompleter,
+    this.uploadCompleter,
+  }) : current = initial;
 
-  final ChatThreadResponse initial;
+  ChatThreadResponse current;
+  final Completer<void>? sendCompleter;
   final Completer<void>? uploadCompleter;
   final sentBodies = <String>[];
   final reactions = <String>[];
   final uploadedPaths = <String>[];
 
   @override
-  Future<ChatThreadResponse> build() async => initial;
+  Future<ChatThreadResponse> build() async => current;
 
   @override
   Future<void> sendMessage({
@@ -926,6 +1221,7 @@ class _FakeChatController extends ChatThreadController {
     if (body != null) {
       sentBodies.add(body);
     }
+    await sendCompleter?.future;
   }
 
   @override
@@ -940,6 +1236,35 @@ class _FakeChatController extends ChatThreadController {
   }) async {
     uploadedPaths.addAll(files.map((file) => file.path));
     await uploadCompleter?.future;
+  }
+
+  @override
+  Future<void> updatePartnerNickname(String nickname) async {
+    current = ChatThreadResponse(
+      hasActiveTether: current.hasActiveTether,
+      tetherConnectionId: current.tetherConnectionId,
+      partnerDisplayName: nickname.trim(),
+      state: current.state,
+      messages: current.messages,
+    );
+    state = AsyncData(current);
+  }
+}
+
+class _FakeBubSendController extends BubSendController {
+  _FakeBubSendController({this.sendCompleter});
+
+  final Completer<void>? sendCompleter;
+  var sendCount = 0;
+
+  @override
+  Future<void> build() async {}
+
+  @override
+  Future<void> sendBub() async {
+    sendCount += 1;
+    await sendCompleter?.future;
+    state = const AsyncData(null);
   }
 }
 

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../api/generated/models/chat_edit_message_request.dart';
+import '../../api/generated/models/chat_partner_nickname_request.dart';
 import '../../api/generated/models/chat_reaction_request.dart';
 import '../../api/generated/models/chat_read_request.dart';
 import '../../api/generated/models/chat_send_message_request.dart';
@@ -139,6 +140,19 @@ class ChatThreadController extends AsyncNotifier<ChatThreadResponse> {
           .read(restClientProvider)
           .chatController
           .removeChatMessageReaction(messageId: messageId);
+    });
+  }
+
+  Future<void> updatePartnerNickname(String nickname) async {
+    state = await AsyncValue.guard(() async {
+      final thread = await ref
+          .read(restClientProvider)
+          .chatController
+          .updateChatPartnerNickname(
+            body: ChatPartnerNicknameRequest(nickname: nickname.trim()),
+          );
+      _syncLiveConnection(thread);
+      return thread;
     });
   }
 
