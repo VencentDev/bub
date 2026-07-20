@@ -326,6 +326,8 @@ void main() {
 
     await tester.tap(find.byKey(const Key('bub-nav-heart')));
     await tester.pump();
+    expect(find.byKey(const Key('bub-heart-burst-heart')), findsWidgets);
+
     await tester.tap(find.byKey(const Key('bub-nav-heart')));
     await tester.pump();
 
@@ -340,8 +342,6 @@ void main() {
 
     sendController.completeSend();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 180));
-    expect(find.byKey(const Key('bub-heart-burst-heart')), findsWidgets);
     await tester.pumpAndSettle();
     expect(find.text('Bub sent'), findsOneWidget);
     expect(tester.getTopLeft(find.text('Bub sent')).dy, lessThan(140));
@@ -431,6 +431,8 @@ void main() {
             partnerUserId: 'partner-id',
             partnerDisplayName: 'Bobby',
             tetheredSince: DateTime(2026, 7, 1),
+            viewerMood: 'calm',
+            partnerMood: 'cozy',
           ),
           todayMoment: HomeTodayMomentResponse(
             momentId: 'moment-id',
@@ -457,6 +459,22 @@ void main() {
     expect(find.text('Bobby'), findsNothing);
     expect(find.textContaining('Tethered since'), findsOneWidget);
     expect(find.byKey(const Key('home-tether-string')), findsOneWidget);
+    expect(find.byKey(const Key('home-tether-viewer-mood')), findsOneWidget);
+    expect(find.byKey(const Key('home-tether-partner-mood')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home-tether-viewer-mood')),
+        matching: find.text('calm'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home-tether-partner-mood')),
+        matching: find.text('cozy'),
+      ),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('home-tether-since-date')), findsOneWidget);
     expect(find.byKey(const Key('home-tether-duration')), findsOneWidget);
     expect(

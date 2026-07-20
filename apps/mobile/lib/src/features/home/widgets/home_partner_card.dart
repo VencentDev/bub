@@ -36,21 +36,32 @@ class _TetheredPartnerCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
-          height: 68,
+          height: 82,
           child: Stack(
+            clipBehavior: Clip.none,
             alignment: Alignment.center,
             children: [
               const Positioned.fill(
                 key: Key('home-tether-string'),
                 child: CustomPaint(painter: _TetherStringPainter()),
               ),
-              const Align(
+              Align(
                 alignment: Alignment.centerLeft,
-                child: _ProfileNode(label: 'You'),
+                child: _ProfileNode(
+                  label: 'You',
+                  mood: tether.viewerMood,
+                  moodKey: const Key('home-tether-viewer-mood'),
+                  moodAlignment: _MoodCloudAlignment.topRight,
+                ),
               ),
               Align(
                 alignment: Alignment.centerRight,
-                child: _ProfileNode(label: _initials(partnerName)),
+                child: _ProfileNode(
+                  label: _initials(partnerName),
+                  mood: tether.partnerMood,
+                  moodKey: const Key('home-tether-partner-mood'),
+                  moodAlignment: _MoodCloudAlignment.topLeft,
+                ),
               ),
             ],
           ),
@@ -286,38 +297,152 @@ class _UntetheredPartnerCard extends StatelessWidget {
   }
 }
 
+enum _MoodCloudAlignment { topLeft, topRight }
+
 class _ProfileNode extends StatelessWidget {
-  const _ProfileNode({required this.label});
+  const _ProfileNode({
+    required this.label,
+    this.mood,
+    this.moodKey,
+    this.moodAlignment = _MoodCloudAlignment.topRight,
+  });
 
   final String label;
+  final String? mood;
+  final Key? moodKey;
+  final _MoodCloudAlignment moodAlignment;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 60,
-      height: 60,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: BubColors.partnerBubbleLight,
-        shape: BoxShape.circle,
-        border: Border.all(color: BubColors.white, width: 3),
-        boxShadow: [
-          BoxShadow(
-            color: BubColors.deepPurple.withValues(alpha: 0.18),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+    final moodText = mood?.trim();
+    return SizedBox(
+      width: 108,
+      height: 78,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: 60,
+              height: 60,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: BubColors.partnerBubbleLight,
+                shape: BoxShape.circle,
+                border: Border.all(color: BubColors.white, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: BubColors.deepPurple.withValues(alpha: 0.18),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: BubColors.deepPurple,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+          if (moodText != null && moodText.isNotEmpty)
+            _MoodThoughtCloud(
+              key: moodKey,
+              mood: moodText,
+              alignment: moodAlignment,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MoodThoughtCloud extends StatelessWidget {
+  const _MoodThoughtCloud({
+    super.key,
+    required this.mood,
+    required this.alignment,
+  });
+
+  final String mood;
+  final _MoodCloudAlignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final isLeft = alignment == _MoodCloudAlignment.topLeft;
+    return Positioned(
+      top: 0,
+      left: isLeft ? 0 : null,
+      right: isLeft ? null : 0,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: BubColors.white.withValues(alpha: 0.90),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: BubColors.pink.withValues(alpha: 0.26)),
+              boxShadow: [
+                BoxShadow(
+                  color: BubColors.deepPurple.withValues(alpha: 0.14),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              child: Text(
+                mood,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: BubColors.deepPurple,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -5,
+            left: isLeft ? 13 : null,
+            right: isLeft ? null : 13,
+            child: const _MoodThoughtDot(size: 7),
+          ),
+          Positioned(
+            bottom: -10,
+            left: isLeft ? 23 : null,
+            right: isLeft ? null : 23,
+            child: const _MoodThoughtDot(size: 4),
           ),
         ],
       ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: BubColors.deepPurple,
-          fontWeight: FontWeight.w900,
-        ),
+    );
+  }
+}
+
+class _MoodThoughtDot extends StatelessWidget {
+  const _MoodThoughtDot({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: BubColors.white.withValues(alpha: 0.92),
+        shape: BoxShape.circle,
+        border: Border.all(color: BubColors.pink.withValues(alpha: 0.20)),
       ),
+      child: SizedBox.square(dimension: size),
     );
   }
 }
