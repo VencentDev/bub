@@ -31,6 +31,7 @@ class _TetheredPartnerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final partnerName = tether.partnerDisplayName ?? 'Your Bub';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -55,16 +56,34 @@ class _TetheredPartnerCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Text(
-          'Been tethered for ${_durationLabel(tether.tetheredSince, DateTime.now())}',
+        const SizedBox(height: 2),
+        DecoratedBox(
           key: const Key('home-tether-duration'),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: BubColors.deepPurple,
-            fontSize: 20,
-            fontWeight: FontWeight.w900,
+          decoration: BoxDecoration(
+            color: isDark
+                ? BubColors.white.withValues(alpha: 0.08)
+                : BubColors.white.withValues(alpha: 0.76),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: isDark
+                  ? BubColors.white.withValues(alpha: 0.12)
+                  : BubColors.deepPurple.withValues(alpha: 0.10),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: Text(
+              'Tethered since ${_dateLabel(tether.tetheredSince)} • ${_durationLabel(tether.tetheredSince, DateTime.now())}',
+              key: const Key('home-tether-since-date'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isDark ? BubColors.white : BubColors.deepPurple,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ),
         ),
       ],
@@ -106,6 +125,14 @@ class _TetheredPartnerCard extends StatelessWidget {
     }
     final years = days ~/ 365;
     return '$years ${years == 1 ? 'year' : 'years'}';
+  }
+
+  static String _dateLabel(DateTime? date) {
+    if (date == null) {
+      return 'today';
+    }
+    final local = date.toLocal();
+    return '${local.month}/${local.day}/${local.year}';
   }
 }
 

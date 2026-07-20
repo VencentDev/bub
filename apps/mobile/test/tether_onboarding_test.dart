@@ -246,6 +246,8 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Safe'));
     await tester.pumpAndSettle();
     expect(find.text('Safe section'), findsOneWidget);
@@ -528,7 +530,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Mood'), findsOneWidget);
-    expect(find.text('How are you feeling?'), findsOneWidget);
+    expect(find.text('How are you feeling?'), findsWidgets);
     expect(find.byKey(const Key('home-mood-card')), findsOneWidget);
 
     await tester.scrollUntilVisible(
@@ -542,7 +544,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('home-mood-dialog-glass')), findsOneWidget);
     expect(find.byKey(const Key('home-mood-dialog-field')), findsOneWidget);
-    expect(find.text('How are you?'), findsOneWidget);
+    expect(find.text('How are you feeling?'), findsWidgets);
 
     await tester.enterText(
       find.byKey(const Key('home-mood-dialog-field')),

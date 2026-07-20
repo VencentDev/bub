@@ -27,18 +27,18 @@ class HomeLatestBubCard extends StatelessWidget {
     return HomeCardShell(
       key: const Key('home-latest-bub-card'),
       treatment: HomeCardTreatment.latestBub,
-      minHeight: hasActivity ? 150 : 116,
+      minHeight: hasActivity ? 128 : 108,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Image.asset(
             'assets/onboarding/bub.png',
             key: const Key('home-latest-bub-art'),
-            width: hasActivity ? 88 : 72,
-            height: hasActivity ? 96 : 78,
+            width: hasActivity ? 70 : 66,
+            height: hasActivity ? 76 : 72,
             fit: BoxFit.contain,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -188,37 +188,49 @@ class _PartnerBubStreak extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       key: const Key('home-latest-bub-streak'),
-      width: 80,
+      width: 74,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Image.asset(
             'assets/onboarding/heart.png',
             key: const Key('home-latest-bub-heart'),
-            width: 120,
-            height: 120,
+            width: 70,
+            height: 62,
             fit: BoxFit.contain,
           ),
-          Text(
-            '$streakDays',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: BubColors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0,
-              shadows: [
-                Shadow(
-                  color: BubColors.pink.withValues(alpha: 0.95),
-                  blurRadius: 12,
+          Transform.translate(
+            offset: const Offset(0, -5),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: BubColors.deepPurple.withValues(alpha: 0.62),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('❤️', style: TextStyle(fontSize: 11)),
+                      const SizedBox(width: 3),
+                      Text(
+                        '$streakDays days',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: BubColors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                Shadow(
-                  color: BubColors.deepPurple.withValues(alpha: 0.45),
-                  blurRadius: 20,
-                ),
-              ],
+              ),
             ),
           ),
         ],
