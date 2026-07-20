@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:bub/src/api/generated/models/chat_attachment_response.dart';
@@ -19,6 +20,7 @@ import 'package:bub/src/theme/bub_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 void main() {
   testWidgets('chat section renders loading and retry states', (tester) async {
@@ -220,6 +222,41 @@ void main() {
     expect(expandedHeight, greaterThan(collapsedHeight));
   });
 
+  testWidgets('inline media picker resolves files only after selection', (
+    tester,
+  ) async {
+    var resolvedFiles = 0;
+    final controller = _FakeChatController(_thread());
+    final picker = _FakeChatMediaPicker(
+      media: [
+        ChatMediaItem(
+          id: 'lazy',
+          resolveFile: () async {
+            resolvedFiles += 1;
+            return File('/tmp/lazy.png');
+          },
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      _appWithController(controller, mediaPicker: picker),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(resolvedFiles, 0);
+
+    await tester.tap(find.byKey(const Key('chat-inline-media-item-lazy')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(resolvedFiles, 1);
+    expect(find.byKey(const Key('chat-staged-media-tray')), findsOneWidget);
+  });
+
   testWidgets('safe media stages from inline picker before notice', (
     tester,
   ) async {
@@ -286,6 +323,37 @@ void main() {
     expect(controller.uploadedPaths, ['/tmp/one.png', '/tmp/clip.mp4']);
     expect(find.byKey(const Key('chat-staged-media-tray')), findsNothing);
     expect(picker.recentMediaCount, 1);
+  });
+
+  testWidgets('quick media upload shows an animated pending placeholder', (
+    tester,
+  ) async {
+    final uploadCompleter = Completer<void>();
+    final controller = _FakeChatController(
+      _thread(),
+      uploadCompleter: uploadCompleter,
+    );
+    final picker = _FakeChatMediaPicker(
+      media: [ChatMediaItem(id: 'one', file: File('/tmp/one.png'))],
+    );
+    await tester.pumpWidget(
+      _appWithController(controller, mediaPicker: picker),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-inline-media-item-one')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-send-button')));
+    await tester.pump();
+
+    expect(find.byKey(const Key('chat-pending-media-upload')), findsOneWidget);
+
+    uploadCompleter.complete();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('chat-pending-media-upload')), findsNothing);
   });
 
   testWidgets('composer keeps focus while typing and clearing text', (
@@ -414,6 +482,21 @@ void main() {
     expect(find.text('😂 2'), findsNothing);
   });
 
+  testWidgets('deleted message bubble is outlined and transparent', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(AsyncData(_threadWithDeletedReaction())));
+    await tester.pump();
+
+    final bubble = tester.widget<DecoratedBox>(
+      find.byKey(const Key('chat-message-bubble-deleted')),
+    );
+    final decoration = bubble.decoration as BoxDecoration;
+
+    expect(decoration.color, Colors.transparent);
+    expect(decoration.border, isNotNull);
+  });
+
   testWidgets('reply previews overlap above the message bubble', (
     tester,
   ) async {
@@ -517,6 +600,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('chat-media-viewer')), findsOneWidget);
+  });
+
+  testWidgets('video viewer shows a loading state while player initializes', (
+    tester,
+  ) async {
+    final originalVideoPlatform = VideoPlayerPlatform.instance;
+    VideoPlayerPlatform.instance = _PendingVideoPlayerPlatform();
+    addTearDown(() => VideoPlayerPlatform.instance = originalVideoPlatform);
+
+    await tester.pumpWidget(_app(AsyncData(_threadWithMedia())));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-video-attachment-video-1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.byKey(const Key('chat-media-viewer')), findsOneWidget);
+    expect(find.byKey(const Key('chat-video-loading')), findsOneWidget);
   });
 }
 
@@ -803,9 +904,10 @@ class _StateChatController extends ChatThreadController {
 }
 
 class _FakeChatController extends ChatThreadController {
-  _FakeChatController(this.initial);
+  _FakeChatController(this.initial, {this.uploadCompleter});
 
   final ChatThreadResponse initial;
+  final Completer<void>? uploadCompleter;
   final sentBodies = <String>[];
   final reactions = <String>[];
   final uploadedPaths = <String>[];
@@ -837,6 +939,7 @@ class _FakeChatController extends ChatThreadController {
     String? replyToMessageId,
   }) async {
     uploadedPaths.addAll(files.map((file) => file.path));
+    await uploadCompleter?.future;
   }
 }
 
@@ -851,4 +954,55 @@ class _FakeChatMediaPicker implements ChatMediaPicker {
     recentMediaCount += 1;
     return media;
   }
+}
+
+class _PendingVideoPlayerPlatform extends VideoPlayerPlatform {
+  var _nextPlayerId = 0;
+  final _streams = <int, StreamController<VideoEvent>>{};
+
+  @override
+  Future<void> init() async {}
+
+  @override
+  Future<int?> createWithOptions(VideoCreationOptions options) async {
+    final playerId = _nextPlayerId++;
+    _streams[playerId] = StreamController<VideoEvent>();
+    return playerId;
+  }
+
+  @override
+  Stream<VideoEvent> videoEventsFor(int playerId) {
+    return _streams[playerId]?.stream ?? const Stream<VideoEvent>.empty();
+  }
+
+  @override
+  Widget buildViewWithOptions(VideoViewOptions options) {
+    return const SizedBox.shrink();
+  }
+
+  @override
+  Future<void> dispose(int playerId) async {
+    await _streams.remove(playerId)?.close();
+  }
+
+  @override
+  Future<void> setLooping(int playerId, bool looping) async {}
+
+  @override
+  Future<void> play(int playerId) async {}
+
+  @override
+  Future<void> pause(int playerId) async {}
+
+  @override
+  Future<void> setVolume(int playerId, double volume) async {}
+
+  @override
+  Future<void> setPlaybackSpeed(int playerId, double speed) async {}
+
+  @override
+  Future<void> seekTo(int playerId, Duration position) async {}
+
+  @override
+  Future<Duration> getPosition(int playerId) async => Duration.zero;
 }

@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../api/generated/models/chat_attachment_response.dart';
 import '../../api/generated/models/chat_attachment_response_type.dart';
@@ -34,6 +36,8 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
   ChatMessageResponse? _replyTo;
   final _safeNotices = <_LocalChatNotice>[];
   var _stagedMedia = const <File>[];
+  var _stagedMediaIds = const <String>{};
+  var _pendingUploadMedia = const <File>[];
   _AttachmentMode? _stagedMediaMode;
   var _inlineMedia = const <ChatMediaItem>[];
   var _inlineMediaMode = _AttachmentMode.quick;
@@ -118,6 +122,7 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
                 child: _MessageList(
                   messages: data.messages ?? const [],
                   localNotices: _safeNotices,
+                  pendingUploadMedia: _pendingUploadMedia,
                 ),
               ),
               SafeArea(
@@ -135,6 +140,7 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
                       inlineMediaExpanded: _inlineMediaExpanded,
                       inlineMediaLoading: _inlineMediaLoading,
                       stagedMedia: _stagedMedia,
+                      stagedMediaIds: _stagedMediaIds,
                       hasText: _composerHasText || _stagedMedia.isNotEmpty,
                       onCancelReply: () => setState(() => _replyTo = null),
                       onSend: _sendComposer,
@@ -253,6 +259,10 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
         for (final (fileIndex, file) in _stagedMedia.indexed)
           if (fileIndex != index) file,
       ];
+      _stagedMediaIds = {
+        for (final (fileIndex, id) in _stagedMediaIds.indexed)
+          if (fileIndex != index) id,
+      };
       if (_stagedMedia.isEmpty) {
         _stagedMediaMode = null;
       }
@@ -268,19 +278,32 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
     });
   }
 
-  void _toggleInlineMediaSelection(ChatMediaItem item) {
-    final path = item.file.path;
-    final selected = _stagedMedia.any((file) => file.path == path);
+  Future<void> _toggleInlineMediaSelection(ChatMediaItem item) async {
+    final selected = _stagedMediaIds.contains(item.id);
     setState(() {
       if (selected) {
         _stagedMedia = [
-          for (final file in _stagedMedia)
-            if (file.path != path) file,
+          for (final (index, file) in _stagedMedia.indexed)
+            if (_stagedMediaIds.elementAt(index) != item.id) file,
         ];
-      } else {
-        _stagedMedia = [..._stagedMedia, item.file];
+        _stagedMediaIds = {
+          for (final id in _stagedMediaIds)
+            if (id != item.id) id,
+        };
       }
       _stagedMediaMode = _stagedMedia.isEmpty ? null : _inlineMediaMode;
+    });
+    if (selected) {
+      return;
+    }
+    final file = await item.resolveFile();
+    if (!mounted || file == null) {
+      return;
+    }
+    setState(() {
+      _stagedMedia = [..._stagedMedia, file];
+      _stagedMediaIds = {..._stagedMediaIds, item.id};
+      _stagedMediaMode = _inlineMediaMode;
     });
   }
 
@@ -292,6 +315,7 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
     }
     setState(() {
       _stagedMedia = const [];
+      _stagedMediaIds = const {};
       _stagedMediaMode = null;
       _showInlineMediaPicker = false;
       _inlineMediaExpanded = false;
@@ -301,10 +325,19 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
       return;
     }
     final replyId = _replyTo?.id;
-    setState(() => _replyTo = null);
-    await ref
-        .read(chatThreadProvider.notifier)
-        .uploadMedia(files: files, replyToMessageId: replyId);
+    setState(() {
+      _replyTo = null;
+      _pendingUploadMedia = files;
+    });
+    try {
+      await ref
+          .read(chatThreadProvider.notifier)
+          .uploadMedia(files: files, replyToMessageId: replyId);
+    } finally {
+      if (mounted) {
+        setState(() => _pendingUploadMedia = const []);
+      }
+    }
   }
 
   Future<void> _sendQuickReaction() async {
@@ -481,17 +514,23 @@ class _ChatHeader extends StatelessWidget {
   }
 
   String _timeLabel(DateTime dateTime) {
-    final hour = dateTime.hour.toString().padLeft(2, '0');
-    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final local = dateTime.toLocal();
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
   }
 }
 
 class _MessageList extends ConsumerWidget {
-  const _MessageList({required this.messages, required this.localNotices});
+  const _MessageList({
+    required this.messages,
+    required this.localNotices,
+    required this.pendingUploadMedia,
+  });
 
   final List<ChatMessageResponse> messages;
   final List<_LocalChatNotice> localNotices;
+  final List<File> pendingUploadMedia;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -499,6 +538,8 @@ class _MessageList extends ConsumerWidget {
     final items = [
       for (final message in messages) _ChatTimelineItem.message(message),
       for (final notice in localNotices) _ChatTimelineItem.notice(notice),
+      if (pendingUploadMedia.isNotEmpty)
+        _ChatTimelineItem.pendingMedia(pendingUploadMedia),
     ];
     return ListView.separated(
       reverse: true,
@@ -509,6 +550,10 @@ class _MessageList extends ConsumerWidget {
         final notice = item.notice;
         if (notice != null) {
           return _LocalChatNoticeDivider(notice: notice);
+        }
+        final pendingMedia = item.pendingMedia;
+        if (pendingMedia != null) {
+          return _PendingMediaUploadBubble(files: pendingMedia);
         }
         final message = item.message!;
         return Column(
@@ -556,12 +601,21 @@ class _MessageList extends ConsumerWidget {
 }
 
 class _ChatTimelineItem {
-  const _ChatTimelineItem.message(this.message) : notice = null;
+  const _ChatTimelineItem.message(this.message)
+    : notice = null,
+      pendingMedia = null;
 
-  const _ChatTimelineItem.notice(this.notice) : message = null;
+  const _ChatTimelineItem.notice(this.notice)
+    : message = null,
+      pendingMedia = null;
+
+  const _ChatTimelineItem.pendingMedia(this.pendingMedia)
+    : message = null,
+      notice = null;
 
   final ChatMessageResponse? message;
   final _LocalChatNotice? notice;
+  final List<File>? pendingMedia;
 }
 
 class _LocalChatNoticeDivider extends StatelessWidget {
@@ -597,6 +651,115 @@ class _LocalChatNoticeDivider extends StatelessWidget {
   }
 }
 
+class _PendingMediaUploadBubble extends StatefulWidget {
+  const _PendingMediaUploadBubble({required this.files});
+
+  final List<File> files;
+
+  @override
+  State<_PendingMediaUploadBubble> createState() =>
+      _PendingMediaUploadBubbleState();
+}
+
+class _PendingMediaUploadBubbleState extends State<_PendingMediaUploadBubble>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: FadeTransition(
+        opacity: Tween<double>(begin: 0.48, end: 0.88).animate(
+          CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+        ),
+        child: DecoratedBox(
+          key: const Key('chat-pending-media-upload'),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.70),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: BubColors.pink.withValues(alpha: 0.30)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final (index, file) in widget.files.take(3).indexed) ...[
+                  if (index > 0) const SizedBox(width: 5),
+                  _PendingMediaUploadTile(file: file),
+                ],
+                const SizedBox(width: 8),
+                const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PendingMediaUploadTile extends StatelessWidget {
+  const _PendingMediaUploadTile({required this.file});
+
+  final File file;
+
+  @override
+  Widget build(BuildContext context) {
+    final isVideo = _isVideoPath(file.path);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(11),
+      child: SizedBox.square(
+        dimension: 58,
+        child: ColoredBox(
+          color: BubColors.deepPurple.withValues(alpha: 0.10),
+          child: isVideo
+              ? const Icon(
+                  Icons.play_circle_fill_rounded,
+                  color: BubColors.pink,
+                )
+              : Image.file(
+                  file,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) =>
+                      const Icon(Icons.photo_rounded, color: BubColors.pink),
+                ),
+        ),
+      ),
+    );
+  }
+
+  bool _isVideoPath(String path) {
+    final lower = path.toLowerCase();
+    return lower.endsWith('.mp4') ||
+        lower.endsWith('.mov') ||
+        lower.endsWith('.m4v') ||
+        lower.endsWith('.webm') ||
+        lower.endsWith('.avi') ||
+        lower.endsWith('.mkv');
+  }
+}
+
 class _MessageBubble extends ConsumerStatefulWidget {
   const _MessageBubble({
     required this.message,
@@ -621,16 +784,21 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
   Widget build(BuildContext context) {
     final message = widget.message;
     final mine = message.viewerMessage == true;
+    final deleted = message.deletedForEveryone == true;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bareMessage =
-        message.deletedForEveryone != true &&
+        !deleted &&
         (message.type == ChatMessageResponseType.emoji ||
             message.type == ChatMessageResponseType.media);
     final bubbleColor = mine
         ? BubColors.myBubble
         : (isDark ? BubColors.partnerBubbleDark : BubColors.partnerBubbleLight);
-    final textColor = mine && !bareMessage ? BubColors.white : null;
-    final reactions = message.deletedForEveryone == true
+    final textColor = deleted
+        ? BubColors.textSecondaryLight
+        : mine && !bareMessage
+        ? BubColors.white
+        : null;
+    final reactions = deleted
         ? const <ChatReactionSummaryResponse>[]
         : message.reactions ?? const <ChatReactionSummaryResponse>[];
     final hasReply = message.reply != null;
@@ -709,10 +877,16 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                                     'chat-message-bubble-${message.id ?? 'unknown'}',
                                   ),
                                   decoration: BoxDecoration(
-                                    color: bareMessage
+                                    color: bareMessage || deleted
                                         ? Colors.transparent
                                         : bubbleColor,
                                     borderRadius: BorderRadius.circular(18),
+                                    border: deleted
+                                        ? Border.all(
+                                            color: BubColors.textSecondaryLight
+                                                .withValues(alpha: 0.34),
+                                          )
+                                        : null,
                                   ),
                                   child: Padding(
                                     padding: bareMessage
@@ -756,13 +930,29 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                         'chat-delivery-checks-${message.id ?? 'unknown'}',
                       ),
                       padding: const EdgeInsets.only(top: 2, right: 4),
-                      child: Icon(
-                        message.deliveryState ==
-                                ChatMessageResponseDeliveryState.seen
-                            ? Icons.done_all_rounded
-                            : Icons.done_rounded,
-                        size: 15,
-                        color: BubColors.textSecondaryLight,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            message.deliveryState ==
+                                    ChatMessageResponseDeliveryState.seen
+                                ? Icons.done_all_rounded
+                                : Icons.done_rounded,
+                            size: 15,
+                            color: BubColors.textSecondaryLight,
+                          ),
+                          if (message.createdAt != null) ...[
+                            const SizedBox(width: 3),
+                            Text(
+                              _deliveryTimeLabel(message),
+                              style: const TextStyle(
+                                color: BubColors.textSecondaryLight,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                 ],
@@ -798,6 +988,16 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
       _dragDistance = 0;
       _dragOffset = 0;
     });
+  }
+
+  String _deliveryTimeLabel(ChatMessageResponse message) {
+    final createdAt = message.createdAt?.toLocal();
+    if (createdAt == null) {
+      return '';
+    }
+    final hour = createdAt.hour.toString().padLeft(2, '0');
+    final minute = createdAt.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
   }
 
   void _openMediaViewer(
@@ -1282,13 +1482,7 @@ class _MediaViewerPageState extends State<_MediaViewerPage> {
         itemBuilder: (context, index) {
           final attachment = widget.attachments[index];
           if (attachment.type == ChatAttachmentResponseType.video) {
-            return const Center(
-              child: Icon(
-                Icons.play_circle_fill_rounded,
-                color: Colors.white,
-                size: 76,
-              ),
-            );
+            return _VideoViewer(attachment: attachment);
           }
           final url = attachment.url;
           if (url == null || url.isEmpty) {
@@ -1308,6 +1502,120 @@ class _MediaViewerPageState extends State<_MediaViewerPage> {
           );
         },
       ),
+    );
+  }
+}
+
+class _VideoViewer extends StatefulWidget {
+  const _VideoViewer({required this.attachment});
+
+  final ChatAttachmentResponse attachment;
+
+  @override
+  State<_VideoViewer> createState() => _VideoViewerState();
+}
+
+class _VideoViewerState extends State<_VideoViewer> {
+  VideoPlayerController? _controller;
+  Future<void>? _initialize;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVideo();
+  }
+
+  @override
+  void didUpdateWidget(_VideoViewer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.attachment.url != widget.attachment.url) {
+      _controller?.dispose();
+      _loadVideo();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void _loadVideo() {
+    final url = widget.attachment.url;
+    if (url == null || url.isEmpty) {
+      _controller = null;
+      _initialize = null;
+      return;
+    }
+    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    _controller = controller;
+    _initialize = controller.initialize().then((_) {
+      controller.play();
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    final initialize = _initialize;
+    if (controller == null || initialize == null) {
+      return const Center(
+        child: Icon(Icons.videocam_off_rounded, color: Colors.white, size: 54),
+      );
+    }
+    return FutureBuilder<void>(
+      future: initialize,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(
+            key: Key('chat-video-loading'),
+            child: CircularProgressIndicator(color: Colors.white),
+          );
+        }
+        if (snapshot.hasError || !controller.value.isInitialized) {
+          return const Center(
+            key: Key('chat-video-error'),
+            child: Text(
+              'Video could not load',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          );
+        }
+        return Center(
+          child: GestureDetector(
+            key: const Key('chat-video-player'),
+            onTap: () {
+              setState(() {
+                controller.value.isPlaying
+                    ? controller.pause()
+                    : controller.play();
+              });
+            },
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                AspectRatio(
+                  aspectRatio: controller.value.aspectRatio,
+                  child: VideoPlayer(controller),
+                ),
+                if (!controller.value.isPlaying)
+                  const CircleAvatar(
+                    radius: 31,
+                    backgroundColor: Colors.black54,
+                    foregroundColor: Colors.white,
+                    child: Icon(Icons.play_arrow_rounded, size: 42),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1454,8 +1762,9 @@ class _TimeDivider extends StatelessWidget {
   }
 
   String _timeLabel(DateTime dateTime) {
-    final hour = dateTime.hour.toString().padLeft(2, '0');
-    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final local = dateTime.toLocal();
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
   }
 }
@@ -1490,6 +1799,7 @@ class _ChatComposer extends StatelessWidget {
     required this.inlineMediaExpanded,
     required this.inlineMediaLoading,
     required this.stagedMedia,
+    required this.stagedMediaIds,
     required this.hasText,
     required this.onCancelReply,
     required this.onSend,
@@ -1511,6 +1821,7 @@ class _ChatComposer extends StatelessWidget {
   final bool inlineMediaExpanded;
   final bool inlineMediaLoading;
   final List<File> stagedMedia;
+  final Set<String> stagedMediaIds;
   final bool hasText;
   final VoidCallback onCancelReply;
   final VoidCallback onSend;
@@ -1647,7 +1958,7 @@ class _ChatComposer extends StatelessWidget {
                 _InlineMediaPicker(
                   items: inlineMedia,
                   mode: inlineMediaMode,
-                  selectedFiles: stagedMedia,
+                  selectedItemIds: stagedMediaIds,
                   expanded: inlineMediaExpanded,
                   loading: inlineMediaLoading,
                   onModeChanged: onInlineMediaModeChanged,
@@ -1674,7 +1985,7 @@ class _InlineMediaPicker extends StatelessWidget {
   const _InlineMediaPicker({
     required this.items,
     required this.mode,
-    required this.selectedFiles,
+    required this.selectedItemIds,
     required this.expanded,
     required this.loading,
     required this.onModeChanged,
@@ -1684,7 +1995,7 @@ class _InlineMediaPicker extends StatelessWidget {
 
   final List<ChatMediaItem> items;
   final _AttachmentMode mode;
-  final List<File> selectedFiles;
+  final Set<String> selectedItemIds;
   final bool expanded;
   final bool loading;
   final ValueChanged<_AttachmentMode> onModeChanged;
@@ -1766,9 +2077,7 @@ class _InlineMediaPicker extends StatelessWidget {
                           ),
                       itemBuilder: (context, index) {
                         final item = items[index];
-                        final selected = selectedFiles.any(
-                          (file) => file.path == item.file.path,
-                        );
+                        final selected = selectedItemIds.contains(item.id);
                         return _InlineMediaItem(
                           key: Key('chat-inline-media-item-${item.id}'),
                           item: item,
@@ -1862,12 +2171,7 @@ class _InlineMediaItem extends StatelessWidget {
                             size: 32,
                           ),
                         )
-                      : Image.file(
-                          item.file,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) =>
-                              const Center(child: Icon(Icons.photo_rounded)),
-                        ),
+                      : _InlineMediaThumbnail(item: item),
                 ),
               ),
             ),
@@ -1895,6 +2199,61 @@ class _InlineMediaItem extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _InlineMediaThumbnail extends StatefulWidget {
+  const _InlineMediaThumbnail({required this.item});
+
+  final ChatMediaItem item;
+
+  @override
+  State<_InlineMediaThumbnail> createState() => _InlineMediaThumbnailState();
+}
+
+class _InlineMediaThumbnailState extends State<_InlineMediaThumbnail> {
+  late Future<Object?> _thumbnail;
+
+  @override
+  void initState() {
+    super.initState();
+    _thumbnail = widget.item.loadThumbnail();
+  }
+
+  @override
+  void didUpdateWidget(_InlineMediaThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.id != widget.item.id) {
+      _thumbnail = widget.item.loadThumbnail();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder(
+      future: _thumbnail,
+      builder: (context, snapshot) {
+        final bytes = snapshot.data;
+        if (bytes is Uint8List) {
+          return Image.memory(bytes, fit: BoxFit.cover);
+        }
+        final file = widget.item.file;
+        if (file != null) {
+          return Image.file(
+            file,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) =>
+                const Center(child: Icon(Icons.photo_rounded)),
+          );
+        }
+        return const Center(
+          child: SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      },
     );
   }
 }
