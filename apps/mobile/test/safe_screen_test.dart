@@ -263,7 +263,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Create Safe PIN'), findsWidgets);
+    expect(find.byKey(const Key('safe-first-time-setup')), findsOneWidget);
+    expect(find.byKey(const Key('safe-pin-entry')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('safe-setup-open')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('safe-setup-dialog')), findsOneWidget);
+    expect(find.text('Set a PIN for your Safe'), findsOneWidget);
+    expect(find.text('Your PIN is private to you.'), findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('safe-pin-entry')), '1234');
     await tester.enterText(
@@ -282,6 +290,27 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('safe-pin-error')), findsOneWidget);
+  });
+
+  testWidgets('first-time setup dialog creates a Safe PIN', (tester) async {
+    await tester.pumpWidget(
+      _safeApp(const SafeStatus(tethered: true, pinConfigured: false)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('safe-setup-open')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('safe-pin-entry')), '1234');
+    await tester.enterText(
+      find.byKey(const Key('safe-pin-confirm-entry')),
+      '1234',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('safe-pin-submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('safe-setup-dialog')), findsNothing);
+    expect(find.byKey(const Key('safe-unlocked-state')), findsOneWidget);
   });
 }
 

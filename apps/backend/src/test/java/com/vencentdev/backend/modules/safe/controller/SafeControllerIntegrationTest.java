@@ -117,10 +117,29 @@ class SafeControllerIntegrationTest extends IntegrationTestBase {
   }
 
   @Test
+  void partnersConfigureIndependentSafePins() throws Exception {
+    tetheredUsers();
+
+    mockMvc.perform(pinSetup("alice", "1234")).andExpect(status().isCreated());
+    mockMvc.perform(pinSetup("bob", "9876")).andExpect(status().isCreated());
+
+    mockMvc.perform(unlock("alice", "1234")).andExpect(status().isOk());
+    mockMvc.perform(unlock("bob", "9876")).andExpect(status().isOk());
+
+    mockMvc
+        .perform(unlock("alice", "9876"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.message").value("Invalid Safe PIN"));
+    mockMvc
+        .perform(unlock("bob", "1234"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.message").value("Invalid Safe PIN"));
+  }
+
+  @Test
   void unlockRejectsIncorrectPin() throws Exception {
     tetheredUsers();
     mockMvc.perform(pinSetup("alice", "1234")).andExpect(status().isCreated());
-    mockMvc.perform(pinSetup("bob", "1234")).andExpect(status().isCreated());
 
     mockMvc
         .perform(unlock("alice", "9999"))

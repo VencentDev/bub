@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -52,6 +54,9 @@ class SafeScreen extends ConsumerWidget {
           if (session.unlocked) {
             return const _SafeUnlockedState();
           }
+          if (!value.pinConfigured) {
+            return const _SafeFirstTimeSetupState();
+          }
           return _SafePinFlow(pinConfigured: value.pinConfigured);
         },
       ),
@@ -104,6 +109,439 @@ class _SafeLockedState extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SafeFirstTimeSetupState extends ConsumerWidget {
+  const _SafeFirstTimeSetupState();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
+          child: Column(
+            key: const Key('safe-first-time-setup'),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                'assets/illustrations/bears/safe-box.png',
+                key: const Key('safe-box-image'),
+                width: 150,
+                height: 150,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Set up your Safe',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Create your private PIN before opening shared memories.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                key: const Key('safe-setup-open'),
+                onPressed: () => _showSetupDialog(context, ref),
+                icon: const Icon(Icons.add_moderator_rounded),
+                label: const Text('Set a PIN'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showSetupDialog(BuildContext context, WidgetRef ref) async {
+    final pin = await showDialog<String>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.34),
+      builder: (_) => const _SafeSetupPinDialog(),
+    );
+    if (pin == null || !context.mounted) {
+      return;
+    }
+    try {
+      await ref.read(safeControllerProvider.notifier).setupPin(pin);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't set your Safe PIN.")),
+        );
+      }
+    }
+  }
+}
+
+class _SafeSetupPinDialog extends StatefulWidget {
+  const _SafeSetupPinDialog();
+
+  @override
+  State<_SafeSetupPinDialog> createState() => _SafeSetupPinDialogState();
+}
+
+class _SafeSetupPinDialogState extends State<_SafeSetupPinDialog> {
+  final _pinController = TextEditingController();
+  final _confirmController = TextEditingController();
+  String? _error;
+
+  bool get _canSubmit {
+    return RegExp(r'^\d{4,6}$').hasMatch(_pinController.text) &&
+        RegExp(r'^\d{4,6}$').hasMatch(_confirmController.text);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _pinController.addListener(_onChanged);
+    _confirmController.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    _pinController.removeListener(_onChanged);
+    _confirmController.removeListener(_onChanged);
+    _pinController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panelColor = (isDark ? BubColors.darkDialog : BubColors.white)
+        .withValues(alpha: isDark ? 0.74 : 0.70);
+    final textColor = isDark ? BubColors.white : BubColors.textPrimaryLight;
+    final softTextColor = isDark
+        ? BubColors.textSecondaryDark
+        : BubColors.textSecondaryLight;
+    final inputFill = (isDark ? BubColors.darkSurface : BubColors.white)
+        .withValues(alpha: isDark ? 0.58 : 0.72);
+
+    return Dialog(
+      key: const Key('safe-setup-dialog'),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+            top: -26,
+            right: 4,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    BubColors.pink.withValues(alpha: isDark ? 0.42 : 0.25),
+                    BubColors.pink.withValues(alpha: 0),
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const SizedBox(width: 126, height: 126),
+            ),
+          ),
+          Positioned(
+            bottom: -28,
+            left: -10,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    BubColors.violet.withValues(alpha: isDark ? 0.34 : 0.23),
+                    BubColors.violet.withValues(alpha: 0),
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const SizedBox(width: 118, height: 118),
+            ),
+          ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(32),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: panelColor,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? [
+                            BubColors.white.withValues(alpha: 0.10),
+                            BubColors.darkDialog.withValues(alpha: 0.70),
+                            BubColors.pink.withValues(alpha: 0.12),
+                          ]
+                        : [
+                            BubColors.white.withValues(alpha: 0.78),
+                            const Color(0xFFFFF4FA).withValues(alpha: 0.64),
+                            const Color(0xFFF5EEFF).withValues(alpha: 0.72),
+                          ],
+                  ),
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(
+                    color: BubColors.white.withValues(
+                      alpha: isDark ? 0.14 : 0.72,
+                    ),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: BubColors.deepPurple.withValues(
+                        alpha: isDark ? 0.42 : 0.16,
+                      ),
+                      blurRadius: 34,
+                      offset: const Offset(0, 18),
+                    ),
+                    BoxShadow(
+                      color: BubColors.pink.withValues(
+                        alpha: isDark ? 0.18 : 0.12,
+                      ),
+                      blurRadius: 36,
+                      offset: const Offset(0, -10),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              gradient: BubColors.bubGradient,
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: BubColors.pink.withValues(alpha: 0.28),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.add_moderator_rounded,
+                              color: BubColors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Set a PIN for your Safe',
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Your PIN is private to you.',
+                                  style: TextStyle(
+                                    color: softTextColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            tooltip: 'Close',
+                            icon: const Icon(Icons.close_rounded),
+                            color: softTextColor,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      _SafePinField(
+                        fieldKey: const Key('safe-pin-entry'),
+                        controller: _pinController,
+                        label: 'PIN',
+                        icon: Icons.lock_rounded,
+                        inputFill: inputFill,
+                        softTextColor: softTextColor,
+                        isDark: isDark,
+                      ),
+                      const SizedBox(height: 12),
+                      _SafePinField(
+                        fieldKey: const Key('safe-pin-confirm-entry'),
+                        controller: _confirmController,
+                        label: 'Confirm PIN',
+                        icon: Icons.verified_user_rounded,
+                        inputFill: inputFill,
+                        softTextColor: softTextColor,
+                        isDark: isDark,
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          _error!,
+                          key: const Key('safe-pin-error'),
+                          style: const TextStyle(
+                            color: BubColors.coral,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: softTextColor,
+                                side: BorderSide(
+                                  color: BubColors.white.withValues(
+                                    alpha: isDark ? 0.12 : 0.58,
+                                  ),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                minimumSize: const Size.fromHeight(48),
+                              ),
+                              child: const Text('Cancel'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: BubColors.bubGradient,
+                                borderRadius: BorderRadius.circular(18),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: BubColors.pink.withValues(
+                                      alpha: 0.28,
+                                    ),
+                                    blurRadius: 18,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              child: FilledButton(
+                                key: const Key('safe-pin-submit'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  minimumSize: const Size.fromHeight(48),
+                                ),
+                                onPressed: _canSubmit ? _submit : null,
+                                child: const Text('Set PIN'),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _submit() {
+    final pin = _pinController.text;
+    if (pin != _confirmController.text) {
+      setState(() => _error = 'PINs do not match');
+      return;
+    }
+    Navigator.of(context).pop(pin);
+  }
+
+  void _onChanged() {
+    setState(() => _error = null);
+  }
+}
+
+class _SafePinField extends StatelessWidget {
+  const _SafePinField({
+    required this.fieldKey,
+    required this.controller,
+    required this.label,
+    required this.icon,
+    required this.inputFill,
+    required this.softTextColor,
+    required this.isDark,
+  });
+
+  final Key fieldKey;
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final Color inputFill;
+  final Color softTextColor;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      key: fieldKey,
+      controller: controller,
+      obscureText: true,
+      keyboardType: TextInputType.number,
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+        LengthLimitingTextInputFormatter(6),
+      ],
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: BubColors.pink.withValues(alpha: 0.78)),
+        fillColor: inputFill,
+        filled: true,
+        labelStyle: TextStyle(color: softTextColor),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(22),
+          borderSide: BorderSide(
+            color: BubColors.white.withValues(alpha: isDark ? 0.10 : 0.62),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(22),
+          borderSide: BorderSide(
+            color: BubColors.white.withValues(alpha: isDark ? 0.10 : 0.62),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(22),
+          borderSide: const BorderSide(color: BubColors.pink, width: 1.5),
         ),
       ),
     );
