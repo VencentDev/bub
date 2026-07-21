@@ -73,43 +73,48 @@ class _SafeLockedState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
-          child: Column(
-            key: const Key('safe-locked-state'),
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Image.asset(
-                'assets/illustrations/bears/safe-box.png',
-                key: const Key('safe-box-image'),
-                width: 150,
-                height: 150,
-                fit: BoxFit.contain,
+      child: Stack(
+        children: [
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
+              child: Column(
+                key: const Key('safe-locked-state'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    'assets/illustrations/bears/safe-box.png',
+                    key: const Key('safe-box-image'),
+                    width: 150,
+                    height: 150,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 18),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Theme.of(context).textTheme.bodyMedium?.color,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+          const _SafeContextBackButton(),
+        ],
       ),
     );
   }
@@ -121,46 +126,51 @@ class _SafeFirstTimeSetupState extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return SafeArea(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
-          child: Column(
-            key: const Key('safe-first-time-setup'),
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Image.asset(
-                'assets/illustrations/bears/safe-box.png',
-                key: const Key('safe-box-image'),
-                width: 150,
-                height: 150,
-                fit: BoxFit.contain,
+      child: Stack(
+        children: [
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
+              child: Column(
+                key: const Key('safe-first-time-setup'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    'assets/illustrations/bears/safe-box.png',
+                    key: const Key('safe-box-image'),
+                    width: 150,
+                    height: 150,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Set up your Safe',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 25,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Create your private PIN before opening shared memories.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    key: const Key('safe-setup-open'),
+                    onPressed: () => _showSetupDialog(context, ref),
+                    icon: const Icon(Icons.add_moderator_rounded),
+                    label: const Text('Set a PIN'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 18),
-              const Text(
-                'Set up your Safe',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 25,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Create your private PIN before opening shared memories.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 20),
-              FilledButton.icon(
-                key: const Key('safe-setup-open'),
-                onPressed: () => _showSetupDialog(context, ref),
-                icon: const Icon(Icons.add_moderator_rounded),
-                label: const Text('Set a PIN'),
-              ),
-            ],
+            ),
           ),
-        ),
+          const _SafeContextBackButton(),
+        ],
       ),
     );
   }
@@ -612,141 +622,148 @@ class _SafePinFlowState extends ConsumerState<_SafePinFlow> {
     final subtitle = widget.pinConfigured
         ? 'Enter your Safe PIN to view private memories.'
         : 'Choose a 4 to 6 digit PIN for this shared vault.';
+    final canPop = Navigator.canPop(context);
 
     return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 150),
+      child: Stack(
         children: [
-          Column(
-            key: const Key('safe-locked-state'),
+          ListView(
+            padding: EdgeInsets.fromLTRB(24, canPop ? 72 : 24, 24, 150),
             children: [
-              Image.asset(
-                'assets/illustrations/bears/safe-box.png',
-                key: const Key('safe-box-image'),
-                width: 142,
-                height: 142,
-                fit: BoxFit.contain,
-              ),
-              const SizedBox(height: 18),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 25,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          TextField(
-            key: const Key('safe-pin-entry'),
-            controller: _pinController,
-            obscureText: true,
-            keyboardType: TextInputType.number,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(6),
-            ],
-            decoration: InputDecoration(
-              labelText: 'PIN',
-              prefixIcon: const Icon(Icons.lock_rounded),
-              errorText: _error == null ? null : '',
-            ),
-          ),
-          if (!widget.pinConfigured) ...[
-            const SizedBox(height: 12),
-            TextField(
-              key: const Key('safe-pin-confirm-entry'),
-              controller: _confirmController,
-              obscureText: true,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(6),
-              ],
-              decoration: const InputDecoration(
-                labelText: 'Confirm PIN',
-                prefixIcon: Icon(Icons.verified_user_rounded),
-              ),
-            ),
-          ],
-          if (_error != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              _error!,
-              key: const Key('safe-pin-error'),
-              style: const TextStyle(
-                color: BubColors.coral,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-          const SizedBox(height: 18),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: _canSubmit
-                  ? null
-                  : BubColors.white.withValues(
-                      alpha: Theme.of(context).brightness == Brightness.dark
-                          ? 0.10
-                          : 0.54,
-                    ),
-              gradient: _canSubmit ? BubColors.bubGradient : null,
-              borderRadius: BorderRadius.circular(18),
-              border: _canSubmit
-                  ? null
-                  : Border.all(
-                      color: BubColors.pink.withValues(
-                        alpha: Theme.of(context).brightness == Brightness.dark
-                            ? 0.16
-                            : 0.22,
-                      ),
-                    ),
-              boxShadow: [
-                BoxShadow(
-                  color: BubColors.pink.withValues(
-                    alpha: _canSubmit ? 0.28 : 0.08,
+              Column(
+                key: const Key('safe-locked-state'),
+                children: [
+                  Image.asset(
+                    'assets/illustrations/bears/safe-box.png',
+                    key: const Key('safe-box-image'),
+                    width: 142,
+                    height: 142,
+                    fit: BoxFit.contain,
                   ),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
+                  const SizedBox(height: 18),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 25,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              TextField(
+                key: const Key('safe-pin-entry'),
+                controller: _pinController,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
+                decoration: InputDecoration(
+                  labelText: 'PIN',
+                  prefixIcon: const Icon(Icons.lock_rounded),
+                  errorText: _error == null ? null : '',
+                ),
+              ),
+              if (!widget.pinConfigured) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  key: const Key('safe-pin-confirm-entry'),
+                  controller: _confirmController,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(6),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'Confirm PIN',
+                    prefixIcon: Icon(Icons.verified_user_rounded),
+                  ),
                 ),
               ],
-            ),
-            child: FilledButton.icon(
-              key: const Key('safe-pin-submit'),
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                disabledBackgroundColor: Colors.transparent,
-                disabledForegroundColor: Theme.of(
-                  context,
-                ).hintColor.withValues(alpha: 0.72),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
+              if (_error != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _error!,
+                  key: const Key('safe-pin-error'),
+                  style: const TextStyle(
+                    color: BubColors.coral,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                minimumSize: const Size.fromHeight(48),
+              ],
+              const SizedBox(height: 18),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _canSubmit
+                      ? null
+                      : BubColors.white.withValues(
+                          alpha: Theme.of(context).brightness == Brightness.dark
+                              ? 0.10
+                              : 0.54,
+                        ),
+                  gradient: _canSubmit ? BubColors.bubGradient : null,
+                  borderRadius: BorderRadius.circular(18),
+                  border: _canSubmit
+                      ? null
+                      : Border.all(
+                          color: BubColors.pink.withValues(
+                            alpha:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? 0.16
+                                : 0.22,
+                          ),
+                        ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: BubColors.pink.withValues(
+                        alpha: _canSubmit ? 0.28 : 0.08,
+                      ),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: FilledButton.icon(
+                  key: const Key('safe-pin-submit'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    disabledBackgroundColor: Colors.transparent,
+                    disabledForegroundColor: Theme.of(
+                      context,
+                    ).hintColor.withValues(alpha: 0.72),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  onPressed: _canSubmit ? _submit : null,
+                  icon: _submitting
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.lock_open_rounded),
+                  label: Text(title),
+                ),
               ),
-              onPressed: _canSubmit ? _submit : null,
-              icon: _submitting
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.lock_open_rounded),
-              label: Text(title),
-            ),
+            ],
           ),
+          const _SafeContextBackButton(),
         ],
       ),
     );
@@ -794,6 +811,40 @@ class _SafeUnlockedState extends ConsumerStatefulWidget {
   ConsumerState<_SafeUnlockedState> createState() => _SafeUnlockedStateState();
 }
 
+class _SafeContextBackButton extends StatelessWidget {
+  const _SafeContextBackButton({this.inline = false});
+
+  final bool inline;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!Navigator.canPop(context)) {
+      return const SizedBox.shrink();
+    }
+
+    final button = IconButton(
+      key: const Key('safe-back-button'),
+      tooltip: 'Back',
+      onPressed: () => Navigator.maybePop(context),
+      icon: const Icon(Icons.arrow_back_rounded),
+      style: IconButton.styleFrom(
+        backgroundColor: BubColors.white.withValues(alpha: 0.72),
+        foregroundColor: BubColors.textPrimaryLight,
+        shadowColor: BubColors.pink.withValues(alpha: 0.18),
+        elevation: 8,
+        fixedSize: const Size.square(42),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+
+    if (inline) {
+      return Padding(padding: const EdgeInsets.only(right: 8), child: button);
+    }
+
+    return Positioned(top: 12, left: 12, child: button);
+  }
+}
+
 class _SafeUnlockedStateState extends ConsumerState<_SafeUnlockedState> {
   late Future<List<SafeMediaItem>> _mediaFuture;
   var _items = const <SafeMediaItem>[];
@@ -825,6 +876,7 @@ class _SafeUnlockedStateState extends ConsumerState<_SafeUnlockedState> {
                     padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
                     child: Row(
                       children: [
+                        const _SafeContextBackButton(inline: true),
                         const Icon(Icons.lock_open_rounded, size: 28),
                         const SizedBox(width: 10),
                         const Expanded(

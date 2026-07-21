@@ -101,7 +101,34 @@ void main() {
     expect(find.byKey(const Key('safe-gallery-grid')), findsOneWidget);
     expect(find.byKey(const Key('safe-unlocked-state')), findsOneWidget);
     expect(find.byKey(const Key('safe-lock-toggle')), findsOneWidget);
+    expect(find.byKey(const Key('safe-back-button')), findsNothing);
     expect(find.text('Unlocked'), findsOneWidget);
+  });
+
+  testWidgets('Safe route shows back button and pops to previous screen', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _safeRouteApp(
+        const SafeStatus(tethered: true, pinConfigured: true),
+        session: const SafeSession(unlocked: true, pin: '1234'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('open-safe-route')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byKey(const Key('safe-screen')), findsOneWidget);
+    expect(find.byKey(const Key('safe-back-button')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('safe-back-button')));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.byKey(const Key('safe-screen')), findsNothing);
+    expect(find.byKey(const Key('open-safe-route')), findsOneWidget);
   });
 
   testWidgets('Safe lock toggle returns to locked flow', (tester) async {
@@ -362,6 +389,37 @@ Widget _safeAppWithController(
       safeControllerProvider.overrideWith(() => controller),
     ],
     child: const MaterialApp(home: SafeScreen()),
+  );
+}
+
+Widget _safeRouteApp(
+  SafeStatus status, {
+  SafeSession session = const SafeSession(unlocked: false),
+}) {
+  return ProviderScope(
+    overrides: [
+      safeSessionProvider.overrideWith(
+        () => _FakeSafeSessionController(session),
+      ),
+      safeControllerProvider.overrideWith(() => _FakeSafeController(status)),
+    ],
+    child: MaterialApp(
+      home: Builder(
+        builder: (context) {
+          return Scaffold(
+            body: Center(
+              child: TextButton(
+                key: const Key('open-safe-route'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const SafeScreen()),
+                ),
+                child: const Text('Open Safe'),
+              ),
+            ),
+          );
+        },
+      ),
+    ),
   );
 }
 
