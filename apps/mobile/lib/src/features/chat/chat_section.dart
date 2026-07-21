@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:video_player/video_player.dart';
@@ -20,6 +20,8 @@ import '../../api/generated/models/chat_send_message_request_type.dart';
 import '../../api/generated/models/chat_thread_response.dart';
 import '../../features/bub/bub_heart_burst.dart';
 import '../../features/bub/bub_send_controller.dart';
+import '../../features/safe/safe_controller.dart';
+import '../../features/safe/safe_screen.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
 import 'chat_controller.dart';
@@ -55,6 +57,7 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
   var _bubTapCount = 0;
   var _bubBurstTrigger = 0;
   var _sendingTapBub = false;
+  String? _safeUploadError;
   var _pendingTextSequence = 0;
   var _pendingMediaSequence = 0;
   var _pendingBubSequence = 0;
@@ -221,6 +224,19 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
                             child: EmojiPicker(
                               textEditingController: _composer,
                               config: const Config(height: 248),
+                            ),
+                          ),
+                        if (_safeUploadError != null)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                            child: Text(
+                              _safeUploadError!,
+                              key: const Key('chat-safe-upload-error'),
+                              style: const TextStyle(
+                                color: BubColors.coral,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                           ),
                       ],
@@ -402,12 +418,13 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
     });
   }
 
-  void _addSafeNotice() {
+  void _addSafeNotice(int count) {
     setState(() {
       _safeNotices.add(
         _LocalChatNotice(
           id: 'safe-${DateTime.now().microsecondsSinceEpoch}',
-          label: 'New media added to Safe',
+          label: _safeNoticeLabel(count),
+          safeItemCount: count,
         ),
       );
     });
@@ -484,7 +501,7 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
       _inlineMediaExpanded = false;
     });
     if (mode == _AttachmentMode.safe) {
-      _addSafeNotice();
+      await _sendSafeMedia(files);
       return;
     }
     final replyId = _replyTo?.id;
@@ -529,15 +546,510 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
   void _setReply(ChatMessageResponse message) {
     setState(() => _replyTo = message);
   }
+
+  Future<void> _sendSafeMedia(List<File> files) async {
+    final pin = await _safePinForUpload();
+    if (!mounted) {
+      return;
+    }
+    if (pin == null) {
+      setState(() {
+        _stagedMedia = files;
+        _stagedMediaIds = {for (final file in files) file.path};
+        _stagedMediaMode = _AttachmentMode.safe;
+      });
+      return;
+    }
+    setState(() => _safeUploadError = null);
+    try {
+      final result = await ref
+          .read(safeControllerProvider.notifier)
+          .uploadMedia(files, pin);
+      final count = result.notice?.safeItemCount ?? result.items.length;
+      _addSafeNotice(count == 0 ? files.length : count);
+      await ref.read(chatThreadProvider.notifier).refresh();
+    } catch (_) {
+      if (mounted) {
+        setState(() => _safeUploadError = "Couldn't add that to Safe.");
+      }
+    }
+  }
+
+  Future<String?> _safePinForUpload() async {
+    final session = ref.read(safeSessionProvider);
+    final existingPin = session.unlocked ? session.pin : null;
+    if (existingPin != null && existingPin.isNotEmpty) {
+      return existingPin;
+    }
+    final status = await ref.read(safeControllerProvider.future);
+    if (!mounted) {
+      return null;
+    }
+    if (status.pinConfigured) {
+      return _showSafePinDialog(
+        setup: false,
+        onSubmit: (pin) =>
+            ref.read(safeControllerProvider.notifier).unlock(pin),
+      );
+    }
+    return _showSafePinDialog(
+      setup: true,
+      onSubmit: (pin) =>
+          ref.read(safeControllerProvider.notifier).setupPin(pin),
+    );
+  }
+
+  Future<String?> _showSafePinDialog({
+    required bool setup,
+    required Future<void> Function(String pin) onSubmit,
+  }) {
+    return showDialog<String>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.34),
+      barrierDismissible: false,
+      builder: (_) => _ChatSafePinDialog(setup: setup, onSubmit: onSubmit),
+    );
+  }
 }
 
 enum _AttachmentMode { quick, safe }
 
+class _ChatSafePinDialog extends StatefulWidget {
+  const _ChatSafePinDialog({required this.setup, required this.onSubmit});
+
+  final bool setup;
+  final Future<void> Function(String pin) onSubmit;
+
+  @override
+  State<_ChatSafePinDialog> createState() => _ChatSafePinDialogState();
+}
+
+class _ChatSafePinDialogState extends State<_ChatSafePinDialog> {
+  final _pinController = TextEditingController();
+  final _confirmController = TextEditingController();
+  String? _error;
+  var _submitting = false;
+
+  bool get _canSubmit {
+    if (_submitting || !RegExp(r'^\d{4,6}$').hasMatch(_pinController.text)) {
+      return false;
+    }
+    return !widget.setup ||
+        RegExp(r'^\d{4,6}$').hasMatch(_confirmController.text);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _pinController.addListener(_onChanged);
+    _confirmController.addListener(_onChanged);
+  }
+
+  @override
+  void dispose() {
+    _pinController.removeListener(_onChanged);
+    _confirmController.removeListener(_onChanged);
+    _pinController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panelColor = (isDark ? BubColors.darkDialog : BubColors.white)
+        .withValues(alpha: isDark ? 0.74 : 0.70);
+    final textColor = isDark ? BubColors.white : BubColors.textPrimaryLight;
+    final softTextColor = isDark
+        ? BubColors.textSecondaryDark
+        : BubColors.textSecondaryLight;
+    final inputFill = (isDark ? BubColors.darkSurface : BubColors.white)
+        .withValues(alpha: isDark ? 0.58 : 0.72);
+
+    return Dialog(
+      key: Key(widget.setup ? 'safe-setup-dialog' : 'safe-unlock-dialog'),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+            top: -26,
+            right: 4,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    BubColors.pink.withValues(alpha: isDark ? 0.42 : 0.25),
+                    BubColors.pink.withValues(alpha: 0),
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const SizedBox(width: 126, height: 126),
+            ),
+          ),
+          Positioned(
+            bottom: -28,
+            left: -10,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    BubColors.violet.withValues(alpha: isDark ? 0.34 : 0.23),
+                    BubColors.violet.withValues(alpha: 0),
+                  ],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const SizedBox(width: 118, height: 118),
+            ),
+          ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(32),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: panelColor,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? [
+                            BubColors.white.withValues(alpha: 0.10),
+                            BubColors.darkDialog.withValues(alpha: 0.70),
+                            BubColors.pink.withValues(alpha: 0.12),
+                          ]
+                        : [
+                            BubColors.white.withValues(alpha: 0.78),
+                            const Color(0xFFFFF4FA).withValues(alpha: 0.64),
+                            const Color(0xFFF5EEFF).withValues(alpha: 0.72),
+                          ],
+                  ),
+                  borderRadius: BorderRadius.circular(32),
+                  border: Border.all(
+                    color: BubColors.white.withValues(
+                      alpha: isDark ? 0.14 : 0.72,
+                    ),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: BubColors.deepPurple.withValues(
+                        alpha: isDark ? 0.42 : 0.16,
+                      ),
+                      blurRadius: 34,
+                      offset: const Offset(0, 18),
+                    ),
+                    BoxShadow(
+                      color: BubColors.pink.withValues(
+                        alpha: isDark ? 0.18 : 0.12,
+                      ),
+                      blurRadius: 36,
+                      offset: const Offset(0, -10),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              gradient: BubColors.bubGradient,
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: BubColors.pink.withValues(alpha: 0.28),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              widget.setup
+                                  ? Icons.add_moderator_rounded
+                                  : Icons.lock_open_rounded,
+                              color: BubColors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.setup
+                                      ? 'Set a PIN for your Safe'
+                                      : 'Unlock Safe',
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  widget.setup
+                                      ? 'Your PIN is private to you.'
+                                      : 'Enter your private PIN to add this to Safe.',
+                                  style: TextStyle(
+                                    color: softTextColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: _submitting
+                                ? null
+                                : () => Navigator.of(context).pop(),
+                            tooltip: 'Close',
+                            icon: const Icon(Icons.close_rounded),
+                            color: softTextColor,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      _ChatSafePinField(
+                        fieldKey: const Key('safe-pin-entry'),
+                        controller: _pinController,
+                        label: 'PIN',
+                        icon: Icons.lock_rounded,
+                        inputFill: inputFill,
+                        softTextColor: softTextColor,
+                        isDark: isDark,
+                      ),
+                      if (widget.setup) ...[
+                        const SizedBox(height: 12),
+                        _ChatSafePinField(
+                          fieldKey: const Key('safe-pin-confirm-entry'),
+                          controller: _confirmController,
+                          label: 'Confirm PIN',
+                          icon: Icons.verified_user_rounded,
+                          inputFill: inputFill,
+                          softTextColor: softTextColor,
+                          isDark: isDark,
+                        ),
+                      ],
+                      if (_error != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          _error!,
+                          key: const Key('safe-pin-error'),
+                          style: const TextStyle(
+                            color: BubColors.coral,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _submitting
+                                  ? null
+                                  : () => Navigator.of(context).pop(),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: softTextColor,
+                                side: BorderSide(
+                                  color: BubColors.white.withValues(
+                                    alpha: isDark ? 0.12 : 0.58,
+                                  ),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                minimumSize: const Size.fromHeight(48),
+                              ),
+                              child: const Text('Cancel'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: _canSubmit
+                                    ? null
+                                    : BubColors.white.withValues(
+                                        alpha: isDark ? 0.10 : 0.54,
+                                      ),
+                                gradient: _canSubmit
+                                    ? BubColors.bubGradient
+                                    : null,
+                                borderRadius: BorderRadius.circular(18),
+                                border: _canSubmit
+                                    ? null
+                                    : Border.all(
+                                        color: BubColors.pink.withValues(
+                                          alpha: isDark ? 0.16 : 0.22,
+                                        ),
+                                      ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: BubColors.pink.withValues(
+                                      alpha: _canSubmit ? 0.28 : 0.08,
+                                    ),
+                                    blurRadius: 18,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              child: FilledButton(
+                                key: const Key('safe-pin-submit'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  minimumSize: const Size.fromHeight(48),
+                                  disabledBackgroundColor: Colors.transparent,
+                                  disabledForegroundColor: softTextColor
+                                      .withValues(alpha: 0.72),
+                                ),
+                                onPressed: _canSubmit ? _submit : null,
+                                child: _submitting
+                                    ? const SizedBox.square(
+                                        dimension: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : Text(widget.setup ? 'Set PIN' : 'Unlock'),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    final pin = _pinController.text;
+    if (widget.setup && pin != _confirmController.text) {
+      setState(() => _error = 'PINs do not match');
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    try {
+      await widget.onSubmit(pin);
+      if (mounted) {
+        Navigator.of(context).pop(pin);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+          _error = widget.setup
+              ? "Couldn't set your Safe PIN"
+              : 'Invalid Safe PIN';
+        });
+      }
+    }
+  }
+
+  void _onChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _error = null);
+  }
+}
+
+class _ChatSafePinField extends StatelessWidget {
+  const _ChatSafePinField({
+    required this.fieldKey,
+    required this.controller,
+    required this.label,
+    required this.icon,
+    required this.inputFill,
+    required this.softTextColor,
+    required this.isDark,
+  });
+
+  final Key fieldKey;
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final Color inputFill;
+  final Color softTextColor;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      key: fieldKey,
+      controller: controller,
+      obscureText: true,
+      keyboardType: TextInputType.number,
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+        LengthLimitingTextInputFormatter(6),
+      ],
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: BubColors.pink.withValues(alpha: 0.78)),
+        fillColor: inputFill,
+        filled: true,
+        labelStyle: TextStyle(color: softTextColor),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(22),
+          borderSide: BorderSide(
+            color: BubColors.white.withValues(alpha: isDark ? 0.10 : 0.62),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(22),
+          borderSide: BorderSide(
+            color: BubColors.white.withValues(alpha: isDark ? 0.10 : 0.62),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(22),
+          borderSide: const BorderSide(color: BubColors.pink, width: 1.5),
+        ),
+      ),
+    );
+  }
+}
+
 class _LocalChatNotice {
-  const _LocalChatNotice({required this.id, required this.label});
+  const _LocalChatNotice({
+    required this.id,
+    required this.label,
+    this.safeItemCount,
+  });
 
   final String id;
   final String label;
+  final int? safeItemCount;
 }
 
 class _UntetheredChatEmptyState extends StatelessWidget {
@@ -1101,6 +1613,16 @@ class _MessageList extends ConsumerWidget {
             ),
           );
         }
+        if (message.type == ChatMessageResponseType.safeNotice) {
+          final count = message.safeItemCount ?? 1;
+          return _LocalChatNoticeDivider(
+            notice: _LocalChatNotice(
+              id: message.id ?? 'safe-notice-$chronologicalIndex',
+              label: message.body ?? _safeNoticeLabel(count),
+              safeItemCount: count,
+            ),
+          );
+        }
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1232,6 +1754,45 @@ class _LocalChatNoticeDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (notice.safeItemCount != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          child: InkWell(
+            key: Key('chat-safe-notice-${notice.id}'),
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => const SafeScreen())),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    'assets/illustrations/bears/safe-box.png',
+                    key: const Key('chat-safe-notice-image'),
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    notice.label,
+                    key: const Key('chat-safe-notice-count'),
+                    style: const TextStyle(
+                      color: BubColors.textSecondaryLight,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Center(
       child: Padding(
         key: Key('chat-safe-notice-${notice.id}'),
@@ -1256,6 +1817,10 @@ class _LocalChatNoticeDivider extends StatelessWidget {
       ),
     );
   }
+}
+
+String _safeNoticeLabel(int count) {
+  return count == 1 ? '1 file added to Safe' : '$count files added to Safe';
 }
 
 class _PendingMediaUploadBubble extends StatefulWidget {

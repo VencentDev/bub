@@ -148,7 +148,9 @@ public class ChatServiceImpl implements ChatService {
   @Override
   @Transactional
   public ChatMessageResponse send(AuthenticatedUser principal, ChatSendMessageRequest request) {
-    if (request.type() == ChatMessageType.MEDIA || request.type() == ChatMessageType.BUB) {
+    if (request.type() == ChatMessageType.MEDIA
+        || request.type() == ChatMessageType.BUB
+        || request.type() == ChatMessageType.SAFE_NOTICE) {
       throw new BadRequestException("Use the dedicated endpoint for this message type");
     }
     UUID userId = userService.resolveInternalId(principal);
@@ -637,7 +639,8 @@ public class ChatServiceImpl implements ChatService {
             : context.reactionsByMessageId().getOrDefault(message.getId(), List.of()),
         deleted
             ? List.of()
-            : context.attachmentsByMessageId().getOrDefault(message.getId(), List.of()));
+            : context.attachmentsByMessageId().getOrDefault(message.getId(), List.of()),
+        deleted ? null : message.getSafeItemCount());
   }
 
   private ChatReplyPreviewResponse replyPreview(ChatMessage reply) {
@@ -650,6 +653,13 @@ public class ChatServiceImpl implements ChatService {
   }
 
   private String bodyForResponse(ChatMessage message, UUID viewerId, boolean viewerMessage) {
+    if (message.getType() == ChatMessageType.SAFE_NOTICE) {
+      Integer count = message.getSafeItemCount();
+      if (count == null || count == 1) {
+        return "1 file added to Safe";
+      }
+      return count + " files added to Safe";
+    }
     if (message.getType() != ChatMessageType.BUB) {
       return message.getBody();
     }
@@ -664,6 +674,13 @@ public class ChatServiceImpl implements ChatService {
   private String snippet(ChatMessage message) {
     if (message.getType() == ChatMessageType.BUB) {
       return "Bub";
+    }
+    if (message.getType() == ChatMessageType.SAFE_NOTICE) {
+      Integer count = message.getSafeItemCount();
+      if (count == null || count == 1) {
+        return "1 file added to Safe";
+      }
+      return count + " files added to Safe";
     }
     if (message.getType() == ChatMessageType.GIF) {
       return "GIF";

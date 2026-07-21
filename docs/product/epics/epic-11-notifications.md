@@ -25,8 +25,9 @@ As a user, I want to receive Safe notifications so that I know when memories are
 
 ### Acceptance Criteria
 
-- Notification includes ❤️.
+- External notification includes private copy without Safe thumbnails or media URLs.
 - Notification copy may say: `3 memories were added.`
+- In-chat Safe notices are covered by Epic 7.
 
 ## US-048 Quiet Hours
 

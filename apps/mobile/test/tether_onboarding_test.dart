@@ -21,6 +21,7 @@ import 'package:bub/src/features/home/home_dashboard_controller.dart';
 import 'package:bub/src/features/home/home_screen.dart';
 import 'package:bub/src/features/home/widgets/home_latest_bub_card.dart';
 import 'package:bub/src/features/home/widgets/home_today_moment_card.dart';
+import 'package:bub/src/features/safe/safe_controller.dart';
 import 'package:bub/src/features/tether_onboarding/tether_onboarding_screens.dart';
 import 'package:bub/src/theme/bub_colors.dart';
 import 'package:bub/src/theme/bub_theme.dart';
@@ -250,7 +251,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Safe'));
     await tester.pumpAndSettle();
-    expect(find.text('Safe section'), findsOneWidget);
+    expect(find.byKey(const Key('safe-screen')), findsOneWidget);
+    expect(find.byKey(const Key('safe-pin-entry')), findsOneWidget);
 
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
@@ -1205,6 +1207,11 @@ Widget _appWithAuthController(
           const ChatThreadResponse(hasActiveTether: false, messages: []),
         ),
       ),
+      safeControllerProvider.overrideWith(
+        () => _FakeSafeController(
+          const SafeStatus(tethered: true, pinConfigured: true),
+        ),
+      ),
       tetherScannerPreviewProvider.overrideWithValue(
         (context, scanWindow, onPayloadDetected) =>
             const ColoredBox(color: Colors.black),
@@ -1349,6 +1356,15 @@ class _FakeChatThreadController extends ChatThreadController {
 
   @override
   Future<ChatThreadResponse> build() async => thread;
+}
+
+class _FakeSafeController extends SafeController {
+  _FakeSafeController(this.status);
+
+  final SafeStatus status;
+
+  @override
+  Future<SafeStatus> build() async => status;
 }
 
 class _FakeAuthController extends AuthController {

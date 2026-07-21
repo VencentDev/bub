@@ -908,7 +908,7 @@
           },
           "type": {
             "type": "string",
-            "enum": ["TEXT", "EMOJI", "GIF", "MEDIA", "BUB"]
+            "enum": ["TEXT", "EMOJI", "GIF", "MEDIA", "BUB", "SAFE_NOTICE"]
           },
           "body": {
             "type": "string"
@@ -961,6 +961,10 @@
             "items": {
               "$ref": "#/components/schemas/ChatAttachmentResponse"
             }
+          },
+          "safeItemCount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

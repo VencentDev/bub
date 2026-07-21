@@ -17,6 +17,7 @@ import 'package:bub/src/features/chat/chat_controller.dart';
 import 'package:bub/src/features/chat/chat_media_picker.dart';
 import 'package:bub/src/features/chat/chat_section.dart';
 import 'package:bub/src/features/bub/bub_send_controller.dart';
+import 'package:bub/src/features/safe/safe_controller.dart';
 import 'package:bub/src/theme/bub_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -362,15 +363,20 @@ void main() {
     expect(find.byKey(const Key('chat-staged-media-tray')), findsOneWidget);
   });
 
-  testWidgets('safe media stages from inline picker before notice', (
+  testWidgets('selecting Safe prompts unlock when Safe is locked', (
     tester,
   ) async {
-    final controller = _FakeChatController(_thread());
+    final chatController = _FakeChatController(_thread());
+    final safeController = _FakeSafeController();
     final picker = _FakeChatMediaPicker(
       media: [ChatMediaItem(id: 'one', file: File('/tmp/one.png'))],
     );
     await tester.pumpWidget(
-      _appWithController(controller, mediaPicker: picker),
+      _appWithController(
+        chatController,
+        mediaPicker: picker,
+        safeController: safeController,
+      ),
     );
     await tester.pump();
 
@@ -382,17 +388,206 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('chat-staged-media-tray')), findsOneWidget);
-    expect(find.byKey(const Key('chat-staged-media-0')), findsOneWidget);
-    expect(find.text('New media added to Safe'), findsNothing);
-    expect(controller.uploadedPaths, isEmpty);
-    expect(picker.recentMediaCount, 1);
 
     await tester.tap(find.byKey(const Key('chat-send-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('New media added to Safe'), findsOneWidget);
+    expect(find.byKey(const Key('safe-pin-entry')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('safe-pin-entry')), '1234');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('safe-pin-submit')));
+    await tester.pumpAndSettle();
+
+    expect(safeController.unlockPins, ['1234']);
+    expect(safeController.uploadedSafePaths, ['/tmp/one.png']);
+    expect(chatController.uploadedPaths, isEmpty);
+  });
+
+  testWidgets('selecting Safe prompts PIN setup when Safe has no PIN', (
+    tester,
+  ) async {
+    final chatController = _FakeChatController(_thread());
+    final safeController = _FakeSafeController(pinConfigured: false);
+    final picker = _FakeChatMediaPicker(
+      media: [ChatMediaItem(id: 'one', file: File('/tmp/one.png'))],
+    );
+    await tester.pumpWidget(
+      _appWithController(
+        chatController,
+        mediaPicker: picker,
+        safeController: safeController,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-inline-media-safe-mode')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-inline-media-item-one')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('safe-setup-dialog')), findsOneWidget);
+    expect(find.text('Set a PIN for your Safe'), findsOneWidget);
+    expect(find.text('Your PIN is private to you.'), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('safe-pin-entry')), '1234');
+    await tester.enterText(
+      find.byKey(const Key('safe-pin-confirm-entry')),
+      '1234',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('safe-pin-submit')));
+    await tester.pumpAndSettle();
+
+    expect(safeController.setupPins, ['1234']);
+    expect(safeController.unlockPins, isEmpty);
+    expect(safeController.uploadedSafePaths, ['/tmp/one.png']);
+    expect(chatController.uploadedPaths, isEmpty);
+  });
+
+  testWidgets('safe media upload uses Safe controller and one-file notice', (
+    tester,
+  ) async {
+    final chatController = _FakeChatController(_thread());
+    final safeController = _FakeSafeController();
+    final picker = _FakeChatMediaPicker(
+      media: [ChatMediaItem(id: 'one', file: File('/tmp/one.png'))],
+    );
+    await tester.pumpWidget(
+      _appWithController(
+        chatController,
+        mediaPicker: picker,
+        safeController: safeController,
+        safeSession: const SafeSession(unlocked: true, pin: '1234'),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-inline-media-safe-mode')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-inline-media-item-one')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(safeController.uploadedSafePaths, ['/tmp/one.png']);
+    expect(chatController.uploadedPaths, isEmpty);
+    expect(find.text('1 file added to Safe'), findsOneWidget);
+    expect(find.byKey(const Key('chat-safe-notice-image')), findsOneWidget);
+    expect(find.byKey(const Key('chat-safe-notice-count')), findsOneWidget);
     expect(find.byKey(const Key('chat-staged-media-tray')), findsNothing);
-    expect(controller.uploadedPaths, isEmpty);
+  });
+
+  testWidgets('safe media upload renders plural count', (tester) async {
+    final safeController = _FakeSafeController();
+    final picker = _FakeChatMediaPicker(
+      media: [
+        ChatMediaItem(id: 'one', file: File('/tmp/one.png')),
+        ChatMediaItem(id: 'two', file: File('/tmp/two.png')),
+        ChatMediaItem(id: 'three', file: File('/tmp/three.png')),
+      ],
+    );
+    await tester.pumpWidget(
+      _appWithController(
+        _FakeChatController(_thread()),
+        mediaPicker: picker,
+        safeController: safeController,
+        safeSession: const SafeSession(unlocked: true, pin: '1234'),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-inline-media-safe-mode')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-inline-media-item-one')));
+    await tester.tap(find.byKey(const Key('chat-inline-media-item-two')));
+    await tester.tap(find.byKey(const Key('chat-inline-media-item-three')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(safeController.uploadedSafePaths, [
+      '/tmp/one.png',
+      '/tmp/two.png',
+      '/tmp/three.png',
+    ]);
+    expect(find.text('3 files added to Safe'), findsOneWidget);
+  });
+
+  testWidgets('safe media upload failure shows recoverable error', (
+    tester,
+  ) async {
+    final safeController = _FakeSafeController(uploadSucceeds: false);
+    final picker = _FakeChatMediaPicker(
+      media: [ChatMediaItem(id: 'one', file: File('/tmp/one.png'))],
+    );
+    await tester.pumpWidget(
+      _appWithController(
+        _FakeChatController(_thread()),
+        mediaPicker: picker,
+        safeController: safeController,
+        safeSession: const SafeSession(unlocked: true, pin: '1234'),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-inline-media-safe-mode')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-inline-media-item-one')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('chat-safe-upload-error')), findsOneWidget);
+    expect(find.text('1 file added to Safe'), findsNothing);
+  });
+
+  testWidgets('backend Safe notices render safe-box count', (tester) async {
+    await tester.pumpWidget(_app(AsyncData(_threadWithSafeNotice())));
+    await tester.pump();
+
+    expect(find.text('2 files added to Safe'), findsOneWidget);
+    expect(find.byKey(const Key('chat-safe-notice-image')), findsOneWidget);
+  });
+
+  testWidgets('tapping Safe notice opens Safe page and back returns to chat', (
+    tester,
+  ) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      _appWithController(
+        _FakeChatController(_threadWithSafeNotice()),
+        navigatorKey: navigatorKey,
+        safeSession: const SafeSession(unlocked: true, pin: '1234'),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-safe-notice-safe-notice')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byKey(const Key('safe-screen')), findsOneWidget);
+    expect(navigatorKey.currentState!.canPop(), isTrue);
+
+    final didPop = await navigatorKey.currentState!.maybePop();
+    expect(didPop, isTrue);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.byKey(const Key('safe-screen')), findsNothing);
+    expect(find.byKey(const Key('chat-fullscreen-header')), findsOneWidget);
+    expect(find.text('2 files added to Safe'), findsOneWidget);
   });
 
   testWidgets('quick media attachment stages previews before upload', (
@@ -894,16 +1089,26 @@ Widget _appWithController(
   VoidCallback? onBack,
   ChatMediaPicker? mediaPicker,
   BubSendController? bubSendController,
+  SafeController? safeController,
+  SafeSession safeSession = const SafeSession(unlocked: false),
+  GlobalKey<NavigatorState>? navigatorKey,
 }) {
   return ProviderScope(
     overrides: [
       chatThreadProvider.overrideWith(() => controller),
+      safeSessionProvider.overrideWith(
+        () => _FakeSafeSessionController(safeSession),
+      ),
+      safeControllerProvider.overrideWith(
+        () => safeController ?? _FakeSafeController(),
+      ),
       if (bubSendController != null)
         bubSendControllerProvider.overrideWith(() => bubSendController),
       if (mediaPicker != null)
         chatMediaPickerProvider.overrideWithValue(mediaPicker),
     ],
     child: MaterialApp(
+      navigatorKey: navigatorKey,
       theme: BubTheme.light,
       home: Scaffold(body: ChatSection(onBack: onBack)),
     ),
@@ -1014,6 +1219,23 @@ ChatThreadResponse _threadWithViewerBubMessage() {
         type: ChatMessageResponseType.bub,
         body: 'You bubbed Bob',
         createdAt: baseTime,
+      ),
+    ],
+  );
+}
+
+ChatThreadResponse _threadWithSafeNotice() {
+  return ChatThreadResponse(
+    hasActiveTether: true,
+    partnerDisplayName: 'Bob',
+    messages: [
+      ChatMessageResponse(
+        id: 'safe-notice',
+        viewerMessage: true,
+        type: ChatMessageResponseType.safeNotice,
+        body: '2 files added to Safe',
+        safeItemCount: 2,
+        createdAt: DateTime(2026, 7, 20, 9),
       ),
     ],
   );
@@ -1289,6 +1511,68 @@ class _FakeBubSendController extends BubSendController {
     await sendCompleter?.future;
     state = const AsyncData(null);
   }
+}
+
+class _FakeSafeController extends SafeController {
+  _FakeSafeController({this.uploadSucceeds = true, this.pinConfigured = true});
+
+  final bool uploadSucceeds;
+  final bool pinConfigured;
+  final uploadedSafePaths = <String>[];
+  final unlockPins = <String>[];
+  final setupPins = <String>[];
+
+  @override
+  Future<SafeStatus> build() async {
+    return SafeStatus(tethered: true, pinConfigured: pinConfigured);
+  }
+
+  @override
+  Future<void> unlock(String pin) async {
+    unlockPins.add(pin);
+    ref.read(safeSessionProvider.notifier).unlock(pin);
+  }
+
+  @override
+  Future<void> setupPin(String pin) async {
+    setupPins.add(pin);
+    ref.read(safeSessionProvider.notifier).unlock(pin);
+    state = const AsyncData(SafeStatus(tethered: true, pinConfigured: true));
+  }
+
+  @override
+  Future<SafeMediaUploadResult> uploadMedia(
+    List<File> files,
+    String pin,
+  ) async {
+    if (!uploadSucceeds) {
+      throw StateError('Upload failed');
+    }
+    uploadedSafePaths.addAll(files.map((file) => file.path));
+    return SafeMediaUploadResult(
+      items: [
+        for (final (index, file) in files.indexed)
+          SafeMediaItem(
+            id: 'safe-$index',
+            mediaType: file.path.endsWith('.mp4')
+                ? SafeMediaType.video
+                : SafeMediaType.image,
+            url: 'https://example.com/safe-$index',
+            createdAt: '2026-07-21T00:00:00Z',
+          ),
+      ],
+      notice: SafeChatNotice(id: 'notice', safeItemCount: files.length),
+    );
+  }
+}
+
+class _FakeSafeSessionController extends SafeSessionController {
+  _FakeSafeSessionController(this.initialSession);
+
+  final SafeSession initialSession;
+
+  @override
+  SafeSession build() => initialSession;
 }
 
 class _FakeChatMediaPicker implements ChatMediaPicker {

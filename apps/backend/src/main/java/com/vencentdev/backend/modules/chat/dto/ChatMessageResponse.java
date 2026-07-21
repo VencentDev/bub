@@ -23,4 +23,5 @@ public record ChatMessageResponse(
     boolean deletableForEveryone,
     String viewerReaction,
     List<ChatReactionSummaryResponse> reactions,
-    List<ChatAttachmentResponse> attachments) {}
+    List<ChatAttachmentResponse> attachments,
+    Integer safeItemCount) {}

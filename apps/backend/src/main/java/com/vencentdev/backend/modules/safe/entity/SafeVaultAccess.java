@@ -1,12 +1,10 @@
-package com.vencentdev.backend.modules.chat.entity;
+package com.vencentdev.backend.modules.safe.entity;
 
 import com.vencentdev.backend.common.persistence.AuditableEntity;
 import com.vencentdev.backend.modules.tether.entity.TetherConnection;
 import com.vencentdev.backend.modules.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -14,7 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.time.Instant;
+import jakarta.persistence.UniqueConstraint;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -25,14 +23,19 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "chat_messages")
+@Table(
+    name = "safe_vault_access",
+    uniqueConstraints =
+        @UniqueConstraint(
+            name = "uq_safe_vault_access_connection_user",
+            columnNames = {"tether_connection_id", "user_id"}))
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = false, onlyExplicitlyIncluded = true)
-public class ChatMessage extends AuditableEntity {
+public class SafeVaultAccess extends AuditableEntity {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
@@ -44,35 +47,9 @@ public class ChatMessage extends AuditableEntity {
   private TetherConnection tetherConnection;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "sender_user_id", nullable = false)
-  private User senderUser;
+  @JoinColumn(name = "user_id", nullable = false)
+  private User user;
 
-  @Enumerated(EnumType.STRING)
-  @Column(name = "message_type", nullable = false, length = 16)
-  private ChatMessageType type;
-
-  @Column(columnDefinition = "TEXT")
-  private String body;
-
-  @Column(name = "gif_url", columnDefinition = "TEXT")
-  private String gifUrl;
-
-  @Column(name = "gif_provider_id")
-  private String gifProviderId;
-
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "reply_to_message_id")
-  private ChatMessage replyToMessage;
-
-  @Column(name = "edited_at")
-  private Instant editedAt;
-
-  @Column(name = "deleted_for_everyone_at")
-  private Instant deletedForEveryoneAt;
-
-  @Column(name = "delivered_at", nullable = false)
-  private Instant deliveredAt;
-
-  @Column(name = "safe_item_count")
-  private Integer safeItemCount;
+  @Column(name = "pin_hash", nullable = false)
+  private String pinHash;
 }

@@ -1,4 +1,4 @@
-package com.vencentdev.backend.modules.chat.entity;
+package com.vencentdev.backend.modules.safe.entity;
 
 import com.vencentdev.backend.common.persistence.AuditableEntity;
 import com.vencentdev.backend.modules.tether.entity.TetherConnection;
@@ -25,14 +25,14 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "chat_messages")
+@Table(name = "safe_media_items")
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = false, onlyExplicitlyIncluded = true)
-public class ChatMessage extends AuditableEntity {
+public class SafeMediaItem extends AuditableEntity {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
@@ -44,35 +44,28 @@ public class ChatMessage extends AuditableEntity {
   private TetherConnection tetherConnection;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "sender_user_id", nullable = false)
-  private User senderUser;
+  @JoinColumn(name = "uploaded_by_user_id", nullable = false)
+  private User uploadedByUser;
 
   @Enumerated(EnumType.STRING)
-  @Column(name = "message_type", nullable = false, length = 16)
-  private ChatMessageType type;
+  @Column(name = "media_type", nullable = false, length = 16)
+  private SafeMediaType type;
 
-  @Column(columnDefinition = "TEXT")
-  private String body;
+  @Column(nullable = false, columnDefinition = "TEXT")
+  private String url;
 
-  @Column(name = "gif_url", columnDefinition = "TEXT")
-  private String gifUrl;
+  @Column(name = "storage_object_path", nullable = false, columnDefinition = "TEXT")
+  private String storageObjectPath;
 
-  @Column(name = "gif_provider_id")
-  private String gifProviderId;
+  @Column(name = "content_type", nullable = false)
+  private String contentType;
 
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "reply_to_message_id")
-  private ChatMessage replyToMessage;
+  @Column(name = "size_bytes", nullable = false)
+  private long sizeBytes;
 
-  @Column(name = "edited_at")
-  private Instant editedAt;
+  @Column(name = "original_filename", columnDefinition = "TEXT")
+  private String originalFilename;
 
-  @Column(name = "deleted_for_everyone_at")
-  private Instant deletedForEveryoneAt;
-
-  @Column(name = "delivered_at", nullable = false)
-  private Instant deliveredAt;
-
-  @Column(name = "safe_item_count")
-  private Integer safeItemCount;
+  @Column(name = "deleted_at")
+  private Instant deletedAt;
 }
