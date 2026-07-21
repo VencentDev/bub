@@ -437,12 +437,26 @@ class _SafeSetupPinDialogState extends State<_SafeSetupPinDialog> {
                           Expanded(
                             child: DecoratedBox(
                               decoration: BoxDecoration(
-                                gradient: BubColors.bubGradient,
+                                color: _canSubmit
+                                    ? null
+                                    : BubColors.white.withValues(
+                                        alpha: isDark ? 0.10 : 0.54,
+                                      ),
+                                gradient: _canSubmit
+                                    ? BubColors.bubGradient
+                                    : null,
                                 borderRadius: BorderRadius.circular(18),
+                                border: _canSubmit
+                                    ? null
+                                    : Border.all(
+                                        color: BubColors.pink.withValues(
+                                          alpha: isDark ? 0.16 : 0.22,
+                                        ),
+                                      ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: BubColors.pink.withValues(
-                                      alpha: 0.28,
+                                      alpha: _canSubmit ? 0.28 : 0.08,
                                     ),
                                     blurRadius: 18,
                                     offset: const Offset(0, 8),
@@ -458,6 +472,9 @@ class _SafeSetupPinDialogState extends State<_SafeSetupPinDialog> {
                                     borderRadius: BorderRadius.circular(18),
                                   ),
                                   minimumSize: const Size.fromHeight(48),
+                                  disabledBackgroundColor: Colors.transparent,
+                                  disabledForegroundColor: softTextColor
+                                      .withValues(alpha: 0.72),
                                 ),
                                 onPressed: _canSubmit ? _submit : null,
                                 child: const Text('Set PIN'),
