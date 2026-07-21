@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../theme/bub_colors.dart';
 import 'safe_controller.dart';
+import 'widgets/safe_delete_confirmation.dart';
+import 'widgets/safe_gallery_grid.dart';
+import 'widgets/safe_media_viewer.dart';
 
 class SafeScreen extends ConsumerWidget {
   const SafeScreen({super.key});
@@ -286,35 +289,215 @@ class _SafePinFlowState extends ConsumerState<_SafePinFlow> {
   }
 }
 
-class _SafeUnlockedState extends StatelessWidget {
+class _SafeUnlockedState extends ConsumerStatefulWidget {
   const _SafeUnlockedState();
+
+  @override
+  ConsumerState<_SafeUnlockedState> createState() => _SafeUnlockedStateState();
+}
+
+class _SafeUnlockedStateState extends ConsumerState<_SafeUnlockedState> {
+  late Future<List<SafeMediaItem>> _mediaFuture;
+  var _items = const <SafeMediaItem>[];
+  int? _selectedIndex;
+  String? _deleteError;
+  var _deleting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _mediaFuture = _loadMedia();
+  }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Center(
+      child: FutureBuilder<List<SafeMediaItem>>(
+        future: _mediaFuture,
+        builder: (context, snapshot) {
+          final loading = snapshot.connectionState != ConnectionState.done;
+          final error = snapshot.hasError;
+          return Stack(
+            key: const Key('safe-unlocked-state'),
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lock_open_rounded, size: 28),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            'Safe',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Lock Safe',
+                          onPressed: () =>
+                              ref.read(safeSessionProvider.notifier).lock(),
+                          icon: const Icon(Icons.lock_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_deleteError != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                      child: Text(
+                        _deleteError!,
+                        style: const TextStyle(
+                          color: BubColors.coral,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  Expanded(
+                    child: _buildBody(loading: loading, error: error),
+                  ),
+                ],
+              ),
+              if (_selectedIndex != null && _items.isNotEmpty)
+                SafeMediaViewer(
+                  items: _items,
+                  initialIndex: _selectedIndex!.clamp(0, _items.length - 1),
+                  deleting: _deleting,
+                  onClose: () => setState(() => _selectedIndex = null),
+                  onDelete: _confirmAndDeleteSelected,
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBody({required bool loading, required bool error}) {
+    if (loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (error) {
+      return Center(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
           child: Column(
-            key: const Key('safe-unlocked-state'),
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.lock_open_rounded, size: 44),
-              const SizedBox(height: 12),
               const Text(
-                'Safe is unlocked',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+                'Safe gallery could not load',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Your private memories will appear here.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Theme.of(context).hintColor),
-              ),
+              const SizedBox(height: 12),
+              FilledButton(onPressed: _reload, child: const Text('Retry')),
             ],
           ),
         ),
-      ),
+      );
+    }
+    if (_items.isEmpty) {
+      return Stack(
+        children: [
+          SafeGalleryGrid(items: _items, onOpen: (_) {}),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    'assets/illustrations/bears/safe-box.png',
+                    width: 130,
+                    height: 130,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Nothing in Safe yet',
+                    style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    return SafeGalleryGrid(
+      items: _items,
+      onOpen: (index) {
+        setState(() {
+          _selectedIndex = index;
+          _deleteError = null;
+        });
+      },
     );
+  }
+
+  Future<List<SafeMediaItem>> _loadMedia() async {
+    final pin = ref.read(safeSessionProvider).pin;
+    if (pin == null || pin.isEmpty) {
+      return const [];
+    }
+    final items = await ref
+        .read(safeControllerProvider.notifier)
+        .listMedia(pin);
+    if (mounted) {
+      setState(() => _items = items);
+    } else {
+      _items = items;
+    }
+    return items;
+  }
+
+  void _reload() {
+    setState(() {
+      _deleteError = null;
+      _mediaFuture = _loadMedia();
+    });
+  }
+
+  Future<void> _confirmAndDeleteSelected(int index) async {
+    final item = _items[index];
+    final confirmed = await showSafeDeleteConfirmation(context);
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    final pin = ref.read(safeSessionProvider).pin;
+    if (pin == null || pin.isEmpty) {
+      ref.read(safeSessionProvider.notifier).lock();
+      return;
+    }
+    setState(() {
+      _deleting = true;
+      _deleteError = null;
+    });
+    try {
+      await ref.read(safeControllerProvider.notifier).deleteMedia(item.id, pin);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _items = [
+          for (final current in _items)
+            if (current.id != item.id) current,
+        ];
+        _selectedIndex = null;
+        _mediaFuture = Future.value(_items);
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _deleteError = "Couldn't delete that Safe item.");
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _deleting = false);
+      }
+    }
   }
 }
