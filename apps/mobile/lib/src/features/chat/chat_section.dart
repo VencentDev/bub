@@ -20,6 +20,7 @@ import '../../api/generated/models/chat_send_message_request_type.dart';
 import '../../api/generated/models/chat_thread_response.dart';
 import '../../features/bub/bub_heart_burst.dart';
 import '../../features/bub/bub_send_controller.dart';
+import '../../features/safe/safe_controller.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
 import 'chat_controller.dart';
@@ -55,6 +56,7 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
   var _bubTapCount = 0;
   var _bubBurstTrigger = 0;
   var _sendingTapBub = false;
+  String? _safeUploadError;
   var _pendingTextSequence = 0;
   var _pendingMediaSequence = 0;
   var _pendingBubSequence = 0;
@@ -221,6 +223,19 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
                             child: EmojiPicker(
                               textEditingController: _composer,
                               config: const Config(height: 248),
+                            ),
+                          ),
+                        if (_safeUploadError != null)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                            child: Text(
+                              _safeUploadError!,
+                              key: const Key('chat-safe-upload-error'),
+                              style: const TextStyle(
+                                color: BubColors.coral,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                           ),
                       ],
@@ -402,12 +417,13 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
     });
   }
 
-  void _addSafeNotice() {
+  void _addSafeNotice(int count) {
     setState(() {
       _safeNotices.add(
         _LocalChatNotice(
           id: 'safe-${DateTime.now().microsecondsSinceEpoch}',
-          label: 'New media added to Safe',
+          label: _safeNoticeLabel(count),
+          safeItemCount: count,
         ),
       );
     });
@@ -484,7 +500,7 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
       _inlineMediaExpanded = false;
     });
     if (mode == _AttachmentMode.safe) {
-      _addSafeNotice();
+      await _sendSafeMedia(files);
       return;
     }
     final replyId = _replyTo?.id;
@@ -529,15 +545,121 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
   void _setReply(ChatMessageResponse message) {
     setState(() => _replyTo = message);
   }
+
+  Future<void> _sendSafeMedia(List<File> files) async {
+    final pin = await _safePinForUpload();
+    if (!mounted) {
+      return;
+    }
+    if (pin == null) {
+      setState(() {
+        _stagedMedia = files;
+        _stagedMediaIds = {for (final file in files) file.path};
+        _stagedMediaMode = _AttachmentMode.safe;
+      });
+      return;
+    }
+    setState(() => _safeUploadError = null);
+    try {
+      final result = await ref
+          .read(safeControllerProvider.notifier)
+          .uploadMedia(files, pin);
+      final count = result.notice?.safeItemCount ?? result.items.length;
+      _addSafeNotice(count == 0 ? files.length : count);
+      await ref.read(chatThreadProvider.notifier).refresh();
+    } catch (_) {
+      if (mounted) {
+        setState(() => _safeUploadError = "Couldn't add that to Safe.");
+      }
+    }
+  }
+
+  Future<String?> _safePinForUpload() {
+    final session = ref.read(safeSessionProvider);
+    final existingPin = session.unlocked ? session.pin : null;
+    if (existingPin != null && existingPin.isNotEmpty) {
+      return Future.value(existingPin);
+    }
+    return _showSafeUnlockDialog();
+  }
+
+  Future<String?> _showSafeUnlockDialog() {
+    final controller = TextEditingController();
+    String? error;
+    var submitting = false;
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final canSubmit =
+                RegExp(r'^\d{4,6}$').hasMatch(controller.text) && !submitting;
+            return AlertDialog(
+              title: const Text('Unlock Safe'),
+              content: TextField(
+                key: const Key('safe-pin-entry'),
+                controller: controller,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(labelText: 'PIN', errorText: error),
+                onChanged: (_) => setDialogState(() => error = null),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: submitting
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  key: const Key('safe-pin-submit'),
+                  onPressed: canSubmit
+                      ? () async {
+                          setDialogState(() => submitting = true);
+                          try {
+                            await ref
+                                .read(safeControllerProvider.notifier)
+                                .unlock(controller.text);
+                            if (dialogContext.mounted) {
+                              Navigator.of(dialogContext).pop(controller.text);
+                            }
+                          } catch (_) {
+                            setDialogState(() {
+                              submitting = false;
+                              error = 'Invalid Safe PIN';
+                            });
+                          }
+                        }
+                      : null,
+                  child: submitting
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Unlock'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 }
 
 enum _AttachmentMode { quick, safe }
 
 class _LocalChatNotice {
-  const _LocalChatNotice({required this.id, required this.label});
+  const _LocalChatNotice({
+    required this.id,
+    required this.label,
+    this.safeItemCount,
+  });
 
   final String id;
   final String label;
+  final int? safeItemCount;
 }
 
 class _UntetheredChatEmptyState extends StatelessWidget {
@@ -1101,6 +1223,16 @@ class _MessageList extends ConsumerWidget {
             ),
           );
         }
+        if (message.type == ChatMessageResponseType.safeNotice) {
+          final count = message.safeItemCount ?? 1;
+          return _LocalChatNoticeDivider(
+            notice: _LocalChatNotice(
+              id: message.id ?? 'safe-notice-$chronologicalIndex',
+              label: message.body ?? _safeNoticeLabel(count),
+              safeItemCount: count,
+            ),
+          );
+        }
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1232,6 +1364,46 @@ class _LocalChatNoticeDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (notice.safeItemCount != null) {
+      return Center(
+        child: Padding(
+          key: Key('chat-safe-notice-${notice.id}'),
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: BubColors.pink.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: BubColors.pink.withValues(alpha: 0.16)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    'assets/illustrations/bears/safe-box.png',
+                    key: const Key('chat-safe-notice-image'),
+                    width: 28,
+                    height: 28,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    notice.label,
+                    key: const Key('chat-safe-notice-count'),
+                    style: const TextStyle(
+                      color: BubColors.textSecondaryLight,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Center(
       child: Padding(
         key: Key('chat-safe-notice-${notice.id}'),
@@ -1256,6 +1428,10 @@ class _LocalChatNoticeDivider extends StatelessWidget {
       ),
     );
   }
+}
+
+String _safeNoticeLabel(int count) {
+  return count == 1 ? '1 file added to Safe' : '$count files added to Safe';
 }
 
 class _PendingMediaUploadBubble extends StatefulWidget {
