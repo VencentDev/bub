@@ -693,16 +693,59 @@ class _SafePinFlowState extends ConsumerState<_SafePinFlow> {
             ),
           ],
           const SizedBox(height: 18),
-          FilledButton.icon(
-            key: const Key('safe-pin-submit'),
-            onPressed: _canSubmit ? _submit : null,
-            icon: _submitting
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.lock_open_rounded),
-            label: Text(title),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: _canSubmit
+                  ? null
+                  : BubColors.white.withValues(
+                      alpha: Theme.of(context).brightness == Brightness.dark
+                          ? 0.10
+                          : 0.54,
+                    ),
+              gradient: _canSubmit ? BubColors.bubGradient : null,
+              borderRadius: BorderRadius.circular(18),
+              border: _canSubmit
+                  ? null
+                  : Border.all(
+                      color: BubColors.pink.withValues(
+                        alpha: Theme.of(context).brightness == Brightness.dark
+                            ? 0.16
+                            : 0.22,
+                      ),
+                    ),
+              boxShadow: [
+                BoxShadow(
+                  color: BubColors.pink.withValues(
+                    alpha: _canSubmit ? 0.28 : 0.08,
+                  ),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: FilledButton.icon(
+              key: const Key('safe-pin-submit'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                disabledBackgroundColor: Colors.transparent,
+                disabledForegroundColor: Theme.of(
+                  context,
+                ).hintColor.withValues(alpha: 0.72),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                minimumSize: const Size.fromHeight(48),
+              ),
+              onPressed: _canSubmit ? _submit : null,
+              icon: _submitting
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.lock_open_rounded),
+              label: Text(title),
+            ),
           ),
         ],
       ),
@@ -793,11 +836,26 @@ class _SafeUnlockedStateState extends ConsumerState<_SafeUnlockedState> {
                             ),
                           ),
                         ),
-                        IconButton(
-                          tooltip: 'Lock Safe',
+                        OutlinedButton.icon(
+                          key: const Key('safe-lock-toggle'),
                           onPressed: () =>
                               ref.read(safeSessionProvider.notifier).lock(),
-                          icon: const Icon(Icons.lock_rounded),
+                          icon: const Icon(Icons.lock_open_rounded, size: 18),
+                          label: const Text('Unlocked'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: BubColors.pink,
+                            side: BorderSide(
+                              color: BubColors.pink.withValues(alpha: 0.34),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 9,
+                            ),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
                         ),
                       ],
                     ),

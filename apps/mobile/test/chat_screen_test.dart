@@ -560,6 +560,36 @@ void main() {
     expect(find.byKey(const Key('chat-safe-notice-image')), findsOneWidget);
   });
 
+  testWidgets('tapping Safe notice opens Safe page and back returns to chat', (
+    tester,
+  ) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      _appWithController(
+        _FakeChatController(_threadWithSafeNotice()),
+        navigatorKey: navigatorKey,
+        safeSession: const SafeSession(unlocked: true, pin: '1234'),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-safe-notice-safe-notice')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byKey(const Key('safe-screen')), findsOneWidget);
+    expect(navigatorKey.currentState!.canPop(), isTrue);
+
+    final didPop = await navigatorKey.currentState!.maybePop();
+    expect(didPop, isTrue);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.byKey(const Key('safe-screen')), findsNothing);
+    expect(find.byKey(const Key('chat-fullscreen-header')), findsOneWidget);
+    expect(find.text('2 files added to Safe'), findsOneWidget);
+  });
+
   testWidgets('quick media attachment stages previews before upload', (
     tester,
   ) async {
@@ -1061,6 +1091,7 @@ Widget _appWithController(
   BubSendController? bubSendController,
   SafeController? safeController,
   SafeSession safeSession = const SafeSession(unlocked: false),
+  GlobalKey<NavigatorState>? navigatorKey,
 }) {
   return ProviderScope(
     overrides: [
@@ -1077,6 +1108,7 @@ Widget _appWithController(
         chatMediaPickerProvider.overrideWithValue(mediaPicker),
     ],
     child: MaterialApp(
+      navigatorKey: navigatorKey,
       theme: BubTheme.light,
       home: Scaffold(body: ChatSection(onBack: onBack)),
     ),

@@ -100,6 +100,24 @@ void main() {
 
     expect(find.byKey(const Key('safe-gallery-grid')), findsOneWidget);
     expect(find.byKey(const Key('safe-unlocked-state')), findsOneWidget);
+    expect(find.byKey(const Key('safe-lock-toggle')), findsOneWidget);
+    expect(find.text('Unlocked'), findsOneWidget);
+  });
+
+  testWidgets('Safe lock toggle returns to locked flow', (tester) async {
+    await tester.pumpWidget(
+      _safeApp(
+        const SafeStatus(tethered: true, pinConfigured: true),
+        session: const SafeSession(unlocked: true, pin: '1234'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('safe-lock-toggle')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('safe-pin-entry')), findsOneWidget);
+    expect(find.text('Unlock Safe'), findsWidgets);
   });
 
   testWidgets('Safe gallery renders newest items in backend order', (

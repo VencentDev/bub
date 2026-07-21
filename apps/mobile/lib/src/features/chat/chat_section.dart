@@ -21,6 +21,7 @@ import '../../api/generated/models/chat_thread_response.dart';
 import '../../features/bub/bub_heart_burst.dart';
 import '../../features/bub/bub_send_controller.dart';
 import '../../features/safe/safe_controller.dart';
+import '../../features/safe/safe_screen.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
 import 'chat_controller.dart';
@@ -1756,33 +1757,32 @@ class _LocalChatNoticeDivider extends StatelessWidget {
     if (notice.safeItemCount != null) {
       return Center(
         child: Padding(
-          key: Key('chat-safe-notice-${notice.id}'),
           padding: const EdgeInsets.symmetric(vertical: 7),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: BubColors.pink.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: BubColors.pink.withValues(alpha: 0.16)),
-            ),
+          child: InkWell(
+            key: Key('chat-safe-notice-${notice.id}'),
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => const SafeScreen())),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              child: Row(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Image.asset(
                     'assets/illustrations/bears/safe-box.png',
                     key: const Key('chat-safe-notice-image'),
-                    width: 28,
-                    height: 28,
+                    width: 64,
+                    height: 64,
                     fit: BoxFit.contain,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(height: 2),
                   Text(
                     notice.label,
                     key: const Key('chat-safe-notice-count'),
                     style: const TextStyle(
                       color: BubColors.textSecondaryLight,
-                      fontSize: 12,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
