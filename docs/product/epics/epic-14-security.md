@@ -9,6 +9,7 @@ As a user, I want to enable biometrics so that I can access protected areas secu
 ### Acceptance Criteria
 
 - User can enable biometric access.
+- Biometric Safe unlock is deferred; Epic 7 implements PIN unlock first.
 
 ## US-059 Change Password
 
