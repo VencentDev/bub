@@ -32,6 +32,7 @@ app:
     storage:
       moments-bucket: ${SUPABASE_MOMENTS_BUCKET:}
       chat-bucket: ${SUPABASE_CHAT_BUCKET:}
+      safe-bucket: ${SUPABASE_SAFE_BUCKET:}
 
 management:
   endpoints:

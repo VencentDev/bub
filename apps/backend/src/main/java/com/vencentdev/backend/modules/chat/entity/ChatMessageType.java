@@ -5,5 +5,6 @@ public enum ChatMessageType {
   EMOJI,
   GIF,
   MEDIA,
-  BUB
+  BUB,
+  SAFE_NOTICE
 }
