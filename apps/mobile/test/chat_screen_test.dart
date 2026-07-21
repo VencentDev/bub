@@ -404,6 +404,51 @@ void main() {
     expect(chatController.uploadedPaths, isEmpty);
   });
 
+  testWidgets('selecting Safe prompts PIN setup when Safe has no PIN', (
+    tester,
+  ) async {
+    final chatController = _FakeChatController(_thread());
+    final safeController = _FakeSafeController(pinConfigured: false);
+    final picker = _FakeChatMediaPicker(
+      media: [ChatMediaItem(id: 'one', file: File('/tmp/one.png'))],
+    );
+    await tester.pumpWidget(
+      _appWithController(
+        chatController,
+        mediaPicker: picker,
+        safeController: safeController,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-inline-media-safe-mode')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-inline-media-item-one')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('safe-setup-dialog')), findsOneWidget);
+    expect(find.text('Set a PIN for your Safe'), findsOneWidget);
+    expect(find.text('Your PIN is private to you.'), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('safe-pin-entry')), '1234');
+    await tester.enterText(
+      find.byKey(const Key('safe-pin-confirm-entry')),
+      '1234',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('safe-pin-submit')));
+    await tester.pumpAndSettle();
+
+    expect(safeController.setupPins, ['1234']);
+    expect(safeController.unlockPins, isEmpty);
+    expect(safeController.uploadedSafePaths, ['/tmp/one.png']);
+    expect(chatController.uploadedPaths, isEmpty);
+  });
+
   testWidgets('safe media upload uses Safe controller and one-file notice', (
     tester,
   ) async {
@@ -1437,21 +1482,30 @@ class _FakeBubSendController extends BubSendController {
 }
 
 class _FakeSafeController extends SafeController {
-  _FakeSafeController({this.uploadSucceeds = true});
+  _FakeSafeController({this.uploadSucceeds = true, this.pinConfigured = true});
 
   final bool uploadSucceeds;
+  final bool pinConfigured;
   final uploadedSafePaths = <String>[];
   final unlockPins = <String>[];
+  final setupPins = <String>[];
 
   @override
   Future<SafeStatus> build() async {
-    return const SafeStatus(tethered: true, pinConfigured: true);
+    return SafeStatus(tethered: true, pinConfigured: pinConfigured);
   }
 
   @override
   Future<void> unlock(String pin) async {
     unlockPins.add(pin);
     ref.read(safeSessionProvider.notifier).unlock(pin);
+  }
+
+  @override
+  Future<void> setupPin(String pin) async {
+    setupPins.add(pin);
+    ref.read(safeSessionProvider.notifier).unlock(pin);
+    state = const AsyncData(SafeStatus(tethered: true, pinConfigured: true));
   }
 
   @override
