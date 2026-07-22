@@ -11,6 +11,7 @@ import 'package:bub/src/auth/token_store.dart';
 import 'package:bub/src/core/dio_provider.dart';
 import 'package:bub/src/features/chat/chat_controller.dart';
 import 'package:bub/src/features/settings/settings_controller.dart';
+import 'package:bub/src/features/settings/settings_screen.dart';
 import 'package:bub/src/features/settings/settings_store.dart';
 import 'package:bub/src/theme/bub_colors.dart';
 import 'package:bub/src/theme/bub_theme.dart';
@@ -343,6 +344,90 @@ void main() {
         BubSettingsThemeMode.dark,
       );
     },
+  );
+
+  testWidgets('settings logout confirms before running logout action', (
+    tester,
+  ) async {
+    var logoutCount = 0;
+    await tester.pumpWidget(
+      _settingsApp(
+        SettingsScreen(
+          paired: true,
+          onLogout: () => logoutCount += 1,
+          onRemoveTether: () async {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('settings-logout-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Log out?'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Log out'));
+    await tester.pumpAndSettle();
+
+    expect(logoutCount, 1);
+  });
+
+  testWidgets('settings remove tether requires destructive confirmation', (
+    tester,
+  ) async {
+    var removeCount = 0;
+    await tester.pumpWidget(
+      _settingsApp(
+        SettingsScreen(
+          paired: true,
+          onLogout: () {},
+          onRemoveTether: () async => removeCount += 1,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('settings-remove-tether-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove tether?'), findsOneWidget);
+    expect(find.textContaining('Shared Moments'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Remove tether'));
+    await tester.pumpAndSettle();
+
+    expect(removeCount, 1);
+  });
+
+  testWidgets('settings disables remove tether when untethered', (
+    tester,
+  ) async {
+    var removeCount = 0;
+    await tester.pumpWidget(
+      _settingsApp(
+        SettingsScreen(
+          paired: false,
+          onLogout: () {},
+          onRemoveTether: () async => removeCount += 1,
+        ),
+      ),
+    );
+
+    final action = tester.widget<InkWell>(
+      find.byKey(const Key('settings-remove-tether-button')),
+    );
+
+    expect(action.onTap, isNull);
+    expect(removeCount, 0);
+  });
+}
+
+Widget _settingsApp(Widget child) {
+  return ProviderScope(
+    overrides: [
+      settingsStoreProvider.overrideWithValue(_MemorySettingsStore()),
+      settingsRemoteSyncProvider.overrideWithValue(_NoopSettingsRemoteSync()),
+    ],
+    child: MaterialApp(
+      theme: BubTheme.light,
+      home: Scaffold(body: child),
+    ),
   );
 }
 

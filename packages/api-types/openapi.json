@@ -537,6 +537,22 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": ["tether-controller"],
+        "operationId": "removeTether",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TetherStatusResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/home/dashboard": {

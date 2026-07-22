@@ -6,9 +6,16 @@ import 'settings_controller.dart';
 import 'settings_store.dart';
 
 class SettingsScreen extends ConsumerWidget {
-  const SettingsScreen({super.key, required this.paired});
+  const SettingsScreen({
+    super.key,
+    required this.paired,
+    required this.onLogout,
+    required this.onRemoveTether,
+  });
 
   final bool paired;
+  final VoidCallback onLogout;
+  final Future<void> Function() onRemoveTether;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -88,27 +95,82 @@ class SettingsScreen extends ConsumerWidget {
           title: 'Tether',
           children: [
             _SettingsRow(
+              actionKey: const Key('settings-remove-tether-button'),
               icon: Icons.favorite_rounded,
               title: 'Remove tether',
               value: paired ? 'Available' : 'Not tethered',
               destructive: paired,
+              enabled: paired,
+              onTap: paired ? () => _confirmRemoveTether(context) : null,
             ),
           ],
         ),
         const SizedBox(height: 14),
-        const _SettingsSection(
-          key: Key('settings-account-section'),
+        _SettingsSection(
+          key: const Key('settings-account-section'),
           title: 'Account',
           children: [
             _SettingsRow(
+              actionKey: const Key('settings-logout-button'),
               icon: Icons.logout_rounded,
               title: 'Logout',
               value: 'End session',
+              onTap: () => _confirmLogout(context),
             ),
           ],
         ),
       ],
     );
+  }
+
+  Future<void> _confirmLogout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text(
+          'You will need to sign in again to get back to Bub.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      onLogout();
+    }
+  }
+
+  Future<void> _confirmRemoveTether(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove tether?'),
+        content: const Text(
+          'This removes Shared Moments, Bub History, Shared Safe, and Chat History for this tether.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove tether'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await onRemoveTether();
+    }
   }
 
   static String _themeModeLabel(BubSettingsThemeMode value) {
@@ -195,6 +257,9 @@ class _SettingsRow extends StatelessWidget {
     this.value,
     this.trailing,
     this.destructive = false,
+    this.enabled = true,
+    this.actionKey,
+    this.onTap,
   });
 
   final IconData icon;
@@ -202,6 +267,9 @@ class _SettingsRow extends StatelessWidget {
   final String? value;
   final Widget? trailing;
   final bool destructive;
+  final bool enabled;
+  final Key? actionKey;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -214,53 +282,62 @@ class _SettingsRow extends StatelessWidget {
         ? BubColors.textSecondaryDark
         : BubColors.textSecondaryLight;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: accent, size: 19),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: destructive ? BubColors.coral : textColor,
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0,
+    return InkWell(
+      key: actionKey,
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(20),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: enabled ? 0.12 : 0.06),
+                shape: BoxShape.circle,
               ),
+              child: Icon(icon, color: enabled ? accent : valueColor, size: 19),
             ),
-          ),
-          const SizedBox(width: 12),
-          if (trailing case final trailing?)
-            trailing
-          else
-            Flexible(
+            const SizedBox(width: 12),
+            Expanded(
               child: Text(
-                value ?? '',
+                title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.end,
                 style: TextStyle(
-                  color: valueColor,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
+                  color: enabled
+                      ? destructive
+                            ? BubColors.coral
+                            : textColor
+                      : valueColor,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
                   letterSpacing: 0,
                 ),
               ),
             ),
-        ],
+            const SizedBox(width: 12),
+            if (trailing case final trailing?)
+              trailing
+            else
+              Flexible(
+                child: Text(
+                  value ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    color: valueColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
