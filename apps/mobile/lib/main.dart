@@ -3,6 +3,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'src/features/home/home_screen.dart';
+import 'src/features/settings/settings_controller.dart';
+import 'src/features/settings/settings_store.dart';
 import 'src/theme/bub_theme.dart';
 
 Future<void> main() async {
@@ -11,16 +13,22 @@ Future<void> main() async {
   runApp(const ProviderScope(child: MobileApp()));
 }
 
-class MobileApp extends StatelessWidget {
+class MobileApp extends ConsumerWidget {
   const MobileApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsControllerProvider).value;
+
     return MaterialApp(
       title: 'Bub',
       theme: BubTheme.light,
       darkTheme: BubTheme.dark,
-      themeMode: ThemeMode.system,
+      themeMode: switch (settings?.themeMode ?? BubSettingsThemeMode.system) {
+        BubSettingsThemeMode.system => ThemeMode.system,
+        BubSettingsThemeMode.light => ThemeMode.light,
+        BubSettingsThemeMode.dark => ThemeMode.dark,
+      },
       home: const HomeScreen(),
     );
   }

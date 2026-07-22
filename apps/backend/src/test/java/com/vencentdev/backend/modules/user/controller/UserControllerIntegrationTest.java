@@ -37,7 +37,9 @@ class UserControllerIntegrationTest extends IntegrationTestBase {
         .perform(get("/api/v1/users/me").with(currentUser("subject-1")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.email").value("old@example.com"))
-        .andExpect(jsonPath("$.displayName").value("Old Name"));
+        .andExpect(jsonPath("$.displayName").value("Old Name"))
+        .andExpect(jsonPath("$.themeMode").value("system"))
+        .andExpect(jsonPath("$.language").value("en"));
   }
 
   @Test
@@ -93,6 +95,37 @@ class UserControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.email").value("old@example.com"))
         .andExpect(jsonPath("$.displayName").value(nullValue()));
+  }
+
+  @Test
+  void patchWithPreferencesUpdatesThemeAndLanguage() throws Exception {
+    repository.save(user("subject-7", "old@example.com", "Old Name"));
+
+    mockMvc
+        .perform(patchMe("subject-7", "{\"themeMode\":\"dark\",\"language\":\"en\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.email").value("old@example.com"))
+        .andExpect(jsonPath("$.displayName").value("Old Name"))
+        .andExpect(jsonPath("$.themeMode").value("dark"))
+        .andExpect(jsonPath("$.language").value("en"));
+  }
+
+  @Test
+  void patchWithInvalidThemeReturnsBadRequest() throws Exception {
+    repository.save(user("subject-8", "old@example.com", "Old Name"));
+
+    mockMvc
+        .perform(patchMe("subject-8", "{\"themeMode\":\"midnight\"}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void patchWithInvalidLanguageReturnsBadRequest() throws Exception {
+    repository.save(user("subject-9", "old@example.com", "Old Name"));
+
+    mockMvc
+        .perform(patchMe("subject-9", "{\"language\":\"tl\"}"))
+        .andExpect(status().isBadRequest());
   }
 
   private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder patchMe(

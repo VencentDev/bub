@@ -7,6 +7,7 @@ import com.vencentdev.backend.modules.user.dto.UserUpdateRequest;
 import com.vencentdev.backend.modules.user.entity.User;
 import com.vencentdev.backend.modules.user.enums.KycStatus;
 import com.vencentdev.backend.modules.user.enums.Role;
+import com.vencentdev.backend.modules.user.enums.ThemeMode;
 import com.vencentdev.backend.modules.user.enums.UserType;
 import com.vencentdev.backend.modules.user.mapper.UserMapper;
 import com.vencentdev.backend.modules.user.repository.UserRepository;
@@ -71,6 +72,8 @@ public class UserServiceImpl implements UserService {
         .role(Role.USER)
         .userType(UserType.INDIVIDUAL)
         .kycStatus(KycStatus.NONE)
+        .themeMode(ThemeMode.SYSTEM)
+        .language("en")
         .build();
   }
 }

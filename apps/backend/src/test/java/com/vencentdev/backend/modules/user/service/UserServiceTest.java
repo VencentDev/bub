@@ -11,6 +11,7 @@ import com.vencentdev.backend.modules.user.dto.UserUpdateRequest;
 import com.vencentdev.backend.modules.user.entity.User;
 import com.vencentdev.backend.modules.user.enums.KycStatus;
 import com.vencentdev.backend.modules.user.enums.Role;
+import com.vencentdev.backend.modules.user.enums.ThemeMode;
 import com.vencentdev.backend.modules.user.enums.UserType;
 import com.vencentdev.backend.modules.user.mapper.UserMapperImpl;
 import com.vencentdev.backend.modules.user.repository.UserRepository;
@@ -47,6 +48,8 @@ class UserServiceTest {
 
     assertThat(first.email()).isEqualTo("user@example.com");
     assertThat(first.displayName()).isEqualTo("Example User");
+    assertThat(first.themeMode()).isEqualTo(ThemeMode.SYSTEM);
+    assertThat(first.language()).isEqualTo("en");
     assertThat(second.id()).isEqualTo(first.id());
     verify(repository).save(any(User.class));
   }
@@ -61,10 +64,35 @@ class UserServiceTest {
     var response =
         service.updateMe(
             principal,
-            new UserUpdateRequest(JsonNullable.of("new@example.com"), JsonNullable.undefined()));
+            new UserUpdateRequest(
+                JsonNullable.of("new@example.com"),
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.undefined()));
 
     assertThat(response.email()).isEqualTo("new@example.com");
     assertThat(response.displayName()).isEqualTo("Old Name");
+    verify(repository, never()).save(any(User.class));
+  }
+
+  @Test
+  void updateMeAppliesPresentPreferences() {
+    AuthenticatedUser principal =
+        new AuthenticatedUser("subject-3", "user@example.com", "Example User", Set.of("USER"));
+    User stored = user("subject-3", "old@example.com", "Old Name");
+    when(repository.findByExternalId("subject-3")).thenReturn(Optional.of(stored));
+
+    var response =
+        service.updateMe(
+            principal,
+            new UserUpdateRequest(
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.of(ThemeMode.DARK),
+                JsonNullable.of("en")));
+
+    assertThat(response.themeMode()).isEqualTo(ThemeMode.DARK);
+    assertThat(response.language()).isEqualTo("en");
     verify(repository, never()).save(any(User.class));
   }
 

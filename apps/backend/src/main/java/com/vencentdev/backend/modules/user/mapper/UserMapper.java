@@ -17,5 +17,11 @@ public abstract class UserMapper {
     if (request.displayName() != null && request.displayName().isPresent()) {
       target.setDisplayName(request.displayName().get());
     }
+    if (request.themeMode() != null && request.themeMode().isPresent()) {
+      target.setThemeMode(request.themeMode().get());
+    }
+    if (request.language() != null && request.language().isPresent()) {
+      target.setLanguage(request.language().get());
+    }
   }
 }

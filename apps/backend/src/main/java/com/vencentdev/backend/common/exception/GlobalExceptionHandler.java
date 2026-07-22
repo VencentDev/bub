@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -40,6 +41,11 @@ public class GlobalExceptionHandler {
                         violation.getPropertyPath().toString(), violation.getMessage()))
             .toList();
     return error(HttpStatus.BAD_REQUEST, "CONSTRAINT_VIOLATION", "Validation failed", errors);
+  }
+
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  ResponseEntity<ApiError> handleUnreadableMessage(HttpMessageNotReadableException exception) {
+    return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST_BODY", "Invalid request body", List.of());
   }
 
   @ExceptionHandler(ResourceNotFoundException.class)

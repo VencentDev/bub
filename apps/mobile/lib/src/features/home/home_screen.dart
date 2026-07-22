@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../../auth/auth_controller.dart';
 import '../../auth/auth_state.dart';
+import '../../core/dio_provider.dart';
 import '../../core/env.dart';
 import '../../features/bub/bub_heart_burst.dart';
 import '../../features/bub/bub_send_controller.dart';
@@ -18,6 +19,7 @@ import '../../features/home/widgets/home_mood_card.dart';
 import '../../features/home/widgets/home_partner_card.dart';
 import '../../features/home/widgets/home_today_moment_card.dart';
 import '../../features/safe/safe_screen.dart';
+import '../../features/settings/settings_screen.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
 
@@ -288,32 +290,6 @@ class _BubHomeState extends ConsumerState<_BubHome> {
     ref.read(firstBubTutorialLauncherProvider)(context, _bubNavTargetKey);
   }
 
-  Future<void> _confirmLogout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Log out?'),
-        content: const Text(
-          'You will need to sign in again to get back to Bub.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Log out'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted || confirmed != true) {
-      return;
-    }
-    widget.onLogout();
-  }
-
   Future<void> _sendBub() async {
     if (!widget.paired) {
       _showBubToast(
@@ -343,6 +319,33 @@ class _BubHomeState extends ConsumerState<_BubHome> {
         context,
         message: _bubSendMessage(error),
         icon: Icons.favorite_border_rounded,
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _removeTether() async {
+    try {
+      await ref.read(restClientProvider).tetherController.removeTether();
+      await ref
+          .read(authControllerProvider.notifier)
+          .refreshTetherStatus(markSkipped: true);
+      if (!mounted) {
+        return;
+      }
+      _showBubToast(
+        context,
+        message: 'Tether removed',
+        icon: Icons.favorite_border_rounded,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showBubToast(
+        context,
+        message: 'Tether could not be removed. Please try again.',
+        icon: Icons.error_outline_rounded,
         isError: true,
       );
     }
@@ -389,13 +392,7 @@ class _BubHomeState extends ConsumerState<_BubHome> {
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      appBar: AppBar(
-        titleSpacing: 0,
-        title: const _BubAppBarLogo(),
-        actions: [
-          TextButton(onPressed: _confirmLogout, child: const Text('Logout')),
-        ],
-      ),
+      appBar: AppBar(titleSpacing: 0, title: const _BubAppBarLogo()),
       extendBody: true,
       body: Stack(
         fit: StackFit.expand,
@@ -406,6 +403,8 @@ class _BubHomeState extends ConsumerState<_BubHome> {
               paired: widget.paired,
               onOpenSafe: () => _selectSection(_BubHomeSection.safe),
               onStartFirstBub: _startFirstBubTutorial,
+              onLogout: widget.onLogout,
+              onRemoveTether: _removeTether,
             ),
           ),
           Positioned.fill(child: BubHeartBurst(trigger: _heartBurstTrigger)),
@@ -438,13 +437,13 @@ class _BubAppBarLogo extends StatelessWidget {
 
     return SizedBox(
       key: const Key('bub-app-bar-logo'),
-      height: 30,
+      height: 35,
       width: 120,
       child: ClipRect(
         child: Align(
           alignment: Alignment.center,
           child: SizedBox(
-            height: 30,
+            height: 35,
             width: 120,
             child: FittedBox(
               alignment: Alignment.center,
@@ -472,12 +471,16 @@ class _BubHomeSectionBody extends ConsumerWidget {
     required this.paired,
     required this.onOpenSafe,
     required this.onStartFirstBub,
+    required this.onLogout,
+    required this.onRemoveTether,
   });
 
   final _BubHomeSection section;
   final bool paired;
   final VoidCallback onOpenSafe;
   final VoidCallback onStartFirstBub;
+  final VoidCallback onLogout;
+  final Future<void> Function() onRemoveTether;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -489,15 +492,10 @@ class _BubHomeSectionBody extends ConsumerWidget {
       if (section == _BubHomeSection.safe) {
         return const SafeScreen();
       }
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
-          child: Text(
-            section.label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-          ),
-        ),
+      return SettingsScreen(
+        paired: paired,
+        onLogout: onLogout,
+        onRemoveTether: onRemoveTether,
       );
     }
 

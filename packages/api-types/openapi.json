@@ -537,6 +537,22 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": ["tether-controller"],
+        "operationId": "removeTether",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/TetherStatusResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/home/dashboard": {
@@ -1060,6 +1076,14 @@
           },
           "displayName": {
             "$ref": "#/components/schemas/JsonNullableString"
+          },
+          "themeMode": {
+            "type": "string",
+            "enum": ["system", "light", "dark"]
+          },
+          "language": {
+            "type": "string",
+            "enum": ["en"]
           }
         }
       },
@@ -1087,6 +1111,14 @@
           "kycStatus": {
             "type": "string",
             "enum": ["NONE", "PENDING", "VERIFIED", "REJECTED"]
+          },
+          "themeMode": {
+            "type": "string",
+            "enum": ["system", "light", "dark"]
+          },
+          "language": {
+            "type": "string",
+            "enum": ["en"]
           },
           "createdAt": {
             "type": "string",
