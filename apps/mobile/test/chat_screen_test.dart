@@ -82,6 +82,65 @@ void main() {
     expect(find.byKey(const Key('chat-message-row-partner')), findsOneWidget);
   });
 
+  testWidgets('offline presence 3 hours ago renders last-seen copy', (
+    tester,
+  ) async {
+    final now = DateTime(2026, 7, 22, 12);
+    await tester.pumpWidget(
+      _appWithController(
+        _FakeChatController(
+          _threadWithPresence(
+            lastSeenAt: now.subtract(const Duration(hours: 3)),
+          ),
+        ),
+        presenceNow: now,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Last seen 09:00'), findsOneWidget);
+  });
+
+  testWidgets('offline presence exactly 24 hours ago renders last-seen copy', (
+    tester,
+  ) async {
+    final now = DateTime(2026, 7, 22, 12);
+    await tester.pumpWidget(
+      _appWithController(
+        _FakeChatController(
+          _threadWithPresence(
+            lastSeenAt: now.subtract(const Duration(hours: 24)),
+          ),
+        ),
+        presenceNow: now,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Last seen 12:00'), findsOneWidget);
+  });
+
+  testWidgets('offline presence 25 hours ago hides last-seen copy', (
+    tester,
+  ) async {
+    final now = DateTime(2026, 7, 22, 12);
+    await tester.pumpWidget(
+      _appWithController(
+        _FakeChatController(
+          _threadWithPresence(
+            lastSeenAt: now.subtract(const Duration(hours: 25)),
+          ),
+        ),
+        presenceNow: now,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Bob'), findsOneWidget);
+    expect(find.textContaining('Last seen'), findsNothing);
+    expect(find.text('Offline'), findsNothing);
+  });
+
   testWidgets('bub messages render as timeline notices', (tester) async {
     await tester.pumpWidget(_app(AsyncData(_threadWithBubMessage())));
     await tester.pump();
@@ -92,6 +151,22 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const Key('chat-message-row-bub-message')), findsNothing);
+  });
+
+  testWidgets('scrolling near oldest messages asks controller to load older', (
+    tester,
+  ) async {
+    final controller = _FakeChatController(_threadWithManyMessages());
+    await tester.pumpWidget(_appWithController(controller));
+    await tester.pump();
+
+    await tester.drag(
+      find.byKey(const Key('chat-message-list')),
+      const Offset(0, -1800),
+    );
+    await tester.pump();
+
+    expect(controller.loadOlderCount, greaterThan(0));
   });
 
   testWidgets('blank send is ignored and valid text send clears input', (
@@ -1092,6 +1167,7 @@ Widget _appWithController(
   SafeController? safeController,
   SafeSession safeSession = const SafeSession(unlocked: false),
   GlobalKey<NavigatorState>? navigatorKey,
+  DateTime? presenceNow,
 }) {
   return ProviderScope(
     overrides: [
@@ -1106,12 +1182,29 @@ Widget _appWithController(
         bubSendControllerProvider.overrideWith(() => bubSendController),
       if (mediaPicker != null)
         chatMediaPickerProvider.overrideWithValue(mediaPicker),
+      if (presenceNow != null)
+        chatPresenceClockProvider.overrideWithValue(() => presenceNow),
     ],
     child: MaterialApp(
       navigatorKey: navigatorKey,
       theme: BubTheme.light,
       home: Scaffold(body: ChatSection(onBack: onBack)),
     ),
+  );
+}
+
+ChatThreadResponse _threadWithPresence({required DateTime lastSeenAt}) {
+  return ChatThreadResponse(
+    hasActiveTether: true,
+    tetherConnectionId: 'tether-a',
+    partnerDisplayName: 'Bob',
+    state: ChatStateResponse(
+      partnerPresence: ChatPresenceResponse(
+        status: ChatPresenceResponseStatus.offline,
+        lastSeenAt: lastSeenAt,
+      ),
+    ),
+    messages: const [],
   );
 }
 
@@ -1179,6 +1272,27 @@ ChatThreadResponse _threadWithOutgoingRun() {
         deliveryState: ChatMessageResponseDeliveryState.seen,
         createdAt: baseTime.add(const Duration(minutes: 1)),
       ),
+    ],
+  );
+}
+
+ChatThreadResponse _threadWithManyMessages() {
+  final baseTime = DateTime(2026, 7, 20, 9);
+  return ChatThreadResponse(
+    hasActiveTether: true,
+    tetherConnectionId: 'tether-a',
+    partnerDisplayName: 'Bob',
+    hasMoreBefore: true,
+    oldestCursor: baseTime.toUtc().toIso8601String(),
+    messages: [
+      for (var index = 0; index < 30; index++)
+        ChatMessageResponse(
+          id: 'message-$index',
+          viewerMessage: index.isEven,
+          type: ChatMessageResponseType.text,
+          body: 'message $index',
+          createdAt: baseTime.add(Duration(minutes: index)),
+        ),
     ],
   );
 }
@@ -1451,9 +1565,15 @@ class _FakeChatController extends ChatThreadController {
   final sentBodies = <String>[];
   final reactions = <String>[];
   final uploadedPaths = <String>[];
+  var loadOlderCount = 0;
 
   @override
   Future<ChatThreadResponse> build() async => current;
+
+  @override
+  Future<void> refresh() async {
+    state = AsyncData(current);
+  }
 
   @override
   Future<void> sendMessage({
@@ -1484,6 +1604,11 @@ class _FakeChatController extends ChatThreadController {
   }
 
   @override
+  Future<void> loadOlder() async {
+    loadOlderCount += 1;
+  }
+
+  @override
   Future<void> updatePartnerNickname(String nickname) async {
     current = ChatThreadResponse(
       hasActiveTether: current.hasActiveTether,
@@ -1491,6 +1616,8 @@ class _FakeChatController extends ChatThreadController {
       partnerDisplayName: nickname.trim(),
       state: current.state,
       messages: current.messages,
+      hasMoreBefore: current.hasMoreBefore,
+      oldestCursor: current.oldestCursor,
     );
     state = AsyncData(current);
   }

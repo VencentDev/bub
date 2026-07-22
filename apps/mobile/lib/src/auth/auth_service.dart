@@ -53,6 +53,8 @@ class AuthService {
     return stillValid ? token : refresh();
   }
 
+  Future<String?> cacheUserId() => _store.refreshToken;
+
   Future<String?> refresh() async {
     final refreshToken = await _store.refreshToken;
     if (refreshToken == null) return null;

@@ -12,6 +12,7 @@ import '../../core/env.dart';
 import '../../features/bub/bub_heart_burst.dart';
 import '../../features/bub/bub_send_controller.dart';
 import '../../features/bub/first_bub_tutorial.dart';
+import '../../features/chat/chat_cache_store.dart';
 import '../../features/chat/chat_section.dart';
 import '../../features/home/home_dashboard_controller.dart';
 import '../../features/home/widgets/home_latest_bub_card.dart';
@@ -327,7 +328,26 @@ class _BubHomeState extends ConsumerState<_BubHome> {
 
   Future<void> _removeTether() async {
     try {
+      final userId = await ref.read(authServiceProvider).cacheUserId();
+      final cachedThread = userId == null
+          ? null
+          : await ref
+                .read(chatCacheStoreProvider)
+                .readActiveLatest(userId: userId);
       await ref.read(restClientProvider).tetherController.removeTether();
+      if (userId != null) {
+        final tetherConnectionId = cachedThread?.tetherConnectionId;
+        if (tetherConnectionId == null) {
+          await ref.read(chatCacheStoreProvider).clearUser(userId: userId);
+        } else {
+          await ref
+              .read(chatCacheStoreProvider)
+              .clearTether(
+                userId: userId,
+                tetherConnectionId: tetherConnectionId,
+              );
+        }
+      }
       await ref
           .read(authControllerProvider.notifier)
           .refreshTetherStatus(markSkipped: true);

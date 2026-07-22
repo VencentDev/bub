@@ -1,5 +1,7 @@
 # F04 Chat Presence Last Seen
 
+Status: Done
+
 ## Goal
 
 Remove stale last-seen copy below the chat profile when the partner has been offline for more than one full day.
@@ -34,3 +36,14 @@ Remove stale last-seen copy below the chat profile when the partner has been off
 ## Done Criteria
 
 - Chat header no longer shows stale last-seen copy after more than one day offline.
+
+## Implementation Summary
+
+- Added `shouldShowLastSeen(lastSeenAt, now)` and a chat presence clock provider for deterministic tests.
+- Chat header still renders `Online` for online partners.
+- Chat header renders concise `Last seen HH:mm` copy only when the partner was seen within the last 24 hours, including exactly 24 hours.
+- Chat header hides stale/missing offline presence copy after more than 24 hours without hiding the partner name or header actions.
+
+## Verification
+
+- `cd apps/mobile && flutter test test/chat_screen_test.dart --plain-name "presence"`

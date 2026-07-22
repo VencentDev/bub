@@ -22,10 +22,10 @@ Add Filipino language support, top-nav notifications, safer untether behavior, S
 - `frontend/F01-filipino-localization.md`
 - `frontend/F02-safe-pin-recovery-deferred-state-done.md`
 - `frontend/F03-top-nav-notifications-done.md`
-- `frontend/F04-chat-presence-last-seen.md`
+- `frontend/F04-chat-presence-last-seen-done.md`
 - `frontend/F05-safe-untethered-and-new-tether-states-done.md`
 - `frontend/F06-untether-warning-copy-done.md`
-- `frontend/F07-chat-and-image-caching.md`
+- `frontend/F07-chat-and-image-caching-done.md`
 - `frontend/F08-page-loading-states.md`
 - `frontend/F09-legal-policy-settings-pages.md`
 
@@ -45,8 +45,8 @@ Add Filipino language support, top-nav notifications, safer untether behavior, S
 5. `backend/B02-notification-center-contract-done.md`
 6. `frontend/F03-top-nav-notifications-done.md`
 7. `backend/B03-chat-pagination-and-cache-contract-done.md`
-8. `frontend/F07-chat-and-image-caching.md`
-9. `frontend/F04-chat-presence-last-seen.md`
+8. `frontend/F07-chat-and-image-caching-done.md`
+9. `frontend/F04-chat-presence-last-seen-done.md`
 10. `frontend/F08-page-loading-states.md`
 11. `frontend/F01-filipino-localization.md`
 12. `backend/B04-legal-policy-versioning.md`

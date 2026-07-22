@@ -27,6 +27,17 @@ import '../../theme/bub_colors.dart';
 import 'chat_controller.dart';
 import 'chat_media_picker.dart';
 
+final chatPresenceClockProvider = Provider<DateTime Function()>(
+  (ref) => DateTime.now,
+);
+
+bool shouldShowLastSeen(DateTime? lastSeenAt, DateTime now) {
+  if (lastSeenAt == null) {
+    return false;
+  }
+  return now.difference(lastSeenAt) <= const Duration(hours: 24);
+}
+
 class ChatSection extends ConsumerStatefulWidget {
   const ChatSection({super.key, this.onBack});
 
@@ -176,6 +187,7 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
                     onBack: widget.onBack,
                     quickImages: _quickImages(data.messages ?? const []),
                     onSaveNickname: _savePartnerNickname,
+                    presenceNow: ref.watch(chatPresenceClockProvider)(),
                   ),
                   Expanded(
                     child: _MessageList(
@@ -183,6 +195,9 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
                       localNotices: [..._safeNotices, ..._pendingBubNotices],
                       pendingTextMessages: _pendingTextMessages,
                       pendingMediaMessages: _pendingMediaMessages,
+                      hasMoreBefore: data.hasMoreBefore == true,
+                      onLoadOlder: () =>
+                          ref.read(chatThreadProvider.notifier).loadOlder(),
                     ),
                   ),
                   SafeArea(
@@ -1101,19 +1116,21 @@ class _ChatHeader extends StatelessWidget {
     required this.onBack,
     required this.quickImages,
     required this.onSaveNickname,
+    required this.presenceNow,
   });
 
   final ChatThreadResponse thread;
   final VoidCallback? onBack;
   final List<ChatAttachmentResponse> quickImages;
   final Future<void> Function(String nickname) onSaveNickname;
+  final DateTime presenceNow;
 
   @override
   Widget build(BuildContext context) {
     final partner = thread.partnerDisplayName?.trim();
     final typing = thread.state?.partnerTyping == true;
     final presence = thread.state?.partnerPresence;
-    final status = _presenceText(presence);
+    final status = _presenceText(presence, presenceNow);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Material(
@@ -1163,12 +1180,13 @@ class _ChatHeader extends StatelessWidget {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      Text(
-                        status,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
+                      if (status != null)
+                        Text(
+                          status,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
                       if (typing)
                         const Text(
                           'Typing...',
@@ -1195,15 +1213,15 @@ class _ChatHeader extends StatelessWidget {
     );
   }
 
-  String _presenceText(ChatPresenceResponse? presence) {
+  String? _presenceText(ChatPresenceResponse? presence, DateTime now) {
     if (presence?.status == ChatPresenceResponseStatus.online) {
       return 'Online';
     }
     final lastSeen = presence?.lastSeenAt;
-    if (lastSeen != null) {
+    if (lastSeen != null && shouldShowLastSeen(lastSeen, now)) {
       return 'Last seen ${_timeLabel(lastSeen)}';
     }
-    return 'Offline';
+    return null;
   }
 
   String _timeLabel(DateTime dateTime) {
@@ -1558,12 +1576,16 @@ class _MessageList extends ConsumerWidget {
     required this.localNotices,
     required this.pendingTextMessages,
     required this.pendingMediaMessages,
+    required this.hasMoreBefore,
+    required this.onLoadOlder,
   });
 
   final List<ChatMessageResponse> messages;
   final List<_LocalChatNotice> localNotices;
   final List<_PendingTextMessage> pendingTextMessages;
   final List<_PendingMediaMessage> pendingMediaMessages;
+  final bool hasMoreBefore;
+  final VoidCallback onLoadOlder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1576,70 +1598,83 @@ class _MessageList extends ConsumerWidget {
       for (final pendingMedia in pendingMediaMessages)
         _ChatTimelineItem.pendingMedia(pendingMedia),
     ];
-    return ListView.separated(
-      reverse: true,
-      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-      itemBuilder: (context, index) {
-        final chronologicalIndex = items.length - 1 - index;
-        final item = items[chronologicalIndex];
-        final notice = item.notice;
-        if (notice != null) {
-          return _LocalChatNoticeDivider(notice: notice);
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        final metrics = notification.metrics;
+        if (hasMoreBefore &&
+            metrics.axis == Axis.vertical &&
+            (metrics.pixels <= metrics.minScrollExtent + 160 ||
+                metrics.pixels >= metrics.maxScrollExtent - 160)) {
+          onLoadOlder();
         }
-        final pendingMedia = item.pendingMedia;
-        if (pendingMedia != null) {
-          return _MessageBubble(
-            message: pendingMedia.toMessageResponse(),
-            showDeliveryState: false,
-            showSendingState: true,
-            onReply: () {},
-          );
-        }
-        final pendingText = item.pendingText;
-        if (pendingText != null) {
-          return _MessageBubble(
-            message: pendingText.toMessageResponse(),
-            showDeliveryState: false,
-            showSendingState: true,
-            onReply: () {},
-          );
-        }
-        final message = item.message!;
-        if (message.type == ChatMessageResponseType.bub) {
-          return _LocalChatNoticeDivider(
-            notice: _LocalChatNotice(
-              id: 'bub-${message.id ?? chronologicalIndex}',
-              label: message.body ?? 'Bub',
-            ),
-          );
-        }
-        if (message.type == ChatMessageResponseType.safeNotice) {
-          final count = message.safeItemCount ?? 1;
-          return _LocalChatNoticeDivider(
-            notice: _LocalChatNotice(
-              id: message.id ?? 'safe-notice-$chronologicalIndex',
-              label: message.body ?? _safeNoticeLabel(count),
-              safeItemCount: count,
-            ),
-          );
-        }
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_hasTimeGapBefore(chronologicalIndex))
-              _TimeDivider(message: message),
-            _MessageBubble(
-              message: message,
-              showDeliveryState: message.id == latestOutgoingStatusMessageId,
-              onReply: () => context
-                  .findAncestorStateOfType<_ChatSectionState>()
-                  ?._setReply(message),
-            ),
-          ],
-        );
+        return false;
       },
-      separatorBuilder: (_, _) => const SizedBox(height: 4),
-      itemCount: items.length,
+      child: ListView.separated(
+        key: const Key('chat-message-list'),
+        reverse: true,
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+        itemBuilder: (context, index) {
+          final chronologicalIndex = items.length - 1 - index;
+          final item = items[chronologicalIndex];
+          final notice = item.notice;
+          if (notice != null) {
+            return _LocalChatNoticeDivider(notice: notice);
+          }
+          final pendingMedia = item.pendingMedia;
+          if (pendingMedia != null) {
+            return _MessageBubble(
+              message: pendingMedia.toMessageResponse(),
+              showDeliveryState: false,
+              showSendingState: true,
+              onReply: () {},
+            );
+          }
+          final pendingText = item.pendingText;
+          if (pendingText != null) {
+            return _MessageBubble(
+              message: pendingText.toMessageResponse(),
+              showDeliveryState: false,
+              showSendingState: true,
+              onReply: () {},
+            );
+          }
+          final message = item.message!;
+          if (message.type == ChatMessageResponseType.bub) {
+            return _LocalChatNoticeDivider(
+              notice: _LocalChatNotice(
+                id: 'bub-${message.id ?? chronologicalIndex}',
+                label: message.body ?? 'Bub',
+              ),
+            );
+          }
+          if (message.type == ChatMessageResponseType.safeNotice) {
+            final count = message.safeItemCount ?? 1;
+            return _LocalChatNoticeDivider(
+              notice: _LocalChatNotice(
+                id: message.id ?? 'safe-notice-$chronologicalIndex',
+                label: message.body ?? _safeNoticeLabel(count),
+                safeItemCount: count,
+              ),
+            );
+          }
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_hasTimeGapBefore(chronologicalIndex))
+                _TimeDivider(message: message),
+              _MessageBubble(
+                message: message,
+                showDeliveryState: message.id == latestOutgoingStatusMessageId,
+                onReply: () => context
+                    .findAncestorStateOfType<_ChatSectionState>()
+                    ?._setReply(message),
+              ),
+            ],
+          );
+        },
+        separatorBuilder: (_, _) => const SizedBox(height: 4),
+        itemCount: items.length,
+      ),
     );
   }
 

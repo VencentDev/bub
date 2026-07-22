@@ -1,5 +1,7 @@
 # F07 Chat And Image Caching
 
+Status: Done
+
 ## Goal
 
 Cache recent chat messages and media images locally so recent chats open quickly and images do not reload every login.
@@ -44,3 +46,18 @@ Cache recent chat messages and media images locally so recent chats open quickly
 
 - Opening chat no longer waits for a full conversation fetch when cached recent messages exist.
 - Older messages still load on demand without duplicate rows.
+
+## Implementation Summary
+
+- Added `ChatCacheStore` with secure-storage persistence and an in-memory test store.
+- Cached threads are scoped by authenticated user id and active tether id.
+- Cached message history is capped to the latest 50 messages.
+- `ChatThreadController` renders cached recent messages immediately, refreshes in the background, supports `loadOlder()`, and supports date-based back-reading through the B03 query contract.
+- Chat scroll now requests older messages near the oldest rendered edge.
+- Untether cleanup clears the active chat cache and evicts cached network image URLs for the removed tether.
+- Image caching uses Flutter's built-in `Image.network`/`NetworkImage` cache, with explicit eviction on tether removal.
+
+## Verification
+
+- `cd apps/mobile && flutter analyze`
+- `cd apps/mobile && flutter test test/chat_controller_cache_test.dart test/chat_cache_store_test.dart test/chat_screen_test.dart`
