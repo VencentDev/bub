@@ -23,6 +23,8 @@ import 'package:bub/src/features/home/widgets/home_latest_bub_card.dart';
 import 'package:bub/src/features/home/widgets/home_partner_card.dart';
 import 'package:bub/src/features/home/widgets/home_today_moment_card.dart';
 import 'package:bub/src/features/safe/safe_controller.dart';
+import 'package:bub/src/features/settings/legal_policy_controller.dart';
+import 'package:bub/src/features/tether_onboarding/profile_onboarding_screen.dart';
 import 'package:bub/src/features/tether_onboarding/tether_onboarding_screens.dart';
 import 'package:bub/src/theme/bub_colors.dart';
 import 'package:bub/src/theme/bub_theme.dart';
@@ -33,6 +35,147 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 void main() {
+  testWidgets('new user completes profile stepper before tether setup', (
+    tester,
+  ) async {
+    final controller = _FakeAuthController(
+      AuthState.authenticated(
+        user: _user(),
+        tetherStatus: const TetherStatusResponse(hasActiveTether: false),
+        tetherOnboardingComplete: false,
+        profileOnboardingComplete: false,
+      ),
+    );
+    final profileSubmitter = _FakeProfileOnboardingSubmitter();
+    final permissions = _FakeOnboardingPermissionRequester();
+
+    await tester.pumpWidget(
+      _appWithAuthController(
+        controller,
+        overrides: [
+          profileOnboardingSubmitterProvider.overrideWithValue(
+            profileSubmitter,
+          ),
+          onboardingPermissionRequesterProvider.overrideWithValue(permissions),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('profile-onboarding-stepper')), findsOneWidget);
+    expect(find.byKey(const Key('tether-code-field')), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const Key('profile-full-name-field')),
+      'Alice Reyes',
+    );
+    await tester.enterText(find.byKey(const Key('profile-age-field')), '24');
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Where did you find Bub?'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('source-tiktok-option')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('terms-accept-checkbox')));
+    await tester.tap(find.byKey(const Key('profile-finish-button')));
+    await tester.pumpAndSettle();
+
+    expect(profileSubmitter.submissions.single.fullName, 'Alice Reyes');
+    expect(profileSubmitter.submissions.single.age, 24);
+    expect(profileSubmitter.submissions.single.discoveredAppVia, 'tiktok');
+    expect(permissions.requestCount, 1);
+    expect(controller.profileCompleteCount, 1);
+    expect(find.byKey(const Key('tether-code-field')), findsOneWidget);
+  });
+
+  testWidgets('profile onboarding requires accepting terms and policy', (
+    tester,
+  ) async {
+    final profileSubmitter = _FakeProfileOnboardingSubmitter();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          profileOnboardingSubmitterProvider.overrideWithValue(
+            profileSubmitter,
+          ),
+          onboardingPermissionRequesterProvider.overrideWithValue(
+            _FakeOnboardingPermissionRequester(),
+          ),
+        ],
+        child: const MaterialApp(home: ProfileOnboardingScreen()),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('profile-full-name-field')),
+      'Alice Reyes',
+    );
+    await tester.enterText(find.byKey(const Key('profile-age-field')), '24');
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('source-playstore-option')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('profile-finish-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Accept the Terms and Privacy Policy to continue'),
+      findsOneWidget,
+    );
+    expect(profileSubmitter.submissions, isEmpty);
+  });
+
+  testWidgets('profile onboarding terms and privacy copy opens policies', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          legalPolicyRepositoryProvider.overrideWithValue(
+            _FakeLegalPolicyRepository(),
+          ),
+        ],
+        child: const MaterialApp(home: ProfileOnboardingScreen()),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('profile-full-name-field')),
+      'Alice Reyes',
+    );
+    await tester.enterText(find.byKey(const Key('profile-age-field')), '24');
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('source-playstore-option')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('terms-policy-link')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('legal-policy-screen-terms-of-service')),
+      findsOneWidget,
+    );
+    expect(find.text('Policy body for terms-of-service.'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('privacy-policy-link')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('legal-policy-screen-privacy-policy')),
+      findsOneWidget,
+    );
+    expect(find.text('Policy body for privacy-policy.'), findsOneWidget);
+  });
+
   testWidgets('first-time untethered user routes to tether onboarding', (
     tester,
   ) async {
@@ -261,6 +404,11 @@ void main() {
     expect(find.byKey(const Key('settings-theme-row')), findsOneWidget);
     expect(find.byKey(const Key('settings-language-row')), findsOneWidget);
     expect(find.byKey(const Key('settings-tether-section')), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('settings-account-section')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.byKey(const Key('settings-account-section')), findsOneWidget);
 
     await tester.tap(find.text('Home'));
@@ -1460,6 +1608,7 @@ class _FakeAuthController extends AuthController {
 
   final AuthState initial;
   var completeCount = 0;
+  var profileCompleteCount = 0;
 
   @override
   Future<AuthState> build() async => initial;
@@ -1493,6 +1642,19 @@ class _FakeAuthController extends AuthController {
   @override
   Future<void> skipTetherOnboarding() =>
       refreshTetherStatus(markComplete: true);
+
+  @override
+  Future<void> completeProfileOnboarding(UserResponse user) async {
+    profileCompleteCount += 1;
+    state = AsyncData(
+      AuthState.authenticated(
+        user: user,
+        tetherStatus: initial.tetherStatus!,
+        tetherOnboardingComplete: initial.tetherOnboardingComplete,
+        profileOnboardingComplete: true,
+      ),
+    );
+  }
 }
 
 UserResponse _user() => UserResponse(
@@ -1504,3 +1666,45 @@ UserResponse _user() => UserResponse(
   createdAt: DateTime.utc(2026),
   updatedAt: DateTime.utc(2026),
 );
+
+class _FakeProfileOnboardingSubmitter implements ProfileOnboardingSubmitter {
+  final submissions = <ProfileOnboardingSubmission>[];
+
+  @override
+  Future<UserResponse> submit(ProfileOnboardingSubmission submission) async {
+    submissions.add(submission);
+    return _user().copyWith(
+      displayName: submission.fullName,
+      age: submission.age,
+      discoveredAppVia: submission.discoveredAppVia,
+      profileOnboardingComplete: true,
+    );
+  }
+}
+
+class _FakeOnboardingPermissionRequester
+    implements OnboardingPermissionRequester {
+  var requestCount = 0;
+
+  @override
+  Future<void> requestInitialMediaPermissions() async {
+    requestCount += 1;
+  }
+}
+
+class _FakeLegalPolicyRepository implements LegalPolicyRepository {
+  @override
+  Future<LegalPolicy> fetchPolicy(String slug) async {
+    return LegalPolicy(
+      slug: slug,
+      title: switch (slug) {
+        'terms-of-service' => 'Terms of Service',
+        'cookies-policy' => 'Cookies Policy',
+        _ => 'Privacy Policy',
+      },
+      version: '2026-07-22',
+      effectiveDate: '2026-07-22',
+      body: 'Policy body for $slug.',
+    );
+  }
+}
