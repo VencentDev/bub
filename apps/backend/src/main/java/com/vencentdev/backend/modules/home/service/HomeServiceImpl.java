@@ -29,7 +29,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -325,7 +327,7 @@ public class HomeServiceImpl implements HomeService {
     boolean hasActivity = viewerLastSentAt != null || partnerLastSentAt != null;
     Instant occurredAt = latest(viewerLastSentAt, partnerLastSentAt);
     String copy = hasActivity ? latestCopy(viewerLastSentAt, partnerLastSentAt) : FIRST_BUB_COPY;
-    int streakDays = hasActivity ? bubStreakDays(connection.getId()) : 0;
+    int streakDays = hasActivity ? bubStreakDays(connection.getId(), viewerId, partnerId) : 0;
 
     return new HomeLatestBubResponse(
         hasActivity,
@@ -338,23 +340,34 @@ public class HomeServiceImpl implements HomeService {
         streakDays);
   }
 
-  private int bubStreakDays(UUID connectionId) {
-    Set<LocalDate> activityDays = new HashSet<>();
+  private int bubStreakDays(UUID connectionId, UUID viewerId, UUID partnerId) {
+    Map<LocalDate, Set<UUID>> sendersByDay = new HashMap<>();
     for (BubEvent event :
         bubEvents.findByTetherConnectionIdOrderByCreatedAtDescIdDesc(connectionId)) {
-      activityDays.add(LocalDate.ofInstant(event.getCreatedAt(), BUB_DAY_ZONE));
+      LocalDate day = LocalDate.ofInstant(event.getCreatedAt(), BUB_DAY_ZONE);
+      sendersByDay
+          .computeIfAbsent(day, ignored -> new HashSet<>())
+          .add(event.getSenderUser().getId());
     }
-    if (activityDays.isEmpty()) {
+
+    Set<LocalDate> mutualDays = new HashSet<>();
+    Set<UUID> tetherUsers = Set.of(viewerId, partnerId);
+    for (Map.Entry<LocalDate, Set<UUID>> entry : sendersByDay.entrySet()) {
+      if (entry.getValue().containsAll(tetherUsers)) {
+        mutualDays.add(entry.getKey());
+      }
+    }
+    if (mutualDays.isEmpty()) {
       return 0;
     }
 
     LocalDate cursor = LocalDate.now(clock.withZone(BUB_DAY_ZONE));
-    if (!activityDays.contains(cursor)) {
+    if (!mutualDays.contains(cursor)) {
       cursor = cursor.minusDays(1);
     }
 
     int streak = 0;
-    while (activityDays.contains(cursor)) {
+    while (mutualDays.contains(cursor)) {
       streak += 1;
       cursor = cursor.minusDays(1);
     }

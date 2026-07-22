@@ -112,7 +112,7 @@ void main() {
     );
     expect(
       tester.getSize(find.byKey(const Key('bub-app-bar-logo'))),
-      const Size(120, 30),
+      const Size(120, 35),
     );
     expect(
       tester.getTopLeft(find.byKey(const Key('bub-app-bar-logo'))).dx,
@@ -135,7 +135,7 @@ void main() {
     );
     expect(
       tester.getSize(find.byKey(const Key('bub-app-bar-logo'))),
-      const Size(120, 30),
+      const Size(120, 35),
     );
     expect(
       tester.getTopLeft(find.byKey(const Key('bub-app-bar-logo'))).dx,
