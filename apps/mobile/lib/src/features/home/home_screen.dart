@@ -18,6 +18,7 @@ import '../../features/home/widgets/home_mood_card.dart';
 import '../../features/home/widgets/home_partner_card.dart';
 import '../../features/home/widgets/home_today_moment_card.dart';
 import '../../features/safe/safe_screen.dart';
+import '../../features/settings/settings_screen.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
 
@@ -489,16 +490,7 @@ class _BubHomeSectionBody extends ConsumerWidget {
       if (section == _BubHomeSection.safe) {
         return const SafeScreen();
       }
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
-          child: Text(
-            section.label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-          ),
-        ),
-      );
+      return SettingsScreen(paired: paired);
     }
 
     final dashboard = ref.watch(homeDashboardProvider);

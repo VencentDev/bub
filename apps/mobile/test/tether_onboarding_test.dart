@@ -256,7 +256,11 @@ void main() {
 
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
-    expect(find.text('Settings section'), findsOneWidget);
+    expect(find.byKey(const Key('settings-screen')), findsOneWidget);
+    expect(find.byKey(const Key('settings-theme-row')), findsOneWidget);
+    expect(find.byKey(const Key('settings-language-row')), findsOneWidget);
+    expect(find.byKey(const Key('settings-tether-section')), findsOneWidget);
+    expect(find.byKey(const Key('settings-account-section')), findsOneWidget);
 
     await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
