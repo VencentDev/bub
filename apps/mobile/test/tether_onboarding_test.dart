@@ -20,6 +20,7 @@ import 'package:bub/src/features/chat/chat_controller.dart';
 import 'package:bub/src/features/home/home_dashboard_controller.dart';
 import 'package:bub/src/features/home/home_screen.dart';
 import 'package:bub/src/features/home/widgets/home_latest_bub_card.dart';
+import 'package:bub/src/features/home/widgets/home_partner_card.dart';
 import 'package:bub/src/features/home/widgets/home_today_moment_card.dart';
 import 'package:bub/src/features/safe/safe_controller.dart';
 import 'package:bub/src/features/tether_onboarding/tether_onboarding_screens.dart';
@@ -350,6 +351,8 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
     expect(find.text('Bub sent'), findsOneWidget);
+    final sentToast = tester.widget<Text>(find.text('Bub sent'));
+    expect(sentToast.style?.decoration, TextDecoration.none);
     expect(tester.getTopLeft(find.text('Bub sent')).dy, lessThan(140));
     await tester.pump(const Duration(milliseconds: 2200));
   });
@@ -375,6 +378,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text("Bub couldn't send. Please try again."), findsOneWidget);
+    final errorToast = tester.widget<Text>(
+      find.text("Bub couldn't send. Please try again."),
+    );
+    expect(errorToast.style?.decoration, TextDecoration.none);
     expect(
       tester.getTopLeft(find.text("Bub couldn't send. Please try again.")).dy,
       lessThan(140),
@@ -463,7 +470,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Bobby'), findsNothing);
-    expect(find.textContaining('Tethered since'), findsOneWidget);
+    expect(find.textContaining('Been tethered for'), findsOneWidget);
+    expect(find.textContaining('Tethered since'), findsNothing);
     expect(find.byKey(const Key('home-tether-string')), findsOneWidget);
     expect(find.byKey(const Key('home-tether-viewer-mood')), findsOneWidget);
     expect(find.byKey(const Key('home-tether-partner-mood')), findsOneWidget);
@@ -649,6 +657,71 @@ void main() {
     expect(find.text('45 days'), findsOneWidget);
     expect(find.text('2 hours ago'), findsOneWidget);
     expect(find.text('30 mins ago'), findsOneWidget);
+  });
+
+  testWidgets('latest Bub streak uses singular and plural day labels', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _latestBubCardApp(
+        latestBub: HomeLatestBubResponse(
+          hasActivity: true,
+          partnerLastSentAt: DateTime(2026, 7, 17, 8, 0),
+          partnerLastSentCopy: 'Your partner Bubbed you',
+          streakDays: 1,
+        ),
+        isTethered: true,
+        now: DateTime(2026, 7, 17, 9, 0),
+      ),
+    );
+
+    expect(find.text('1 day'), findsOneWidget);
+    expect(find.text('1 days'), findsNothing);
+
+    await tester.pumpWidget(
+      _latestBubCardApp(
+        latestBub: HomeLatestBubResponse(
+          hasActivity: true,
+          partnerLastSentAt: DateTime(2026, 7, 17, 8, 0),
+          partnerLastSentCopy: 'Your partner Bubbed you',
+          streakDays: 2,
+        ),
+        isTethered: true,
+        now: DateTime(2026, 7, 17, 9, 0),
+      ),
+    );
+
+    expect(find.text('2 days'), findsOneWidget);
+  });
+
+  testWidgets('partner card shows tether duration in days without since copy', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _partnerCardApp(
+        HomeTetherCardResponse(
+          hasActiveTether: true,
+          partnerDisplayName: 'Bobby',
+          tetheredSince: DateTime.now().subtract(const Duration(days: 1)),
+        ),
+      ),
+    );
+
+    expect(find.text('Been tethered for 1 day'), findsOneWidget);
+    expect(find.textContaining('Tethered since'), findsNothing);
+
+    await tester.pumpWidget(
+      _partnerCardApp(
+        HomeTetherCardResponse(
+          hasActiveTether: true,
+          partnerDisplayName: 'Bobby',
+          tetheredSince: DateTime.now().subtract(const Duration(days: 2)),
+        ),
+      ),
+    );
+
+    expect(find.text('Been tethered for 2 days'), findsOneWidget);
+    expect(find.textContaining('Tethered since'), findsNothing);
   });
 
   testWidgets(
@@ -1245,6 +1318,17 @@ Widget _latestBubCardApp({
             now: now,
           ),
         ),
+      ),
+    ),
+  );
+}
+
+Widget _partnerCardApp(HomeTetherCardResponse tether) {
+  return MaterialApp(
+    theme: BubTheme.light,
+    home: Scaffold(
+      body: Center(
+        child: SizedBox(width: 300, child: HomePartnerCard(tether: tether)),
       ),
     ),
   );

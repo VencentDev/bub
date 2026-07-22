@@ -437,13 +437,13 @@ class _BubAppBarLogo extends StatelessWidget {
 
     return SizedBox(
       key: const Key('bub-app-bar-logo'),
-      height: 35,
+      height: 30,
       width: 120,
       child: ClipRect(
         child: Align(
           alignment: Alignment.center,
           child: SizedBox(
-            height: 35,
+            height: 30,
             width: 120,
             child: FittedBox(
               alignment: Alignment.center,
@@ -1072,6 +1072,7 @@ class _BubToast extends StatelessWidget {
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0,
+                  decoration: TextDecoration.none,
                 ),
               ),
             ),

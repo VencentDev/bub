@@ -84,7 +84,7 @@ class _TetheredPartnerCard extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             child: Text(
-              'Tethered since ${_dateLabel(tether.tetheredSince)} • ${_durationLabel(tether.tetheredSince, DateTime.now())}',
+              'Been tethered for ${_durationLabel(tether.tetheredSince, DateTime.now())}',
               key: const Key('home-tether-since-date'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -108,42 +108,14 @@ class _TetheredPartnerCard extends StatelessWidget {
 
   static String _durationLabel(DateTime? start, DateTime now) {
     if (start == null) {
-      return '0 seconds';
+      return '0 days';
     }
     final duration = now.difference(start);
     if (duration.isNegative) {
-      return '0 seconds';
-    }
-    if (duration.inSeconds < 60) {
-      final seconds = duration.inSeconds;
-      return '$seconds ${seconds == 1 ? 'second' : 'seconds'}';
-    }
-    if (duration.inMinutes < 60) {
-      final minutes = duration.inMinutes;
-      return '$minutes ${minutes == 1 ? 'minute' : 'minutes'}';
-    }
-    if (duration.inHours < 24) {
-      final hours = duration.inHours;
-      return '$hours ${hours == 1 ? 'hour' : 'hours'}';
+      return '0 days';
     }
     final days = duration.inDays;
-    if (days < 30) {
-      return '$days ${days == 1 ? 'day' : 'days'}';
-    }
-    if (days < 365) {
-      final months = days ~/ 30;
-      return '$months ${months == 1 ? 'month' : 'months'}';
-    }
-    final years = days ~/ 365;
-    return '$years ${years == 1 ? 'year' : 'years'}';
-  }
-
-  static String _dateLabel(DateTime? date) {
-    if (date == null) {
-      return 'today';
-    }
-    final local = date.toLocal();
-    return '${local.month}/${local.day}/${local.year}';
+    return '$days ${days == 1 ? 'day' : 'days'}';
   }
 }
 
