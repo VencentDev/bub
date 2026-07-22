@@ -1,5 +1,7 @@
 # B04 Legal Policy Versioning
 
+Status: Done
+
 ## Goal
 
 Expose current Terms of Service, Privacy Policy, and Cookies Policy versions so settings can show policy content and future acceptance tracking can be added safely.
@@ -35,3 +37,15 @@ Expose current Terms of Service, Privacy Policy, and Cookies Policy versions so 
 
 - Settings can load all three policy pages through generated API clients.
 - Policy version metadata is available for future acceptance tracking.
+
+## Implementation Summary
+
+- Added `GET /api/v1/legal/policies` to return the current policy set.
+- Added `GET /api/v1/legal/policies/{slug}` for `terms-of-service`, `privacy-policy`, and `cookies-policy`.
+- Added policy responses with `slug`, `title`, `version`, `effectiveDate`, and markdown `body`.
+- Stored current policy markdown under `apps/backend/src/main/resources/legal/`.
+
+## Verification
+
+- `cd apps/backend && ./mvnw spotless:apply`
+- `cd apps/backend && ./mvnw -Dtest=LegalPolicyControllerIntegrationTest test`
