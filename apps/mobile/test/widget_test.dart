@@ -10,6 +10,7 @@ import 'package:bub/src/auth/auth_state.dart';
 import 'package:bub/src/auth/token_store.dart';
 import 'package:bub/src/core/dio_provider.dart';
 import 'package:bub/src/features/chat/chat_controller.dart';
+import 'package:bub/src/features/notifications/notification_controller.dart';
 import 'package:bub/src/features/settings/settings_controller.dart';
 import 'package:bub/src/features/settings/settings_screen.dart';
 import 'package:bub/src/features/settings/settings_store.dart';
@@ -173,6 +174,49 @@ void main() {
     expect(find.byKey(const Key('chat-fullscreen-header')), findsNothing);
     expect(find.byKey(const Key('bub-floating-nav')), findsOneWidget);
     expect(find.byType(AppBar), findsOneWidget);
+  });
+
+  testWidgets('top nav notification bell shows unread badge', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(() => _TetheredAuthController()),
+          notificationSummaryProvider.overrideWith(
+            () => _ReadyNotificationSummaryController(
+              const NotificationSummary(unreadCount: 3),
+            ),
+          ),
+        ],
+        child: const MobileApp(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('notifications-button')), findsOneWidget);
+    expect(find.byKey(const Key('notifications-badge')), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+  });
+
+  testWidgets('top nav notification badge caps at 99 plus', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(() => _TetheredAuthController()),
+          notificationSummaryProvider.overrideWith(
+            () => _ReadyNotificationSummaryController(
+              const NotificationSummary(unreadCount: 120),
+            ),
+          ),
+        ],
+        child: const MobileApp(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('notifications-badge')), findsOneWidget);
+    expect(find.text('99+'), findsOneWidget);
   });
 
   test('auth controller provisions the user after login', () {
@@ -506,4 +550,14 @@ class _ReadyChatController extends ChatThreadController {
 
   @override
   Future<ChatThreadResponse> build() async => thread;
+}
+
+class _ReadyNotificationSummaryController
+    extends NotificationSummaryController {
+  _ReadyNotificationSummaryController(this.summary);
+
+  final NotificationSummary summary;
+
+  @override
+  Future<NotificationSummary> build() async => summary;
 }

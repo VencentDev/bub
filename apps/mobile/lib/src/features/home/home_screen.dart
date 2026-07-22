@@ -18,6 +18,7 @@ import '../../features/home/widgets/home_latest_bub_card.dart';
 import '../../features/home/widgets/home_mood_card.dart';
 import '../../features/home/widgets/home_partner_card.dart';
 import '../../features/home/widgets/home_today_moment_card.dart';
+import '../../features/notifications/notification_panel.dart';
 import '../../features/safe/safe_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
@@ -351,6 +352,32 @@ class _BubHomeState extends ConsumerState<_BubHome> {
     }
   }
 
+  void _showNotifications() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => NotificationPanel(onOpenLink: _openNotificationLink),
+    );
+  }
+
+  void _openNotificationLink(String linkPath) {
+    Navigator.of(context).maybePop();
+    if (linkPath == '/chat') {
+      _selectSection(_BubHomeSection.chat);
+      return;
+    }
+    if (linkPath == '/safe') {
+      _selectSection(_BubHomeSection.safe);
+      return;
+    }
+    if (linkPath == '/settings') {
+      _selectSection(_BubHomeSection.settings);
+      return;
+    }
+    _selectSection(_BubHomeSection.home);
+  }
+
   @override
   Widget build(BuildContext context) {
     final bubSendState = ref.watch(bubSendControllerProvider);
@@ -392,7 +419,11 @@ class _BubHomeState extends ConsumerState<_BubHome> {
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      appBar: AppBar(titleSpacing: 0, title: const _BubAppBarLogo()),
+      appBar: AppBar(
+        titleSpacing: 0,
+        title: const _BubAppBarLogo(),
+        actions: [NotificationBell(onPressed: _showNotifications)],
+      ),
       extendBody: true,
       body: Stack(
         fit: StackFit.expand,
