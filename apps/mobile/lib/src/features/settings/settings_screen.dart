@@ -91,6 +91,21 @@ class SettingsScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 14),
         _SettingsSection(
+          key: const Key('settings-safe-section'),
+          title: 'Safe',
+          children: const [
+            _SettingsRow(
+              actionKey: Key('settings-safe-pin-recovery-button'),
+              icon: Icons.lock_reset_rounded,
+              title: 'Forgot Safe PIN',
+              value:
+                  'PIN recovery will be available after secure email is configured.',
+              enabled: false,
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _SettingsSection(
           key: const Key('settings-tether-section'),
           title: 'Tether',
           children: [
@@ -154,7 +169,7 @@ class SettingsScreen extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: const Text('Remove tether?'),
         content: const Text(
-          'This removes Shared Moments, Bub History, Shared Safe, and Chat History for this tether.',
+          'This permanently deletes your chat conversation, images and media, Shared Safe, shared moments, Bub history, Bub streak, "Been tethered" history, and other couple history for this tether. This cannot be undone.',
         ),
         actions: [
           TextButton(

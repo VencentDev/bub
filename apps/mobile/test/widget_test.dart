@@ -387,7 +387,10 @@ void main() {
     await tester.tap(find.byKey(const Key('settings-remove-tether-button')));
     await tester.pumpAndSettle();
     expect(find.text('Remove tether?'), findsOneWidget);
-    expect(find.textContaining('Shared Moments'), findsOneWidget);
+    expect(find.textContaining('permanently deletes'), findsOneWidget);
+    expect(find.textContaining('chat conversation'), findsOneWidget);
+    expect(find.textContaining('Bub streak'), findsOneWidget);
+    expect(find.textContaining('Been tethered'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(FilledButton, 'Remove tether'));
     await tester.pumpAndSettle();
@@ -415,6 +418,31 @@ void main() {
 
     expect(action.onTap, isNull);
     expect(removeCount, 0);
+  });
+
+  testWidgets('settings shows safe pin recovery as deferred', (tester) async {
+    await tester.pumpWidget(
+      _settingsApp(
+        SettingsScreen(
+          paired: true,
+          onLogout: () {},
+          onRemoveTether: () async {},
+        ),
+      ),
+    );
+
+    final action = tester.widget<InkWell>(
+      find.byKey(const Key('settings-safe-pin-recovery-button')),
+    );
+
+    expect(find.text('Forgot Safe PIN'), findsOneWidget);
+    expect(
+      find.text(
+        'PIN recovery will be available after secure email is configured.',
+      ),
+      findsOneWidget,
+    );
+    expect(action.onTap, isNull);
   });
 }
 
