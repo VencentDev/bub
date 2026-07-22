@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/async_state_widgets.dart';
+import '../../l10n/app_strings.dart';
 import '../../theme/bub_colors.dart';
 import 'safe_controller.dart';
 import 'widgets/safe_delete_confirmation.dart';
@@ -116,6 +117,7 @@ class _SafeFirstTimeSetupState extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final strings = ref.watch(appStringsProvider);
     return SafeArea(
       child: Stack(
         children: [
@@ -134,27 +136,30 @@ class _SafeFirstTimeSetupState extends ConsumerWidget {
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(height: 18),
-                  const Text(
-                    'Set up your Safe',
+                  Text(
+                    strings.setUpSafe,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 25,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Create your private PIN before opening shared memories.',
+                  Text(
+                    strings.createSafePinSubtitle,
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 20),
                   FilledButton.icon(
                     key: const Key('safe-setup-open'),
                     onPressed: () => _showSetupDialog(context, ref),
                     icon: const Icon(Icons.add_moderator_rounded),
-                    label: const Text('Set a PIN'),
+                    label: Text(strings.setPin),
                   ),
                 ],
               ),
@@ -609,10 +614,13 @@ class _SafePinFlowState extends ConsumerState<_SafePinFlow> {
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.pinConfigured ? 'Unlock Safe' : 'Create Safe PIN';
+    final strings = ref.watch(appStringsProvider);
+    final title = widget.pinConfigured
+        ? strings.unlockSafe
+        : strings.createSafePin;
     final subtitle = widget.pinConfigured
-        ? 'Enter your Safe PIN to view private memories.'
-        : 'Choose a 4 to 6 digit PIN for this shared vault.';
+        ? strings.safeUnlockSubtitle
+        : strings.safeCreatePinSubtitle;
     final canPop = Navigator.canPop(context);
 
     return SafeArea(

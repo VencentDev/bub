@@ -19,7 +19,7 @@ Add Filipino language support, top-nav notifications, safer untether behavior, S
 
 ## Frontend Tickets
 
-- `frontend/F01-filipino-localization.md`
+- `frontend/F01-filipino-localization-done.md`
 - `frontend/F02-safe-pin-recovery-deferred-state-done.md`
 - `frontend/F03-top-nav-notifications-done.md`
 - `frontend/F04-chat-presence-last-seen-done.md`
@@ -48,7 +48,7 @@ Add Filipino language support, top-nav notifications, safer untether behavior, S
 8. `frontend/F07-chat-and-image-caching-done.md`
 9. `frontend/F04-chat-presence-last-seen-done.md`
 10. `frontend/F08-page-loading-states-done.md`
-11. `frontend/F01-filipino-localization.md`
+11. `frontend/F01-filipino-localization-done.md`
 12. `backend/B04-legal-policy-versioning.md`
 13. `frontend/F09-legal-policy-settings-pages.md`
 

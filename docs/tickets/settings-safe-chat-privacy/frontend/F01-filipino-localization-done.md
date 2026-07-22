@@ -1,5 +1,7 @@
 # F01 Filipino Localization
 
+Status: Done
+
 ## Goal
 
 Add Filipino as a supported app language and localize the settings, Safe, chat, notifications, loading, and legal policy entry points touched by this ticket set.
@@ -49,3 +51,16 @@ Add Filipino as a supported app language and localize the settings, Safe, chat, 
 
 - Filipino can be selected and remains selected after app restart.
 - Touched screens no longer hard-code English where app strings are available.
+
+## Implementation Summary
+
+- Added a lightweight typed strings provider under `apps/mobile/lib/src/l10n/`.
+- Added language option `fil` with display label `Filipino`, keeping `en` as `English`.
+- Settings persists `fil` locally and renders Filipino labels after selection.
+- Updated generated mobile user language enums so `fil` can serialize for settings sync.
+- Safe setup/unlock entry labels use app strings and render Filipino when selected.
+
+## Verification
+
+- `cd apps/mobile && flutter analyze`
+- `cd apps/mobile && flutter test test/widget_test.dart test/safe_screen_test.dart`

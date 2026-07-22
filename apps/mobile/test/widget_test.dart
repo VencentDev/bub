@@ -390,6 +390,56 @@ void main() {
     },
   );
 
+  testWidgets('settings language menu includes English and Filipino', (
+    tester,
+  ) async {
+    final store = _MemorySettingsStore()..language = 'en';
+    await tester.pumpWidget(
+      _settingsApp(
+        SettingsScreen(
+          paired: true,
+          onLogout: () {},
+          onRemoveTether: () async {},
+        ),
+        store: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('English'), findsWidgets);
+    expect(find.text('Filipino'), findsOneWidget);
+  });
+
+  testWidgets('selecting Filipino persists fil and updates settings labels', (
+    tester,
+  ) async {
+    final store = _MemorySettingsStore()..language = 'en';
+    await tester.pumpWidget(
+      _settingsApp(
+        SettingsScreen(
+          paired: true,
+          onLogout: () {},
+          onRemoveTether: () async {},
+        ),
+        store: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Filipino').last);
+    await tester.pumpAndSettle();
+
+    expect(store.language, 'fil');
+    expect(find.text('Mga Setting'), findsOneWidget);
+    expect(find.text('Wika'), findsWidgets);
+    expect(find.text('Nakalimutan ang PIN'), findsOneWidget);
+  });
+
   testWidgets('settings logout confirms before running logout action', (
     tester,
   ) async {
@@ -490,10 +540,10 @@ void main() {
   });
 }
 
-Widget _settingsApp(Widget child) {
+Widget _settingsApp(Widget child, {_MemorySettingsStore? store}) {
   return ProviderScope(
     overrides: [
-      settingsStoreProvider.overrideWithValue(_MemorySettingsStore()),
+      settingsStoreProvider.overrideWithValue(store ?? _MemorySettingsStore()),
       settingsRemoteSyncProvider.overrideWithValue(_NoopSettingsRemoteSync()),
     ],
     child: MaterialApp(

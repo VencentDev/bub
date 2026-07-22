@@ -2,6 +2,8 @@ import 'package:bub/src/features/safe/safe_controller.dart';
 import 'package:bub/src/features/safe/safe_screen.dart';
 import 'dart:async';
 
+import 'package:bub/src/features/settings/settings_controller.dart';
+import 'package:bub/src/features/settings/settings_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -356,6 +358,21 @@ void main() {
     expect(find.byKey(const Key('safe-pin-error')), findsOneWidget);
   });
 
+  testWidgets('Safe setup label renders in Filipino when selected', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _safeApp(
+        const SafeStatus(tethered: true, pinConfigured: false),
+        language: 'fil',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Itakda ang PIN'), findsOneWidget);
+    expect(find.text('I-set up ang Safe'), findsOneWidget);
+  });
+
   testWidgets('first-time setup dialog creates a Safe PIN', (tester) async {
     await tester.pumpWidget(
       _safeApp(const SafeStatus(tethered: true, pinConfigured: false)),
@@ -384,6 +401,7 @@ Widget _safeApp(
   bool deleteSucceeds = true,
   SafeSession session = const SafeSession(unlocked: false),
   List<SafeMediaItem> media = const [],
+  String language = 'en',
 }) {
   return _safeAppWithController(
     _FakeSafeController(
@@ -393,15 +411,19 @@ Widget _safeApp(
       media: media,
     ),
     session: session,
+    language: language,
   );
 }
 
 Widget _safeAppWithController(
   SafeController controller, {
   SafeSession session = const SafeSession(unlocked: false),
+  String language = 'en',
 }) {
   return ProviderScope(
     overrides: [
+      settingsStoreProvider.overrideWithValue(_MemorySettingsStore(language)),
+      settingsRemoteSyncProvider.overrideWithValue(_NoopSettingsRemoteSync()),
       safeSessionProvider.overrideWith(
         () => _FakeSafeSessionController(session),
       ),
@@ -409,6 +431,30 @@ Widget _safeAppWithController(
     ],
     child: const MaterialApp(home: SafeScreen()),
   );
+}
+
+class _NoopSettingsRemoteSync implements SettingsRemoteSync {
+  @override
+  Future<void> sync(BubSettings settings) async {}
+}
+
+class _MemorySettingsStore implements SettingsStore {
+  _MemorySettingsStore(this.language);
+
+  final String language;
+
+  @override
+  Future<BubSettingsThemeMode?> readThemeMode() async =>
+      BubSettingsThemeMode.system;
+
+  @override
+  Future<String?> readLanguage() async => language;
+
+  @override
+  Future<void> writeThemeMode(BubSettingsThemeMode value) async {}
+
+  @override
+  Future<void> writeLanguage(String value) async {}
 }
 
 Widget _safeRouteApp(
