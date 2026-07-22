@@ -317,6 +317,7 @@ void main() {
 
     expect(source, contains("color: '#7C3AED'"));
     expect(source, contains('image: assets/branding/bub-logo.png'));
+    expect(source, contains('image: assets/branding/bub-logo-android12.png'));
     expect(
       source,
       isNot(contains('background_image: assets/branding/splash.png')),
