@@ -3,6 +3,7 @@ package com.vencentdev.backend.modules.user.entity;
 import com.vencentdev.backend.common.persistence.AuditableEntity;
 import com.vencentdev.backend.modules.user.enums.KycStatus;
 import com.vencentdev.backend.modules.user.enums.Role;
+import com.vencentdev.backend.modules.user.enums.ThemeMode;
 import com.vencentdev.backend.modules.user.enums.UserType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -56,4 +57,13 @@ public class User extends AuditableEntity {
   @Enumerated(EnumType.STRING)
   @Column(name = "kyc_status", nullable = false)
   private KycStatus kycStatus;
+
+  @Builder.Default
+  @Enumerated(EnumType.STRING)
+  @Column(name = "theme_mode", nullable = false)
+  private ThemeMode themeMode = ThemeMode.SYSTEM;
+
+  @Builder.Default
+  @Column(nullable = false, length = 16)
+  private String language = "en";
 }
