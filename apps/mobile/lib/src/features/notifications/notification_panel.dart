@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/async_state_widgets.dart';
 import '../../theme/bub_colors.dart';
 import 'notification_controller.dart';
 
@@ -47,7 +48,10 @@ class NotificationPanel extends ConsumerWidget {
         key: const Key('notification-panel'),
         height: MediaQuery.sizeOf(context).height * 0.74,
         child: notifications.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const BubLoadingState(
+            key: Key('notifications-loading'),
+            label: 'Loading notifications',
+          ),
           error: (_, _) => _NotificationError(
             onRetry: () =>
                 ref.read(notificationListProvider.notifier).refresh(),
@@ -193,15 +197,10 @@ class _NotificationEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return const BubEmptyState(
       key: Key('notifications-empty'),
-      child: Padding(
-        padding: EdgeInsets.all(24),
-        child: Text(
-          'No notifications yet',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-        ),
-      ),
+      title: 'No notifications yet',
+      icon: Icons.notifications_none_rounded,
     );
   }
 }
@@ -213,25 +212,11 @@ class _NotificationError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Notifications could not load',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 12),
-            FilledButton(
-              key: const Key('notifications-retry-button'),
-              onPressed: onRetry,
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      ),
+    return BubErrorState(
+      key: const Key('notifications-error'),
+      title: 'Notifications could not load',
+      onRetry: onRetry,
+      retryKey: const Key('notifications-retry-button'),
     );
   }
 }

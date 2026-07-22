@@ -22,6 +22,7 @@ import '../../features/bub/bub_heart_burst.dart';
 import '../../features/bub/bub_send_controller.dart';
 import '../../features/safe/safe_controller.dart';
 import '../../features/safe/safe_screen.dart';
+import '../../core/async_state_widgets.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
 import 'chat_controller.dart';
@@ -128,34 +129,17 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
           if (lastThread != null) {
             return _buildLoadedThread(lastThread);
           }
-          return const Center(
-            child: Padding(
-              key: Key('chat-loading'),
-              padding: EdgeInsets.only(bottom: 132),
-              child: CircularProgressIndicator(),
-            ),
+          return const BubLoadingState(
+            key: Key('chat-loading'),
+            label: 'Loading chat',
           );
         },
-        error: (_, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Chat could not load',
-                  style: TextStyle(fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  key: const Key('chat-retry-button'),
-                  onPressed: () =>
-                      ref.read(chatThreadProvider.notifier).refresh(),
-                  child: const Text('Retry'),
-                ),
-              ],
-            ),
-          ),
+        error: (_, _) => BubErrorState(
+          key: const Key('chat-error-state'),
+          title: 'Chat could not load',
+          onRetry: () => ref.read(chatThreadProvider.notifier).refresh(),
+          retryLabel: 'Retry',
+          retryKey: const Key('chat-retry-button'),
         ),
         data: _buildLoadedThread,
       ),

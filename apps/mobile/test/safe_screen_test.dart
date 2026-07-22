@@ -1,10 +1,29 @@
 import 'package:bub/src/features/safe/safe_controller.dart';
 import 'package:bub/src/features/safe/safe_screen.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('Safe status renders loading state', (tester) async {
+    await tester.pumpWidget(_safeAppWithController(_LoadingSafeController()));
+    await tester.pump();
+
+    expect(find.byKey(const Key('safe-loading')), findsOneWidget);
+    expect(find.text('Loading Safe'), findsOneWidget);
+  });
+
+  testWidgets('Safe status renders error retry state', (tester) async {
+    await tester.pumpWidget(_safeAppWithController(_ErrorSafeController()));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('safe-error-state')), findsOneWidget);
+    expect(find.text('Safe could not load'), findsOneWidget);
+    expect(find.byKey(const Key('safe-retry-button')), findsOneWidget);
+  });
+
   testWidgets('untethered Safe state stays unavailable', (tester) async {
     await tester.pumpWidget(
       _safeApp(const SafeStatus(tethered: false, pinConfigured: false)),
@@ -378,7 +397,7 @@ Widget _safeApp(
 }
 
 Widget _safeAppWithController(
-  _FakeSafeController controller, {
+  SafeController controller, {
   SafeSession session = const SafeSession(unlocked: false),
 }) {
   return ProviderScope(
@@ -421,6 +440,22 @@ Widget _safeRouteApp(
       ),
     ),
   );
+}
+
+class _LoadingSafeController extends SafeController {
+  final _completer = Completer<SafeStatus>();
+
+  @override
+  Future<SafeStatus> build() {
+    return _completer.future;
+  }
+}
+
+class _ErrorSafeController extends SafeController {
+  @override
+  Future<SafeStatus> build() {
+    throw StateError('nope');
+  }
 }
 
 class _FakeSafeController extends SafeController {

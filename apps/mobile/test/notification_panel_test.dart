@@ -1,10 +1,36 @@
 import 'package:bub/src/features/notifications/notification_controller.dart';
 import 'package:bub/src/features/notifications/notification_panel.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('notification panel renders loading state', (tester) async {
+    await tester.pumpWidget(
+      _notificationAppWithController(_LoadingNotificationListController()),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('notifications-loading')), findsOneWidget);
+    expect(find.text('Loading notifications'), findsOneWidget);
+  });
+
+  testWidgets('notification panel renders error retry state', (tester) async {
+    final controller = _ErrorNotificationListController();
+    await tester.pumpWidget(_notificationAppWithController(controller));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('notifications-error')), findsOneWidget);
+    expect(find.text('Notifications could not load'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('notifications-retry-button')));
+    await tester.pump();
+
+    expect(controller.refreshCount, 1);
+  });
+
   testWidgets('notification panel renders empty state', (tester) async {
     await tester.pumpWidget(
       _notificationApp(const NotificationListState(items: [], hasMore: false)),
@@ -51,12 +77,14 @@ Widget _notificationApp(
   NotificationListState state, [
   _ReadyNotificationListController? controller,
 ]) {
+  return _notificationAppWithController(
+    controller ?? _ReadyNotificationListController(state),
+  );
+}
+
+Widget _notificationAppWithController(NotificationListController controller) {
   return ProviderScope(
-    overrides: [
-      notificationListProvider.overrideWith(() {
-        return controller ?? _ReadyNotificationListController(state);
-      }),
-    ],
+    overrides: [notificationListProvider.overrideWith(() => controller)],
     child: const MaterialApp(home: Scaffold(body: NotificationPanel())),
   );
 }
@@ -84,5 +112,28 @@ class _ReadyNotificationListController extends NotificationListController {
         ],
       ),
     );
+  }
+}
+
+class _LoadingNotificationListController extends NotificationListController {
+  final _completer = Completer<NotificationListState>();
+
+  @override
+  Future<NotificationListState> build() {
+    return _completer.future;
+  }
+}
+
+class _ErrorNotificationListController extends NotificationListController {
+  var refreshCount = 0;
+
+  @override
+  Future<NotificationListState> build() {
+    throw StateError('nope');
+  }
+
+  @override
+  Future<void> refresh() async {
+    refreshCount += 1;
   }
 }

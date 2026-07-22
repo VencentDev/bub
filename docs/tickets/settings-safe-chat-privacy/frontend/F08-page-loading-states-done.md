@@ -1,5 +1,7 @@
 # F08 Page Loading States
 
+Status: Done
+
 ## Goal
 
 Add consistent loading, empty, error, and retry states to pages touched by this feature set.
@@ -40,3 +42,16 @@ Add consistent loading, empty, error, and retry states to pages touched by this 
 ## Done Criteria
 
 - Users are never left with a blank page during load or failure on the touched flows.
+
+## Implementation Summary
+
+- Added shared `BubLoadingState`, `BubErrorState`, and `BubEmptyState` widgets for compact, stable async UI.
+- Chat uses the shared loading/error states while still preserving cached chat content during refresh.
+- Safe uses shared loading/error states for status loading and gallery loading/retry, and a shared empty state for an empty Safe gallery.
+- Notifications use shared loading, empty, and error/retry states.
+- Added widget tests for Safe and notification loading/error states; existing chat tests continue to cover chat loading and retry behavior.
+
+## Verification
+
+- `cd apps/mobile && flutter analyze`
+- `cd apps/mobile && flutter test test/safe_screen_test.dart test/notification_panel_test.dart test/chat_screen_test.dart`
