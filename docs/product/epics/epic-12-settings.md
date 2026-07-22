@@ -2,19 +2,6 @@
 
 Settings let users personalize Bub and manage account-level actions.
 
-## US-049 Change Theme
-
-As a user, I want to change the theme so that Bub feels personal.
-
-### Acceptance Criteria
-
-- Supports Lavender.
-- Supports Pink.
-- Supports Blue.
-- Supports Midnight.
-- Supports Sunset.
-- Supports Forest.
-
 ## US-050 Dark Mode
 
 As a user, I want dark mode so that Bub is comfortable at night.
@@ -30,14 +17,6 @@ As a user, I want language settings so that I can use Bub in my preferred langua
 ### Acceptance Criteria
 
 - User can change language.
-
-## US-052 Export Chat
-
-As a user, I want to export chat so that I can keep a copy of our conversation.
-
-### Acceptance Criteria
-
-- User can export chat.
 
 ## US-053 Remove Tether
 
