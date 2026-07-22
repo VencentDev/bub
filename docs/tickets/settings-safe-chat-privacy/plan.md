@@ -33,7 +33,7 @@ Add Filipino language support, top-nav notifications, safer untether behavior, S
 
 - `backend/B01-tether-destruction-cleanup-done.md`
 - `backend/B02-notification-center-contract-done.md`
-- `backend/B03-chat-pagination-and-cache-contract.md`
+- `backend/B03-chat-pagination-and-cache-contract-done.md`
 - `backend/B04-legal-policy-versioning.md`
 
 ## Implementation Order
@@ -44,7 +44,7 @@ Add Filipino language support, top-nav notifications, safer untether behavior, S
 4. `frontend/F06-untether-warning-copy-done.md`
 5. `backend/B02-notification-center-contract-done.md`
 6. `frontend/F03-top-nav-notifications-done.md`
-7. `backend/B03-chat-pagination-and-cache-contract.md`
+7. `backend/B03-chat-pagination-and-cache-contract-done.md`
 8. `frontend/F07-chat-and-image-caching.md`
 9. `frontend/F04-chat-presence-last-seen.md`
 10. `frontend/F08-page-loading-states.md`

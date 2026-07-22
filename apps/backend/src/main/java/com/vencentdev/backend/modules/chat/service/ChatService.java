@@ -10,12 +10,15 @@ import com.vencentdev.backend.modules.chat.dto.ChatSendMessageRequest;
 import com.vencentdev.backend.modules.chat.dto.ChatStateResponse;
 import com.vencentdev.backend.modules.chat.dto.ChatThreadResponse;
 import com.vencentdev.backend.modules.chat.dto.ChatTypingRequest;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface ChatService {
-  ChatThreadResponse thread(AuthenticatedUser principal);
+  ChatThreadResponse thread(
+      AuthenticatedUser principal, Integer limit, Instant beforeCreatedAt, LocalDate aroundDate);
 
   ChatMessageResponse send(AuthenticatedUser principal, ChatSendMessageRequest request);
 

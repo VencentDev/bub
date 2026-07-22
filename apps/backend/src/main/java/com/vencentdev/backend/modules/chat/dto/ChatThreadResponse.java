@@ -8,4 +8,6 @@ public record ChatThreadResponse(
     UUID tetherConnectionId,
     String partnerDisplayName,
     ChatStateResponse state,
-    List<ChatMessageResponse> messages) {}
+    List<ChatMessageResponse> messages,
+    boolean hasMoreBefore,
+    String oldestCursor) {}
