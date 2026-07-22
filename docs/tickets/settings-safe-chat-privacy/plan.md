@@ -27,7 +27,7 @@ Add Filipino language support, top-nav notifications, safer untether behavior, S
 - `frontend/F06-untether-warning-copy-done.md`
 - `frontend/F07-chat-and-image-caching-done.md`
 - `frontend/F08-page-loading-states-done.md`
-- `frontend/F09-legal-policy-settings-pages.md`
+- `frontend/F09-legal-policy-settings-pages-done.md`
 
 ## Backend Tickets
 
@@ -50,7 +50,7 @@ Add Filipino language support, top-nav notifications, safer untether behavior, S
 10. `frontend/F08-page-loading-states-done.md`
 11. `frontend/F01-filipino-localization-done.md`
 12. `backend/B04-legal-policy-versioning-done.md`
-13. `frontend/F09-legal-policy-settings-pages.md`
+13. `frontend/F09-legal-policy-settings-pages-done.md`
 
 ## Acceptance Criteria
 

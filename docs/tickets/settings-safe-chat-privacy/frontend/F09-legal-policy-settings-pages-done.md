@@ -1,5 +1,7 @@
 # F09 Legal Policy Settings Pages
 
+Status: Done
+
 ## Goal
 
 Add Terms of Service, Privacy Policy, and Cookies Policy pages under settings.
@@ -39,3 +41,16 @@ Add Terms of Service, Privacy Policy, and Cookies Policy pages under settings.
 
 - Users can read all three policy pages from settings.
 - Policy pages expose version and effective date.
+
+## Implementation Summary
+
+- Added a Privacy and Legal settings section with Privacy Policy, Terms of Service, and Cookies Policy rows.
+- Added `LegalPolicyScreen` with loading, error/retry, version, effective date, body, and offline-copy indicator states.
+- Added `LegalPolicyRepository` backed by direct Dio calls to the B04 backend endpoints.
+- Added local fallback policy copy for all three policy slugs when backend content cannot load.
+- Added widget tests for settings rows, navigation to each policy page, and fallback/offline display.
+
+## Verification
+
+- `cd apps/mobile && flutter analyze`
+- `cd apps/mobile && flutter test test/widget_test.dart`

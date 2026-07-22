@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/app_strings.dart';
 import '../../theme/bub_colors.dart';
+import 'legal_policy_screen.dart';
 import 'settings_controller.dart';
 import 'settings_store.dart';
 
@@ -123,6 +124,31 @@ class SettingsScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 14),
         _SettingsSection(
+          key: const Key('settings-privacy-legal-section'),
+          title: strings.privacyAndLegal,
+          children: [
+            _SettingsRow(
+              actionKey: const Key('settings-privacy-policy-button'),
+              icon: Icons.privacy_tip_rounded,
+              title: strings.privacyPolicy,
+              onTap: () => _openPolicy(context, 'privacy-policy'),
+            ),
+            _SettingsRow(
+              actionKey: const Key('settings-terms-button'),
+              icon: Icons.description_rounded,
+              title: strings.termsOfService,
+              onTap: () => _openPolicy(context, 'terms-of-service'),
+            ),
+            _SettingsRow(
+              actionKey: const Key('settings-cookies-button'),
+              icon: Icons.cookie_rounded,
+              title: strings.cookiesPolicy,
+              onTap: () => _openPolicy(context, 'cookies-policy'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _SettingsSection(
           key: const Key('settings-account-section'),
           title: strings.account,
           children: [
@@ -136,6 +162,12 @@ class SettingsScreen extends ConsumerWidget {
           ],
         ),
       ],
+    );
+  }
+
+  void _openPolicy(BuildContext context, String slug) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => LegalPolicyScreen(slug: slug)),
     );
   }
 

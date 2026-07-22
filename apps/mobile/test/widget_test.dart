@@ -11,6 +11,8 @@ import 'package:bub/src/auth/token_store.dart';
 import 'package:bub/src/core/dio_provider.dart';
 import 'package:bub/src/features/chat/chat_controller.dart';
 import 'package:bub/src/features/notifications/notification_controller.dart';
+import 'package:bub/src/features/settings/legal_policy_controller.dart';
+import 'package:bub/src/features/settings/legal_policy_screen.dart';
 import 'package:bub/src/features/settings/settings_controller.dart';
 import 'package:bub/src/features/settings/settings_screen.dart';
 import 'package:bub/src/features/settings/settings_store.dart';
@@ -454,6 +456,11 @@ void main() {
       ),
     );
 
+    await tester.drag(
+      find.byKey(const Key('settings-screen')),
+      const Offset(0, -520),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('settings-logout-button')));
     await tester.pumpAndSettle();
     expect(find.text('Log out?'), findsOneWidget);
@@ -538,19 +545,130 @@ void main() {
     );
     expect(action.onTap, isNull);
   });
+
+  testWidgets('settings renders all legal policy rows', (tester) async {
+    await tester.pumpWidget(
+      _settingsApp(
+        SettingsScreen(
+          paired: true,
+          onLogout: () {},
+          onRemoveTether: () async {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('settings-privacy-legal-section')),
+      findsOneWidget,
+    );
+    expect(find.text('Privacy Policy'), findsOneWidget);
+    expect(find.text('Terms of Service'), findsOneWidget);
+    expect(find.text('Cookies Policy'), findsOneWidget);
+  });
+
+  testWidgets('tapping each legal row opens matching policy screen', (
+    tester,
+  ) async {
+    final repository = _FakeLegalPolicyRepository();
+    await tester.pumpWidget(
+      _settingsApp(
+        SettingsScreen(
+          paired: true,
+          onLogout: () {},
+          onRemoveTether: () async {},
+        ),
+        legalPolicyRepository: repository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (final entry in const [
+      ('settings-privacy-policy-button', 'privacy-policy', 'Privacy Policy'),
+      ('settings-terms-button', 'terms-of-service', 'Terms of Service'),
+      ('settings-cookies-button', 'cookies-policy', 'Cookies Policy'),
+    ]) {
+      await tester.ensureVisible(find.byKey(Key(entry.$1)));
+      await tester.tap(find.byKey(Key(entry.$1)));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(Key('legal-policy-screen-${entry.$2}')),
+        findsOneWidget,
+      );
+      expect(find.text(entry.$3), findsWidgets);
+      expect(find.text('Version 2026-07-22'), findsOneWidget);
+      expect(find.text('Effective 2026-07-22'), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets('policy fallback shows offline indicator', (tester) async {
+    await tester.pumpWidget(
+      _settingsApp(
+        const LegalPolicyScreenHarness(slug: 'privacy-policy'),
+        legalPolicyRepository: _FakeLegalPolicyRepository(stale: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('legal-policy-offline')), findsOneWidget);
+    expect(find.text('Offline copy'), findsOneWidget);
+  });
 }
 
-Widget _settingsApp(Widget child, {_MemorySettingsStore? store}) {
+Widget _settingsApp(
+  Widget child, {
+  _MemorySettingsStore? store,
+  LegalPolicyRepository? legalPolicyRepository,
+}) {
   return ProviderScope(
     overrides: [
       settingsStoreProvider.overrideWithValue(store ?? _MemorySettingsStore()),
       settingsRemoteSyncProvider.overrideWithValue(_NoopSettingsRemoteSync()),
+      if (legalPolicyRepository != null)
+        legalPolicyRepositoryProvider.overrideWithValue(legalPolicyRepository),
     ],
     child: MaterialApp(
       theme: BubTheme.light,
       home: Scaffold(body: child),
     ),
   );
+}
+
+class LegalPolicyScreenHarness extends StatelessWidget {
+  const LegalPolicyScreenHarness({super.key, required this.slug});
+
+  final String slug;
+
+  @override
+  Widget build(BuildContext context) {
+    return LegalPolicyScreen(slug: slug);
+  }
+}
+
+class _FakeLegalPolicyRepository implements LegalPolicyRepository {
+  _FakeLegalPolicyRepository({this.stale = false});
+
+  final bool stale;
+
+  @override
+  Future<LegalPolicy> fetchPolicy(String slug) async {
+    return LegalPolicy(
+      slug: slug,
+      title: switch (slug) {
+        'terms-of-service' => 'Terms of Service',
+        'cookies-policy' => 'Cookies Policy',
+        _ => 'Privacy Policy',
+      },
+      version: '2026-07-22',
+      effectiveDate: '2026-07-22',
+      body: 'Policy body for $slug.',
+      stale: stale,
+    );
+  }
 }
 
 class _NoopSettingsRemoteSync implements SettingsRemoteSync {

@@ -33,6 +33,10 @@ abstract class AppStrings {
   String get account;
   String get logout;
   String get endSession;
+  String get privacyAndLegal;
+  String get privacyPolicy;
+  String get termsOfService;
+  String get cookiesPolicy;
   String get setUpSafe;
   String get createSafePinSubtitle;
   String get setPin;
@@ -77,6 +81,14 @@ class EnglishAppStrings extends AppStrings {
   String get logout => 'Logout';
   @override
   String get endSession => 'End session';
+  @override
+  String get privacyAndLegal => 'Privacy and Legal';
+  @override
+  String get privacyPolicy => 'Privacy Policy';
+  @override
+  String get termsOfService => 'Terms of Service';
+  @override
+  String get cookiesPolicy => 'Cookies Policy';
   @override
   String get setUpSafe => 'Set up your Safe';
   @override
@@ -140,6 +152,14 @@ class FilipinoAppStrings extends AppStrings {
   String get logout => 'Mag-log out';
   @override
   String get endSession => 'Tapusin ang session';
+  @override
+  String get privacyAndLegal => 'Privacy at Legal';
+  @override
+  String get privacyPolicy => 'Patakaran sa Privacy';
+  @override
+  String get termsOfService => 'Mga Tuntunin ng Serbisyo';
+  @override
+  String get cookiesPolicy => 'Patakaran sa Cookies';
   @override
   String get setUpSafe => 'I-set up ang Safe';
   @override
