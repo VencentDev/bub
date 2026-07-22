@@ -175,15 +175,13 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
   }
 
   @Test
-  void dashboardStartsBubStreakOnceBothUsersBubOnSameDay() throws Exception {
+  void dashboardKeepsYesterdayBubStreakWhileTodayIsIncomplete() throws Exception {
     User alice = users.save(user("alice", "alice@example.com", "Alice"));
     User bob = users.save(user("bob", "bob@example.com", "Bob"));
     TetherConnection connection =
         connections.save(
             TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
-    Instant noon = todayAtNoon();
-    saveBubEvent(connection, alice, bob, noon);
-    saveBubEvent(connection, bob, alice, noon.plus(Duration.ofMinutes(5)));
+    saveBubEvent(connection, alice, bob, localDayAtNoon(LocalDate.now(BUB_DAY_ZONE).minusDays(1)));
 
     mockMvc
         .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
@@ -193,15 +191,33 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
   }
 
   @Test
-  void dashboardStartsBubStreakWhenLocalDaySpansUtcDates() throws Exception {
+  void dashboardCountsConsecutiveBubActivityDays() throws Exception {
     User alice = users.save(user("alice", "alice@example.com", "Alice"));
     User bob = users.save(user("bob", "bob@example.com", "Bob"));
     TetherConnection connection =
         connections.save(
             TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
     LocalDate today = LocalDate.now(BUB_DAY_ZONE);
-    saveBubEvent(connection, alice, bob, today.atTime(1, 0).atZone(BUB_DAY_ZONE).toInstant());
-    saveBubEvent(connection, bob, alice, today.atTime(23, 30).atZone(BUB_DAY_ZONE).toInstant());
+    saveBubEvent(connection, alice, bob, localDayAtNoon(today));
+    saveBubEvent(connection, bob, alice, localDayAtNoon(today.minusDays(1)));
+    saveBubEvent(connection, alice, bob, localDayAtNoon(today.minusDays(2)));
+    saveBubEvent(connection, bob, alice, localDayAtNoon(today.minusDays(4)));
+
+    mockMvc
+        .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.latestBub.hasActivity").value(true))
+        .andExpect(jsonPath("$.latestBub.streakDays").value(3));
+  }
+
+  @Test
+  void dashboardStartsBubStreakFromOneSidedBubActivity() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    TetherConnection connection =
+        connections.save(
+            TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    saveBubEvent(connection, alice, bob, todayAtNoon());
 
     mockMvc
         .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
@@ -211,34 +227,14 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
   }
 
   @Test
-  void dashboardDoesNotStartBubStreakFromOneSidedBubs() throws Exception {
+  void dashboardResetsBubStreakAfterFullyMissedDay() throws Exception {
     User alice = users.save(user("alice", "alice@example.com", "Alice"));
     User bob = users.save(user("bob", "bob@example.com", "Bob"));
     TetherConnection connection =
         connections.save(
             TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
-    Instant noon = todayAtNoon();
-    saveBubEvent(connection, alice, bob, noon);
-    saveBubEvent(connection, alice, bob, noon.minus(Duration.ofDays(1)));
-
-    mockMvc
-        .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.latestBub.hasActivity").value(true))
-        .andExpect(jsonPath("$.latestBub.streakDays").value(0));
-  }
-
-  @Test
-  void dashboardResetsBubStreakWhenTodayIsNotMutual() throws Exception {
-    User alice = users.save(user("alice", "alice@example.com", "Alice"));
-    User bob = users.save(user("bob", "bob@example.com", "Bob"));
-    TetherConnection connection =
-        connections.save(
-            TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
-    Instant noon = todayAtNoon();
-    saveBubEvent(connection, alice, bob, noon);
-    saveBubEvent(connection, alice, bob, noon.minus(Duration.ofDays(1)));
-    saveBubEvent(connection, bob, alice, noon.minus(Duration.ofDays(1)).plus(Duration.ofHours(1)));
+    LocalDate today = LocalDate.now(BUB_DAY_ZONE);
+    saveBubEvent(connection, alice, bob, localDayAtNoon(today.minusDays(2)));
 
     mockMvc
         .perform(get("/api/v1/home/dashboard").with(currentUser("alice")))
@@ -558,6 +554,10 @@ class HomeControllerIntegrationTest extends IntegrationTestBase {
 
   private Instant todayAtNoon() {
     return LocalDate.now(BUB_DAY_ZONE).atTime(LocalTime.NOON).atZone(BUB_DAY_ZONE).toInstant();
+  }
+
+  private Instant localDayAtNoon(LocalDate localDate) {
+    return localDate.atTime(LocalTime.NOON).atZone(BUB_DAY_ZONE).toInstant();
   }
 
   @TestConfiguration
