@@ -12,4 +12,6 @@ public interface TetherService {
   TetherInvitationResponse generateInvitation(AuthenticatedUser principal);
 
   TetherStatusResponse acceptInvitation(AuthenticatedUser principal, TetherAcceptRequest request);
+
+  TetherStatusResponse removeTether(AuthenticatedUser principal);
 }

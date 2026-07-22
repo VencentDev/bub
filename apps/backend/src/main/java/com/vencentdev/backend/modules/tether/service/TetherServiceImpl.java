@@ -120,6 +120,18 @@ public class TetherServiceImpl implements TetherService {
     return statusFor(accepterId);
   }
 
+  @Override
+  @Transactional
+  public TetherStatusResponse removeTether(AuthenticatedUser principal) {
+    UUID userId = userService.resolveInternalId(principal);
+    TetherConnection connection =
+        connections
+            .findActiveByUserId(userId)
+            .orElseThrow(() -> new BadRequestException("No active tether to remove"));
+    connections.delete(connection);
+    return new TetherStatusResponse(false, null);
+  }
+
   private TetherStatusResponse statusFor(UUID userId) {
     return connections
         .findActiveByUserId(userId)

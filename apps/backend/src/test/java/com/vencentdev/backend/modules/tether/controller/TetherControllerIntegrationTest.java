@@ -2,6 +2,7 @@ package com.vencentdev.backend.modules.tether.controller;
 
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 class TetherControllerIntegrationTest extends IntegrationTestBase {
@@ -30,6 +32,7 @@ class TetherControllerIntegrationTest extends IntegrationTestBase {
   @Autowired private TetherConnectionRepository connections;
   @Autowired private TetherInvitationRepository invitations;
   @Autowired private UserRepository users;
+  @Autowired private JdbcTemplate jdbc;
 
   @BeforeEach
   void setUp() {
@@ -134,6 +137,44 @@ class TetherControllerIntegrationTest extends IntegrationTestBase {
     mockMvc.perform(accept("charlie", "BUB-7KQ2-XH19")).andExpect(status().isBadRequest());
   }
 
+  @Test
+  void removeTetherDeletesSharedDataAndUntethersBothUsers() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com"));
+    User bob = users.save(user("bob", "bob@example.com"));
+    TetherConnection connection =
+        connections.save(
+            TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    insertSharedData(connection, alice, bob);
+
+    mockMvc
+        .perform(delete("/api/v1/tether/me").with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.hasActiveTether").value(false))
+        .andExpect(jsonPath("$.partnerUserId").doesNotExist());
+
+    mockMvc
+        .perform(get("/api/v1/tether/me").with(currentUser("bob")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.hasActiveTether").value(false));
+    assertTableCount("tether_connections", 0);
+    assertTableCount("bub_events", 0);
+    assertTableCount("home_daily_moments", 0);
+    assertTableCount("safe_vault_access", 0);
+    assertTableCount("safe_media_items", 0);
+    assertTableCount("chat_messages", 0);
+    assertTableCount("chat_message_reactions", 0);
+    assertTableCount("chat_message_reads", 0);
+  }
+
+  @Test
+  void removeTetherRejectsUntetheredUser() throws Exception {
+    users.save(user("alice", "alice@example.com"));
+
+    mockMvc
+        .perform(delete("/api/v1/tether/me").with(currentUser("alice")))
+        .andExpect(status().isBadRequest());
+  }
+
   private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder accept(
       String subject, String code) {
     return post("/api/v1/tether/accept")
@@ -157,6 +198,66 @@ class TetherControllerIntegrationTest extends IntegrationTestBase {
 
   private TetherInvitation invitation(String code, User creator, Instant expiresAt) {
     return TetherInvitation.builder().code(code).creator(creator).expiresAt(expiresAt).build();
+  }
+
+  private void insertSharedData(TetherConnection connection, User alice, User bob) {
+    jdbc.update(
+        """
+        insert into bub_events (tether_connection_id, sender_user_id, receiver_user_id)
+        values (?, ?, ?)
+        """,
+        connection.getId(),
+        alice.getId(),
+        bob.getId());
+    jdbc.update(
+        """
+        insert into home_daily_moments
+          (tether_connection_id, created_by_user_id, local_date, photo_url, expires_at)
+        values (?, ?, current_date, 'https://example.com/photo.jpg', now() + interval '1 day')
+        """,
+        connection.getId(),
+        alice.getId());
+    jdbc.update(
+        """
+        insert into safe_vault_access (tether_connection_id, user_id, pin_hash)
+        values (?, ?, 'hash')
+        """,
+        connection.getId(),
+        alice.getId());
+    jdbc.update(
+        """
+        insert into safe_media_items
+          (tether_connection_id, uploaded_by_user_id, media_type, url, storage_object_path,
+           content_type, size_bytes)
+        values (?, ?, 'IMAGE', 'https://example.com/safe.jpg', 'safe.jpg', 'image/jpeg', 10)
+        """,
+        connection.getId(),
+        alice.getId());
+    jdbc.update(
+        """
+        insert into chat_messages (tether_connection_id, sender_user_id, message_type, body)
+        values (?, ?, 'TEXT', 'hello')
+        """,
+        connection.getId(),
+        alice.getId());
+    var messageId =
+        jdbc.queryForObject(
+            "select id from chat_messages where tether_connection_id = ?",
+            java.util.UUID.class,
+            connection.getId());
+    jdbc.update(
+        "insert into chat_message_reactions (message_id, user_id, reaction) values (?, ?, '❤️')",
+        messageId,
+        bob.getId());
+    jdbc.update(
+        "insert into chat_message_reads (message_id, user_id) values (?, ?)",
+        messageId,
+        bob.getId());
+  }
+
+  private void assertTableCount(String table, int expected) {
+    Integer count = jdbc.queryForObject("select count(*) from " + table, Integer.class);
+    org.assertj.core.api.Assertions.assertThat(count).isEqualTo(expected);
   }
 
   private User user(String externalId, String email) {
