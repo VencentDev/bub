@@ -10,6 +10,8 @@ import 'package:bub/src/auth/auth_state.dart';
 import 'package:bub/src/auth/token_store.dart';
 import 'package:bub/src/core/dio_provider.dart';
 import 'package:bub/src/features/chat/chat_controller.dart';
+import 'package:bub/src/features/settings/settings_controller.dart';
+import 'package:bub/src/features/settings/settings_store.dart';
 import 'package:bub/src/theme/bub_colors.dart';
 import 'package:bub/src/theme/bub_theme.dart';
 import 'package:flutter/material.dart';
@@ -77,6 +79,29 @@ void main() {
         .singleWhere((safeArea) => safeArea.minimum.bottom > 0);
     expect(buttonSafeArea.minimum.bottom, 48);
     expect(find.byType(AppBar), findsNothing);
+  });
+
+  testWidgets('mobile app applies stored dark mode preference', (tester) async {
+    final store = _MemorySettingsStore()
+      ..themeMode = BubSettingsThemeMode.dark
+      ..language = 'en';
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authServiceProvider.overrideWithValue(_LoggedOutAuthService()),
+          settingsStoreProvider.overrideWithValue(store),
+          settingsRemoteSyncProvider.overrideWithValue(
+            _NoopSettingsRemoteSync(),
+          ),
+        ],
+        child: const MobileApp(),
+      ),
+    );
+    await tester.pump();
+
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.dark);
   });
 
   testWidgets('chat opens as a full-screen page without the Bub shell chrome', (
@@ -190,6 +215,13 @@ void main() {
     );
   });
 
+  test('auth controller hydrates settings from the authenticated user', () {
+    final source = File('lib/src/auth/auth_controller.dart').readAsStringSync();
+
+    expect(source, contains('settingsControllerProvider'));
+    expect(source, contains('applyUserPreferences(user)'));
+  });
+
   test('all set action awaits tether refresh before returning home', () {
     final source = File(
       'lib/src/features/tether_onboarding/tether_onboarding_screens.dart',
@@ -266,6 +298,78 @@ void main() {
       isNot(contains(BubColors.coral)),
     );
   });
+
+  test('settings controller loads default local preferences', () async {
+    final container = ProviderContainer(
+      overrides: [
+        settingsStoreProvider.overrideWithValue(_MemorySettingsStore()),
+        settingsRemoteSyncProvider.overrideWithValue(_NoopSettingsRemoteSync()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final settings = await container.read(settingsControllerProvider.future);
+
+    expect(settings.themeMode, BubSettingsThemeMode.system);
+    expect(settings.language, 'en');
+  });
+
+  test(
+    'settings controller persists theme and language changes locally',
+    () async {
+      final store = _MemorySettingsStore();
+      final container = ProviderContainer(
+        overrides: [
+          settingsStoreProvider.overrideWithValue(store),
+          settingsRemoteSyncProvider.overrideWithValue(
+            _NoopSettingsRemoteSync(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(settingsControllerProvider.future);
+      await container
+          .read(settingsControllerProvider.notifier)
+          .setThemeMode(BubSettingsThemeMode.dark);
+      await container
+          .read(settingsControllerProvider.notifier)
+          .setLanguage('en');
+
+      expect(store.themeMode, BubSettingsThemeMode.dark);
+      expect(store.language, 'en');
+      expect(
+        container.read(settingsControllerProvider).value?.themeMode,
+        BubSettingsThemeMode.dark,
+      );
+    },
+  );
+}
+
+class _NoopSettingsRemoteSync implements SettingsRemoteSync {
+  @override
+  Future<void> sync(BubSettings settings) async {}
+}
+
+class _MemorySettingsStore implements SettingsStore {
+  BubSettingsThemeMode? themeMode;
+  String? language;
+
+  @override
+  Future<BubSettingsThemeMode?> readThemeMode() async => themeMode;
+
+  @override
+  Future<String?> readLanguage() async => language;
+
+  @override
+  Future<void> writeThemeMode(BubSettingsThemeMode value) async {
+    themeMode = value;
+  }
+
+  @override
+  Future<void> writeLanguage(String value) async {
+    language = value;
+  }
 }
 
 class _TetheredAuthController extends AuthController {

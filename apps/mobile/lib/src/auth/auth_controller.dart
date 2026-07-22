@@ -4,6 +4,7 @@ import '../api/generated/models/tether_status_response.dart';
 import '../core/dio_provider.dart';
 import '../features/chat/chat_controller.dart';
 import '../features/home/home_dashboard_controller.dart';
+import '../features/settings/settings_controller.dart';
 import '../features/tether_onboarding/tether_skip_store.dart';
 import 'auth_state.dart';
 
@@ -18,6 +19,9 @@ class AuthController extends AsyncNotifier<AuthState> {
   Future<AuthState> _fetchSession() async {
     final client = ref.read(restClientProvider);
     final user = await client.authController.authMe();
+    await ref
+        .read(settingsControllerProvider.notifier)
+        .applyUserPreferences(user);
     final tetherStatus = await client.tetherController.tetherMe();
     final onboardingComplete = await ref
         .read(tetherSkipStoreProvider)

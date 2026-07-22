@@ -1060,6 +1060,14 @@
           },
           "displayName": {
             "$ref": "#/components/schemas/JsonNullableString"
+          },
+          "themeMode": {
+            "type": "string",
+            "enum": ["system", "light", "dark"]
+          },
+          "language": {
+            "type": "string",
+            "enum": ["en"]
           }
         }
       },
@@ -1087,6 +1095,14 @@
           "kycStatus": {
             "type": "string",
             "enum": ["NONE", "PENDING", "VERIFIED", "REJECTED"]
+          },
+          "themeMode": {
+            "type": "string",
+            "enum": ["system", "light", "dark"]
+          },
+          "language": {
+            "type": "string",
+            "enum": ["en"]
           },
           "createdAt": {
             "type": "string",

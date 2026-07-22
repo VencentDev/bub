@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../theme/bub_colors.dart';
+import 'settings_controller.dart';
+import 'settings_store.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key, required this.paired});
 
   final bool paired;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsControllerProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark
         ? BubColors.textPrimaryDark
@@ -43,24 +47,38 @@ class SettingsScreen extends StatelessWidget {
         const SizedBox(height: 20),
         _SettingsSection(
           title: 'Appearance',
-          children: const [
+          children: [
             _SettingsRow(
               key: Key('settings-theme-row'),
               icon: Icons.dark_mode_rounded,
               title: 'Theme',
-              value: 'System',
+              trailing: _SettingsMenu<BubSettingsThemeMode>(
+                value: settings.value?.themeMode ?? BubSettingsThemeMode.system,
+                values: BubSettingsThemeMode.values,
+                label: _themeModeLabel,
+                onSelected: (value) => ref
+                    .read(settingsControllerProvider.notifier)
+                    .setThemeMode(value),
+              ),
             ),
           ],
         ),
         const SizedBox(height: 14),
         _SettingsSection(
           title: 'Language',
-          children: const [
+          children: [
             _SettingsRow(
               key: Key('settings-language-row'),
               icon: Icons.language_rounded,
               title: 'Language',
-              value: 'English',
+              trailing: _SettingsMenu<String>(
+                value: settings.value?.language ?? 'en',
+                values: const ['en'],
+                label: _languageLabel,
+                onSelected: (value) => ref
+                    .read(settingsControllerProvider.notifier)
+                    .setLanguage(value),
+              ),
             ),
           ],
         ),
@@ -91,6 +109,21 @@ class SettingsScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  static String _themeModeLabel(BubSettingsThemeMode value) {
+    return switch (value) {
+      BubSettingsThemeMode.system => 'System',
+      BubSettingsThemeMode.light => 'Light',
+      BubSettingsThemeMode.dark => 'Dark',
+    };
+  }
+
+  static String _languageLabel(String value) {
+    return switch (value) {
+      'en' => 'English',
+      _ => value,
+    };
   }
 }
 
@@ -159,13 +192,15 @@ class _SettingsRow extends StatelessWidget {
     super.key,
     required this.icon,
     required this.title,
-    required this.value,
+    this.value,
+    this.trailing,
     this.destructive = false,
   });
 
   final IconData icon;
   final String title;
-  final String value;
+  final String? value;
+  final Widget? trailing;
   final bool destructive;
 
   @override
@@ -208,22 +243,57 @@ class _SettingsRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Flexible(
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.end,
-              style: TextStyle(
-                color: valueColor,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0,
+          if (trailing case final trailing?)
+            trailing
+          else
+            Flexible(
+              child: Text(
+                value ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+                style: TextStyle(
+                  color: valueColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0,
+                ),
               ),
             ),
-          ),
         ],
       ),
+    );
+  }
+}
+
+class _SettingsMenu<T> extends StatelessWidget {
+  const _SettingsMenu({
+    required this.value,
+    required this.values,
+    required this.label,
+    required this.onSelected,
+  });
+
+  final T value;
+  final List<T> values;
+  final String Function(T value) label;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButton<T>(
+      value: value,
+      underline: const SizedBox.shrink(),
+      borderRadius: BorderRadius.circular(16),
+      items: [
+        for (final item in values)
+          DropdownMenuItem<T>(value: item, child: Text(label(item))),
+      ],
+      onChanged: (value) {
+        if (value != null) {
+          onSelected(value);
+        }
+      },
     );
   }
 }
