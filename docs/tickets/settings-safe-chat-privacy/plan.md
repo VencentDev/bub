@@ -32,7 +32,7 @@ Add Filipino language support, top-nav notifications, safer untether behavior, S
 ## Backend Tickets
 
 - `backend/B01-tether-destruction-cleanup-done.md`
-- `backend/B02-notification-center-contract.md`
+- `backend/B02-notification-center-contract-done.md`
 - `backend/B03-chat-pagination-and-cache-contract.md`
 - `backend/B04-legal-policy-versioning.md`
 
@@ -42,7 +42,7 @@ Add Filipino language support, top-nav notifications, safer untether behavior, S
 2. `frontend/F05-safe-untethered-and-new-tether-states-done.md`
 3. `frontend/F02-safe-pin-recovery-deferred-state-done.md`
 4. `frontend/F06-untether-warning-copy-done.md`
-5. `backend/B02-notification-center-contract.md`
+5. `backend/B02-notification-center-contract-done.md`
 6. `frontend/F03-top-nav-notifications.md`
 7. `backend/B03-chat-pagination-and-cache-contract.md`
 8. `frontend/F07-chat-and-image-caching.md`

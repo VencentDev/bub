@@ -1,4 +1,4 @@
-# B04 Notification Center Contract
+# B02 Notification Center Contract
 
 ## Goal
 
