@@ -36,7 +36,7 @@ class HomeCardShell extends StatelessWidget {
           ),
           HomeCardTreatment.mood => BubColors.homeMoodGradient(brightness),
         },
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: brightness == Brightness.dark
               ? BubColors.white.withValues(alpha: 0.10)
@@ -45,10 +45,10 @@ class HomeCardShell extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: BubColors.deepPurple.withValues(
-              alpha: brightness == Brightness.dark ? 0.28 : 0.10,
+              alpha: brightness == Brightness.dark ? 0.28 : 0.08,
             ),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),

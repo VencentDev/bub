@@ -35,8 +35,13 @@ class BubColors {
   static const disabled = Color(0xFF6A687E);
 
   static const myBubble = purple;
-  static const partnerBubbleDark = Color(0xFF26283A);
-  static const partnerBubbleLight = Color(0xFFF1ECFF);
+  static const partnerBubbleDark = Color(0xFF2C2142);
+  static const partnerBubbleLight = Color(0xFFF6EEFF);
+
+  static const chatCanvasLightTop = Color(0xFFF7F1FF);
+  static const chatCanvasLightBottom = Color(0xFFFFFBFE);
+  static const chatCanvasDarkTop = Color(0xFF161022);
+  static const chatCanvasDarkBottom = Color(0xFF100A1F);
 
   static const safeBackground = deepPurple;
   static const doodleYellow = Color(0xFFFFD56A);
@@ -44,6 +49,10 @@ class BubColors {
   static const doodleBlue = Color(0xFF53B8FF);
   static const doodleLavender = Color(0xFFC79DFF);
   static const white = Color(0xFFFFFFFF);
+
+  /// Soft sandy halo behind the home hero bears (sampled from Alan iOS).
+  static const heroHalo = Color(0xFFFCEBD7);
+  static const heroHaloDark = Color(0xFF3A2E28);
 
   static const bubGradient = LinearGradient(colors: [deepPurple, purple, pink]);
 
@@ -116,6 +125,20 @@ class BubColors {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [white, Color(0xFFFFF2F8), Color(0xFFF4ECFF)],
+          );
+  }
+
+  static LinearGradient chatCanvasGradient(Brightness brightness) {
+    return brightness == Brightness.dark
+        ? const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [chatCanvasDarkTop, chatCanvasDarkBottom],
+          )
+        : const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [chatCanvasLightTop, chatCanvasLightBottom],
           );
   }
 }
