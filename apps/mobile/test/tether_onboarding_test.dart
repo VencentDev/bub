@@ -38,6 +38,11 @@ void main() {
   testWidgets('new user completes profile stepper before tether setup', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final controller = _FakeAuthController(
       AuthState.authenticated(
         user: _user(),
@@ -78,6 +83,16 @@ void main() {
     await tester.tap(find.byKey(const Key('profile-next-button')));
     await tester.pumpAndSettle();
 
+    expect(find.text('What is your relationship status?'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('relationship-status-dating')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('How long have you been together?'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('relationship-length-1-to-3-years')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const Key('terms-accept-checkbox')));
     await tester.tap(find.byKey(const Key('profile-finish-button')));
     await tester.pumpAndSettle();
@@ -85,6 +100,11 @@ void main() {
     expect(profileSubmitter.submissions.single.fullName, 'Alice Reyes');
     expect(profileSubmitter.submissions.single.age, 24);
     expect(profileSubmitter.submissions.single.discoveredAppVia, 'tiktok');
+    expect(profileSubmitter.submissions.single.relationshipStatus, 'dating');
+    expect(
+      profileSubmitter.submissions.single.relationshipLength,
+      '1_to_3_years',
+    );
     expect(permissions.requestCount, 1);
     expect(controller.profileCompleteCount, 1);
     expect(find.byKey(const Key('tether-code-field')), findsOneWidget);
@@ -93,6 +113,11 @@ void main() {
   testWidgets('profile onboarding requires accepting terms and policy', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final profileSubmitter = _FakeProfileOnboardingSubmitter();
 
     await tester.pumpWidget(
@@ -119,6 +144,14 @@ void main() {
     await tester.tap(find.byKey(const Key('source-playstore-option')));
     await tester.tap(find.byKey(const Key('profile-next-button')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('relationship-status-engaged')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('relationship-length-3-to-12-months')),
+    );
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('profile-finish-button')));
     await tester.pumpAndSettle();
 
@@ -132,6 +165,11 @@ void main() {
   testWidgets('profile onboarding terms and privacy copy opens policies', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -151,6 +189,12 @@ void main() {
     await tester.tap(find.byKey(const Key('profile-next-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('source-playstore-option')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('relationship-status-married')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('relationship-length-3-plus-years')));
     await tester.tap(find.byKey(const Key('profile-next-button')));
     await tester.pumpAndSettle();
 
@@ -618,30 +662,25 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Bobby'), findsNothing);
-    expect(find.textContaining('Been tethered for'), findsOneWidget);
+    expect(find.textContaining('Tethered for'), findsOneWidget);
+    expect(find.textContaining('Been tethered for'), findsNothing);
     expect(find.textContaining('Tethered since'), findsNothing);
-    expect(find.byKey(const Key('home-tether-string')), findsOneWidget);
-    expect(find.byKey(const Key('home-tether-viewer-mood')), findsOneWidget);
-    expect(find.byKey(const Key('home-tether-partner-mood')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('home-tether-viewer-mood')),
-        matching: find.text('calm'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('home-tether-partner-mood')),
-        matching: find.text('cozy'),
-      ),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('home-hero-halo')), findsOneWidget);
+    expect(find.byKey(const Key('home-tether-string')), findsNothing);
+    expect(find.byKey(const Key('home-tether-viewer-mood')), findsNothing);
+    expect(find.byKey(const Key('home-tether-partner-mood')), findsNothing);
     expect(find.byKey(const Key('home-tether-since-date')), findsOneWidget);
     expect(find.byKey(const Key('home-tether-duration')), findsOneWidget);
+    final tetherBear = tester.widget<Image>(
+      find.byKey(const Key('home-tether-bear')),
+    );
+    expect(
+      (tetherBear.image as AssetImage).assetName,
+      'assets/illustrations/bears/bear-tethered.png',
+    );
     expect(
       tester.getSize(find.byKey(const Key('home-partner-card'))).height,
-      lessThan(165),
+      lessThan(320),
     );
     expect(find.byType(RefreshIndicator), findsOneWidget);
     final refreshList = tester.widget<ListView>(
@@ -730,7 +769,7 @@ void main() {
       find.byKey(const Key('home-mood-dialog-field')),
       'cozy',
     );
-    await tester.tap(find.text('Save mood'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
     expect(find.text('cozy'), findsOneWidget);
     expect(find.byKey(const Key('home-mood-card')), findsOneWidget);
@@ -855,8 +894,9 @@ void main() {
       ),
     );
 
-    expect(find.text('Been tethered for 1 day'), findsOneWidget);
+    expect(find.text('Tethered for 1 day'), findsOneWidget);
     expect(find.textContaining('Tethered since'), findsNothing);
+    expect(find.textContaining('Been tethered for'), findsNothing);
 
     await tester.pumpWidget(
       _partnerCardApp(
@@ -868,8 +908,45 @@ void main() {
       ),
     );
 
-    expect(find.text('Been tethered for 2 days'), findsOneWidget);
+    expect(find.text('Tethered for 2 days'), findsOneWidget);
     expect(find.textContaining('Tethered since'), findsNothing);
+  });
+
+  testWidgets('partner card uses hours minutes and seconds under one day', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _partnerCardApp(
+        HomeTetherCardResponse(
+          hasActiveTether: true,
+          partnerDisplayName: 'Bobby',
+          tetheredSince: DateTime.now().subtract(const Duration(hours: 3)),
+        ),
+      ),
+    );
+    expect(find.text('Tethered for 3 hours'), findsOneWidget);
+
+    await tester.pumpWidget(
+      _partnerCardApp(
+        HomeTetherCardResponse(
+          hasActiveTether: true,
+          partnerDisplayName: 'Bobby',
+          tetheredSince: DateTime.now().subtract(const Duration(minutes: 12)),
+        ),
+      ),
+    );
+    expect(find.text('Tethered for 12 minutes'), findsOneWidget);
+
+    await tester.pumpWidget(
+      _partnerCardApp(
+        HomeTetherCardResponse(
+          hasActiveTether: true,
+          partnerDisplayName: 'Bobby',
+          tetheredSince: DateTime.now().subtract(const Duration(seconds: 8)),
+        ),
+      ),
+    );
+    expect(find.text('Tethered for 8 seconds'), findsOneWidget);
   });
 
   testWidgets(
@@ -1091,9 +1168,7 @@ void main() {
     );
   });
 
-  testWidgets('glass mood dialog validates and saves trimmed mood', (
-    tester,
-  ) async {
+  testWidgets('mood dialog validates and saves trimmed mood', (tester) async {
     await tester.pumpWidget(
       _appWithAuth(
         AuthState.authenticated(
@@ -1122,7 +1197,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('home-mood-empty-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Save mood'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
     expect(find.text('Mood is required'), findsOneWidget);
 
@@ -1130,7 +1205,7 @@ void main() {
       find.byKey(const Key('home-mood-dialog-field')),
       'this mood is too long today',
     );
-    await tester.tap(find.text('Save mood'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
     expect(find.text('Use 20 characters or fewer'), findsOneWidget);
 
@@ -1138,7 +1213,7 @@ void main() {
       find.byKey(const Key('home-mood-dialog-field')),
       '  bright  ',
     );
-    await tester.tap(find.text('Save mood'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
     expect(find.text('bright'), findsOneWidget);
   });
@@ -1186,7 +1261,7 @@ void main() {
     );
     expect(
       tester.getSize(find.byKey(const Key('home-partner-card'))).height,
-      lessThan(145),
+      lessThan(360),
     );
 
     await tester.tap(find.widgetWithText(FilledButton, 'Start tethering'));

@@ -22,6 +22,7 @@ import '../../features/home/widgets/home_today_moment_card.dart';
 import '../../features/notifications/notification_panel.dart';
 import '../../features/safe/safe_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../features/tether_onboarding/profile_onboarding_screen.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
 
@@ -44,6 +45,12 @@ class HomeScreen extends ConsumerWidget {
       value: final state,
     ) when state.route == AuthRouteState.untethered) {
       return _BubHome(onLogout: controller.logout, paired: false);
+    }
+
+    if (auth case AsyncData(
+      value: final state,
+    ) when state.route == AuthRouteState.needsProfileOnboarding) {
+      return const ProfileOnboardingScreen();
     }
 
     if (auth case AsyncData(
@@ -594,19 +601,21 @@ class _BubHomeSectionBody extends ConsumerWidget {
           );
         }
         final isTethered = paired && tether.hasActiveTether == true;
+        final isUploadingMoment = ref.watch(momentUploadInProgressProvider);
         return RefreshIndicator(
           onRefresh: () => ref.read(homeDashboardProvider.notifier).refresh(),
           child: ListView(
             key: const Key('home-dashboard-refresh-list'),
             physics: const AlwaysScrollableScrollPhysics(),
             cacheExtent: 1200,
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 140),
             children: [
               HomePartnerCard(tether: tether),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               HomeTodayMomentCard(
                 moment: data.todayMoment,
                 isTethered: isTethered,
+                isUploading: isUploadingMoment,
                 onCaptureMoment: () async {
                   try {
                     await ref
@@ -627,13 +636,13 @@ class _BubHomeSectionBody extends ConsumerWidget {
                           .read(homeDashboardProvider.notifier)
                           .reactToTodayMoment(data.todayMoment!.momentId ?? ''),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               HomeLatestBubCard(
                 latestBub: latestBub,
                 isTethered: isTethered,
                 onFirstBubPressed: onStartFirstBub,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               HomeMoodCard(
                 mood: mood,
                 onSaveMood: (mood) =>

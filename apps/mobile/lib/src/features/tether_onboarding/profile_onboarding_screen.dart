@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:photo_manager/photo_manager.dart';
 
@@ -15,11 +16,15 @@ class ProfileOnboardingSubmission {
     required this.fullName,
     required this.age,
     required this.discoveredAppVia,
+    required this.relationshipStatus,
+    required this.relationshipLength,
   });
 
   final String fullName;
   final int age;
   final String discoveredAppVia;
+  final String relationshipStatus;
+  final String relationshipLength;
 }
 
 abstract interface class ProfileOnboardingSubmitter {
@@ -39,6 +44,8 @@ class DioProfileOnboardingSubmitter implements ProfileOnboardingSubmitter {
         'displayName': submission.fullName,
         'age': submission.age,
         'discoveredAppVia': submission.discoveredAppVia,
+        'relationshipStatus': submission.relationshipStatus,
+        'relationshipLength': submission.relationshipLength,
         'termsAccepted': true,
       },
     );
@@ -87,12 +94,16 @@ class ProfileOnboardingScreen extends ConsumerStatefulWidget {
 
 class _ProfileOnboardingScreenState
     extends ConsumerState<ProfileOnboardingScreen> {
+  static const _totalSteps = 5;
+
   final _nameController = TextEditingController();
   final _ageController = TextEditingController();
   var _step = 0;
   var _accepted = false;
   var _submitting = false;
   String? _source;
+  String? _relationshipStatus;
+  String? _relationshipLength;
   String? _error;
 
   @override
@@ -104,47 +115,86 @@ class _ProfileOnboardingScreenState
 
   @override
   Widget build(BuildContext context) {
+    final isLastStep = _step == _totalSteps - 1;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: ListView(
-          key: const Key('profile-onboarding-stepper'),
+        child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-          children: [
-            _Header(step: _step),
-            const SizedBox(height: 20),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              child: switch (_step) {
-                0 => _IdentityStep(
-                  nameController: _nameController,
-                  ageController: _ageController,
-                ),
-                1 => _SourceStep(selected: _source, onChanged: _setSource),
-                _ => _TermsStep(
-                  accepted: _accepted,
-                  onChanged: (value) =>
-                      setState(() => _accepted = value ?? false),
-                ),
-              },
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFFB91C1C),
-                  fontWeight: FontWeight.w700,
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  key: const Key('profile-onboarding-stepper'),
+                  children: [
+                    _Header(step: _step, totalSteps: _totalSteps),
+                    const SizedBox(height: 20),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      child: switch (_step) {
+                        0 => _IdentityStep(
+                          nameController: _nameController,
+                          ageController: _ageController,
+                        ),
+                        1 => _SourceStep(
+                          selected: _source,
+                          onChanged: _setSource,
+                        ),
+                        2 => _RelationshipStatusStep(
+                          selected: _relationshipStatus,
+                          onChanged: _setRelationshipStatus,
+                        ),
+                        3 => _RelationshipLengthStep(
+                          selected: _relationshipLength,
+                          onChanged: _setRelationshipLength,
+                        ),
+                        _ => _TermsStep(
+                          accepted: _accepted,
+                          onChanged: (value) =>
+                              setState(() => _accepted = value ?? false),
+                        ),
+                      },
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _error!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFB91C1C),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-            ],
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                if (_step > 0)
-                  Expanded(
-                    child: OutlinedButton(
+              const SizedBox(height: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton(
+                    key: Key(
+                      isLastStep
+                          ? 'profile-finish-button'
+                          : 'profile-next-button',
+                    ),
+                    onPressed: _submitting
+                        ? null
+                        : isLastStep
+                        ? _finish
+                        : _next,
+                    child: _submitting
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(isLastStep ? 'Continue' : 'Next'),
+                  ),
+                  if (_step > 0) ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton(
                       onPressed: _submitting
                           ? null
                           : () => setState(() {
@@ -153,31 +203,11 @@ class _ProfileOnboardingScreenState
                             }),
                       child: const Text('Back'),
                     ),
-                  ),
-                if (_step > 0) const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    key: Key(
-                      _step == 2
-                          ? 'profile-finish-button'
-                          : 'profile-next-button',
-                    ),
-                    onPressed: _submitting
-                        ? null
-                        : _step == 2
-                        ? _finish
-                        : _next,
-                    child: _submitting
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(_step == 2 ? 'Continue' : 'Next'),
-                  ),
-                ),
-              ],
-            ),
-          ],
+                  ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -190,12 +220,34 @@ class _ProfileOnboardingScreenState
     });
   }
 
+  void _setRelationshipStatus(String value) {
+    setState(() {
+      _relationshipStatus = value;
+      _error = null;
+    });
+  }
+
+  void _setRelationshipLength(String value) {
+    setState(() {
+      _relationshipLength = value;
+      _error = null;
+    });
+  }
+
   void _next() {
     if (_step == 0 && !_identityValid()) {
       return;
     }
     if (_step == 1 && _source == null) {
       setState(() => _error = 'Choose where you found Bub');
+      return;
+    }
+    if (_step == 2 && _relationshipStatus == null) {
+      setState(() => _error = 'Choose your relationship status');
+      return;
+    }
+    if (_step == 3 && _relationshipLength == null) {
+      setState(() => _error = 'Choose how long you have been together');
       return;
     }
     setState(() {
@@ -239,6 +291,8 @@ class _ProfileOnboardingScreenState
               fullName: _nameController.text.trim(),
               age: int.parse(_ageController.text.trim()),
               discoveredAppVia: _source!,
+              relationshipStatus: _relationshipStatus!,
+              relationshipLength: _relationshipLength!,
             ),
           );
       await ref
@@ -257,9 +311,10 @@ class _ProfileOnboardingScreenState
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.step});
+  const _Header({required this.step, required this.totalSteps});
 
   final int step;
+  final int totalSteps;
 
   @override
   Widget build(BuildContext context) {
@@ -285,7 +340,7 @@ class _Header extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(
-            3,
+            totalSteps,
             (index) => Container(
               width: index == step ? 28 : 9,
               height: 9,
@@ -343,14 +398,35 @@ class _SourceStep extends StatelessWidget {
   final String? selected;
   final ValueChanged<String> onChanged;
 
+  static const _options = <_SelectableOptionData>[
+    _SelectableOptionData(
+      value: 'tiktok',
+      label: 'TikTok',
+      keyName: 'source-tiktok-option',
+      materialIcon: Icons.tiktok,
+    ),
+    _SelectableOptionData(
+      value: 'playstore',
+      label: 'Play Store',
+      keyName: 'source-playstore-option',
+      brandIcon: FontAwesomeIcons.googlePlay,
+    ),
+    _SelectableOptionData(
+      value: 'recommendation',
+      label: 'Recommendation',
+      keyName: 'source-recommendation-option',
+      materialIcon: Icons.favorite_outline_rounded,
+    ),
+    _SelectableOptionData(
+      value: 'others',
+      label: 'Others',
+      keyName: 'source-others-option',
+      materialIcon: Icons.more_horiz_rounded,
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    const options = [
-      ('tiktok', 'TikTok', 'source-tiktok-option'),
-      ('playstore', 'Play Store', 'source-playstore-option'),
-      ('recommendation', 'Recommendation', 'source-recommendation-option'),
-      ('others', 'Others', 'source-others-option'),
-    ];
     return Column(
       key: const ValueKey('source-step'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -361,17 +437,233 @@ class _SourceStep extends StatelessWidget {
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 16),
-        for (final option in options)
+        for (final option in _options)
           Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: ChoiceChip(
-              key: Key(option.$3),
-              label: Text(option.$2),
-              selected: selected == option.$1,
-              onSelected: (_) => onChanged(option.$1),
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _SelectableOptionTile(
+              option: option,
+              selected: selected == option.value,
+              onTap: () => onChanged(option.value),
             ),
           ),
       ],
+    );
+  }
+}
+
+class _RelationshipStatusStep extends StatelessWidget {
+  const _RelationshipStatusStep({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final String? selected;
+  final ValueChanged<String> onChanged;
+
+  static const _options = <_SelectableOptionData>[
+    _SelectableOptionData(
+      value: 'dating',
+      label: 'Dating',
+      keyName: 'relationship-status-dating',
+      materialIcon: Icons.favorite_border_rounded,
+    ),
+    _SelectableOptionData(
+      value: 'engaged',
+      label: 'Engaged',
+      keyName: 'relationship-status-engaged',
+      materialIcon: Icons.diamond_outlined,
+    ),
+    _SelectableOptionData(
+      value: 'married',
+      label: 'Married',
+      keyName: 'relationship-status-married',
+      materialIcon: Icons.diversity_1_outlined,
+    ),
+    _SelectableOptionData(
+      value: 'long_distance',
+      label: 'Long distance',
+      keyName: 'relationship-status-long-distance',
+      materialIcon: Icons.flight_outlined,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: const ValueKey('relationship-status-step'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'What is your relationship status?',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 16),
+        for (final option in _options)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _SelectableOptionTile(
+              option: option,
+              selected: selected == option.value,
+              onTap: () => onChanged(option.value),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _RelationshipLengthStep extends StatelessWidget {
+  const _RelationshipLengthStep({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final String? selected;
+  final ValueChanged<String> onChanged;
+
+  static const _options = <_SelectableOptionData>[
+    _SelectableOptionData(
+      value: 'under_3_months',
+      label: 'Under 3 months',
+      keyName: 'relationship-length-under-3-months',
+      materialIcon: Icons.hourglass_bottom_rounded,
+    ),
+    _SelectableOptionData(
+      value: '3_to_12_months',
+      label: '3–12 months',
+      keyName: 'relationship-length-3-to-12-months',
+      materialIcon: Icons.calendar_month_outlined,
+    ),
+    _SelectableOptionData(
+      value: '1_to_3_years',
+      label: '1–3 years',
+      keyName: 'relationship-length-1-to-3-years',
+      materialIcon: Icons.event_available_outlined,
+    ),
+    _SelectableOptionData(
+      value: '3_plus_years',
+      label: '3+ years',
+      keyName: 'relationship-length-3-plus-years',
+      materialIcon: Icons.workspace_premium_outlined,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: const ValueKey('relationship-length-step'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'How long have you been together?',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 16),
+        for (final option in _options)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _SelectableOptionTile(
+              option: option,
+              selected: selected == option.value,
+              onTap: () => onChanged(option.value),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _SelectableOptionData {
+  const _SelectableOptionData({
+    required this.value,
+    required this.label,
+    required this.keyName,
+    this.materialIcon,
+    this.brandIcon,
+  });
+
+  final String value;
+  final String label;
+  final String keyName;
+  final IconData? materialIcon;
+  final FaIconData? brandIcon;
+}
+
+class _SelectableOptionTile extends StatelessWidget {
+  const _SelectableOptionTile({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _SelectableOptionData option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final borderColor = selected
+        ? BubColors.purple
+        : BubColors.purple.withValues(alpha: 0.45);
+
+    return Material(
+      color: selected
+          ? BubColors.purple.withValues(alpha: 0.08)
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        key: Key(option.keyName),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: borderColor, width: selected ? 2 : 1.5),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 28,
+                child: Center(
+                  child: option.brandIcon != null
+                      ? FaIcon(
+                          option.brandIcon,
+                          size: 22,
+                          color: BubColors.purple,
+                        )
+                      : Icon(
+                          option.materialIcon,
+                          size: 26,
+                          color: BubColors.purple,
+                        ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  option.label,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 16,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (selected)
+                const Icon(
+                  Icons.check_circle_rounded,
+                  color: BubColors.purple,
+                  size: 22,
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
