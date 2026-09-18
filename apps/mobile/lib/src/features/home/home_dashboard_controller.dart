@@ -10,6 +10,17 @@ import '../../core/dio_provider.dart';
 
 final momentImagePickerProvider = Provider<ImagePicker>((ref) => ImagePicker());
 
+final momentUploadInProgressProvider = NotifierProvider<_BusyFlag, bool>(
+  _BusyFlag.new,
+);
+
+class _BusyFlag extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void setBusy(bool value) => state = value;
+}
+
 class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
   @override
   Future<HomeDashboardResponse> build() {
@@ -31,7 +42,8 @@ class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
 
   Future<void> putTodayMoment(String photoUrl, DateTime date) async {
     final localDate = _dateOnly(date);
-    state = await AsyncValue.guard(() async {
+    final previous = state.asData?.value;
+    try {
       await ref
           .read(restClientProvider)
           .homeController
@@ -41,8 +53,17 @@ class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
               localDate: DateTime.parse(localDate),
             ),
           );
-      return ref.read(restClientProvider).homeController.getHomeDashboard();
-    });
+      state = AsyncData(
+        await ref.read(restClientProvider).homeController.getHomeDashboard(),
+      );
+    } catch (error, stackTrace) {
+      if (previous != null) {
+        state = AsyncData(previous);
+      } else {
+        state = AsyncError(error, stackTrace);
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
   }
 
   Future<void> captureTodayMoment() async {
@@ -59,7 +80,7 @@ class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
     }
 
     final previous = state.asData?.value;
-    state = const AsyncLoading<HomeDashboardResponse>();
+    ref.read(momentUploadInProgressProvider.notifier).setBusy(true);
     try {
       await _uploadMomentPhoto(image.path);
       state = AsyncData(
@@ -72,6 +93,8 @@ class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
         state = AsyncError(error, stackTrace);
       }
       Error.throwWithStackTrace(error, stackTrace);
+    } finally {
+      ref.read(momentUploadInProgressProvider.notifier).setBusy(false);
     }
   }
 
@@ -95,7 +118,8 @@ class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
   }
 
   Future<void> reactToTodayMoment(String momentId) async {
-    state = await AsyncValue.guard(() async {
+    final previous = state.asData?.value;
+    try {
       await ref
           .read(restClientProvider)
           .homeController
@@ -103,8 +127,17 @@ class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
             momentId: momentId,
             body: const HomeMomentReactionRequest(reaction: '❤️'),
           );
-      return ref.read(restClientProvider).homeController.getHomeDashboard();
-    });
+      state = AsyncData(
+        await ref.read(restClientProvider).homeController.getHomeDashboard(),
+      );
+    } catch (error, stackTrace) {
+      if (previous != null) {
+        state = AsyncData(previous);
+      } else {
+        state = AsyncError(error, stackTrace);
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
   }
 
   Future<void> putMood(String mood) async {
@@ -113,13 +146,23 @@ class HomeDashboardController extends AsyncNotifier<HomeDashboardResponse> {
       return;
     }
 
-    state = await AsyncValue.guard(() async {
+    final previous = state.asData?.value;
+    try {
       await ref
           .read(restClientProvider)
           .homeController
           .putMood(body: HomeMoodRequest(mood: trimmedMood));
-      return ref.read(restClientProvider).homeController.getHomeDashboard();
-    });
+      state = AsyncData(
+        await ref.read(restClientProvider).homeController.getHomeDashboard(),
+      );
+    } catch (error, stackTrace) {
+      if (previous != null) {
+        state = AsyncData(previous);
+      } else {
+        state = AsyncError(error, stackTrace);
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
   }
 
   String _dateOnly(DateTime date) {

@@ -68,6 +68,11 @@ class UserServiceTest {
                 JsonNullable.of("new@example.com"),
                 JsonNullable.undefined(),
                 JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
                 JsonNullable.undefined()));
 
     assertThat(response.email()).isEqualTo("new@example.com");
@@ -89,10 +94,46 @@ class UserServiceTest {
                 JsonNullable.undefined(),
                 JsonNullable.undefined(),
                 JsonNullable.of(ThemeMode.DARK),
-                JsonNullable.of("en")));
+                JsonNullable.of("en"),
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.undefined()));
 
     assertThat(response.themeMode()).isEqualTo(ThemeMode.DARK);
     assertThat(response.language()).isEqualTo("en");
+    verify(repository, never()).save(any(User.class));
+  }
+
+  @Test
+  void updateMeAppliesProfileOnboardingFields() {
+    AuthenticatedUser principal =
+        new AuthenticatedUser("subject-4", "user@example.com", "Example User", Set.of("USER"));
+    User stored = user("subject-4", "old@example.com", "Old Name");
+    when(repository.findByExternalId("subject-4")).thenReturn(Optional.of(stored));
+
+    var response =
+        service.updateMe(
+            principal,
+            new UserUpdateRequest(
+                JsonNullable.undefined(),
+                JsonNullable.of("Alice Reyes"),
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.of(24),
+                JsonNullable.of("recommendation"),
+                JsonNullable.of("dating"),
+                JsonNullable.of("1_to_3_years"),
+                JsonNullable.of(true)));
+
+    assertThat(response.displayName()).isEqualTo("Alice Reyes");
+    assertThat(response.age()).isEqualTo(24);
+    assertThat(response.discoveredAppVia()).isEqualTo("recommendation");
+    assertThat(response.relationshipStatus()).isEqualTo("dating");
+    assertThat(response.relationshipLength()).isEqualTo("1_to_3_years");
+    assertThat(response.termsAcceptedAt()).isNotNull();
+    assertThat(response.profileOnboardingComplete()).isTrue();
     verify(repository, never()).save(any(User.class));
   }
 

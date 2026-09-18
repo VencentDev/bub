@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/async_state_widgets.dart';
+import '../../l10n/app_strings.dart';
 import '../../theme/bub_colors.dart';
 import 'safe_controller.dart';
 import 'widgets/safe_delete_confirmation.dart';
@@ -21,26 +23,16 @@ class SafeScreen extends ConsumerWidget {
     return Scaffold(
       key: const Key('safe-screen'),
       body: status.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const BubLoadingState(
+          key: Key('safe-loading'),
+          label: 'Loading Safe',
+        ),
         error: (_, _) => SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Safe could not load',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: () => ref.invalidate(safeControllerProvider),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            ),
+          child: BubErrorState(
+            key: const Key('safe-error-state'),
+            title: 'Safe could not load',
+            onRetry: () => ref.invalidate(safeControllerProvider),
+            retryKey: const Key('safe-retry-button'),
           ),
         ),
         data: (value) {
@@ -125,6 +117,7 @@ class _SafeFirstTimeSetupState extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final strings = ref.watch(appStringsProvider);
     return SafeArea(
       child: Stack(
         children: [
@@ -143,27 +136,30 @@ class _SafeFirstTimeSetupState extends ConsumerWidget {
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(height: 18),
-                  const Text(
-                    'Set up your Safe',
+                  Text(
+                    strings.setUpSafe,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 25,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 0,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Create your private PIN before opening shared memories.',
+                  Text(
+                    strings.createSafePinSubtitle,
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 20),
                   FilledButton.icon(
                     key: const Key('safe-setup-open'),
                     onPressed: () => _showSetupDialog(context, ref),
                     icon: const Icon(Icons.add_moderator_rounded),
-                    label: const Text('Set a PIN'),
+                    label: Text(strings.setPin),
                   ),
                 ],
               ),
@@ -618,10 +614,13 @@ class _SafePinFlowState extends ConsumerState<_SafePinFlow> {
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.pinConfigured ? 'Unlock Safe' : 'Create Safe PIN';
+    final strings = ref.watch(appStringsProvider);
+    final title = widget.pinConfigured
+        ? strings.unlockSafe
+        : strings.createSafePin;
     final subtitle = widget.pinConfigured
-        ? 'Enter your Safe PIN to view private memories.'
-        : 'Choose a 4 to 6 digit PIN for this shared vault.';
+        ? strings.safeUnlockSubtitle
+        : strings.safeCreatePinSubtitle;
     final canPop = Navigator.canPop(context);
 
     return SafeArea(
@@ -945,49 +944,31 @@ class _SafeUnlockedStateState extends ConsumerState<_SafeUnlockedState> {
 
   Widget _buildBody({required bool loading, required bool error}) {
     if (loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const BubLoadingState(
+        key: Key('safe-gallery-loading'),
+        label: 'Loading Safe gallery',
+      );
     }
     if (error) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Safe gallery could not load',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 12),
-              FilledButton(onPressed: _reload, child: const Text('Retry')),
-            ],
-          ),
-        ),
+      return BubErrorState(
+        key: const Key('safe-gallery-error'),
+        title: 'Safe gallery could not load',
+        onRetry: _reload,
+        retryKey: const Key('safe-gallery-retry-button'),
       );
     }
     if (_items.isEmpty) {
       return Stack(
         children: [
           SafeGalleryGrid(items: _items, onOpen: (_) {}),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Image.asset(
-                    'assets/illustrations/bears/safe-box.png',
-                    width: 130,
-                    height: 130,
-                    fit: BoxFit.contain,
-                  ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Nothing in Safe yet',
-                    style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900),
-                  ),
-                ],
-              ),
+          BubEmptyState(
+            key: const Key('safe-gallery-empty'),
+            title: 'Nothing in Safe yet',
+            image: Image.asset(
+              'assets/illustrations/bears/safe-box.png',
+              width: 130,
+              height: 130,
+              fit: BoxFit.contain,
             ),
           ),
         ],

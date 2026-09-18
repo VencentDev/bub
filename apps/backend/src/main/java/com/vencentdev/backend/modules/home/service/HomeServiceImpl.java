@@ -362,6 +362,10 @@ public class HomeServiceImpl implements HomeService {
     }
 
     LocalDate cursor = LocalDate.now(clock.withZone(BUB_DAY_ZONE));
+    if (!mutualDays.contains(cursor)) {
+      cursor = cursor.minusDays(1);
+    }
+
     int streak = 0;
     while (mutualDays.contains(cursor)) {
       streak += 1;

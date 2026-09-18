@@ -44,7 +44,10 @@ import com.vencentdev.backend.modules.user.service.UserService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -53,6 +56,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -65,6 +69,8 @@ public class ChatServiceImpl implements ChatService {
   private static final Duration TYPING_WINDOW = Duration.ofSeconds(12);
   private static final Duration ONLINE_WINDOW = Duration.ofMinutes(5);
   private static final long MAX_MEDIA_BYTES = 25L * 1024L * 1024L;
+  private static final int DEFAULT_THREAD_LIMIT = 50;
+  private static final int MAX_THREAD_LIMIT = 100;
   private static final Set<String> SUPPORTED_REACTIONS = Set.of("❤️", "😂", "🥺", "😭", "🔥");
 
   private final TetherConnectionRepository connections;
@@ -137,12 +143,15 @@ public class ChatServiceImpl implements ChatService {
 
   @Override
   @Transactional(readOnly = true)
-  public ChatThreadResponse thread(AuthenticatedUser principal) {
+  public ChatThreadResponse thread(
+      AuthenticatedUser principal, Integer limit, Instant beforeCreatedAt, LocalDate aroundDate) {
     UUID userId = userService.resolveInternalId(principal);
     return connections
         .findActiveByUserId(userId)
-        .map(connection -> threadForConnection(connection, userId))
-        .orElseGet(() -> new ChatThreadResponse(false, null, null, null, List.of()));
+        .map(
+            connection ->
+                threadForConnection(connection, userId, limit, beforeCreatedAt, aroundDate))
+        .orElseGet(() -> new ChatThreadResponse(false, null, null, null, List.of(), false, null));
   }
 
   @Override
@@ -396,14 +405,64 @@ public class ChatServiceImpl implements ChatService {
   }
 
   private ChatThreadResponse threadForConnection(TetherConnection connection, UUID userId) {
-    List<ChatMessage> threadMessages = messages.findThreadMessages(connection.getId(), userId);
+    return threadForConnection(connection, userId, null, null, null);
+  }
+
+  private ChatThreadResponse threadForConnection(
+      TetherConnection connection,
+      UUID userId,
+      Integer requestedLimit,
+      Instant beforeCreatedAt,
+      LocalDate aroundDate) {
+    int limit = normalizedThreadLimit(requestedLimit);
+    List<ChatMessage> fetchedMessages =
+        pagedThreadMessages(connection.getId(), userId, limit, beforeCreatedAt, aroundDate);
+    boolean hasMoreBefore = fetchedMessages.size() > limit;
+    List<ChatMessage> threadMessages =
+        hasMoreBefore
+            ? new ArrayList<>(fetchedMessages.subList(0, limit))
+            : new ArrayList<>(fetchedMessages);
+    if (aroundDate == null) {
+      Collections.reverse(threadMessages);
+    }
     ResponseContext context = responseContext(threadMessages, userId, Instant.now(clock));
     return new ChatThreadResponse(
         true,
         connection.getId(),
         partnerDisplayName(connection, userId),
         stateFor(connection, userId, context.now()),
-        threadMessages.stream().map(message -> toResponse(message, userId, context)).toList());
+        threadMessages.stream().map(message -> toResponse(message, userId, context)).toList(),
+        hasMoreBefore,
+        oldestCursor(threadMessages));
+  }
+
+  private List<ChatMessage> pagedThreadMessages(
+      UUID connectionId, UUID userId, int limit, Instant beforeCreatedAt, LocalDate aroundDate) {
+    PageRequest page = PageRequest.of(0, limit + 1);
+    if (aroundDate != null) {
+      Instant startAt = aroundDate.atStartOfDay().toInstant(ZoneOffset.UTC);
+      Instant endAt = aroundDate.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
+      return messages.findThreadMessagesAroundDate(connectionId, userId, startAt, endAt, page);
+    }
+    if (beforeCreatedAt != null) {
+      return messages.findThreadMessagesBefore(connectionId, userId, beforeCreatedAt, page);
+    }
+    return messages.findRecentThreadMessages(connectionId, userId, page);
+  }
+
+  private int normalizedThreadLimit(Integer requestedLimit) {
+    if (requestedLimit == null || requestedLimit <= 0) {
+      return DEFAULT_THREAD_LIMIT;
+    }
+    return Math.min(requestedLimit, MAX_THREAD_LIMIT);
+  }
+
+  private String oldestCursor(List<ChatMessage> threadMessages) {
+    if (threadMessages.isEmpty()) {
+      return null;
+    }
+    Instant createdAt = threadMessages.getFirst().getCreatedAt();
+    return createdAt == null ? null : createdAt.toString();
   }
 
   private String partnerDisplayName(TetherConnection connection, UUID viewerId) {

@@ -20,8 +20,11 @@ import 'package:bub/src/features/chat/chat_controller.dart';
 import 'package:bub/src/features/home/home_dashboard_controller.dart';
 import 'package:bub/src/features/home/home_screen.dart';
 import 'package:bub/src/features/home/widgets/home_latest_bub_card.dart';
+import 'package:bub/src/features/home/widgets/home_partner_card.dart';
 import 'package:bub/src/features/home/widgets/home_today_moment_card.dart';
 import 'package:bub/src/features/safe/safe_controller.dart';
+import 'package:bub/src/features/settings/legal_policy_controller.dart';
+import 'package:bub/src/features/tether_onboarding/profile_onboarding_screen.dart';
 import 'package:bub/src/features/tether_onboarding/tether_onboarding_screens.dart';
 import 'package:bub/src/theme/bub_colors.dart';
 import 'package:bub/src/theme/bub_theme.dart';
@@ -32,6 +35,191 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 void main() {
+  testWidgets('new user completes profile stepper before tether setup', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final controller = _FakeAuthController(
+      AuthState.authenticated(
+        user: _user(),
+        tetherStatus: const TetherStatusResponse(hasActiveTether: false),
+        tetherOnboardingComplete: false,
+        profileOnboardingComplete: false,
+      ),
+    );
+    final profileSubmitter = _FakeProfileOnboardingSubmitter();
+    final permissions = _FakeOnboardingPermissionRequester();
+
+    await tester.pumpWidget(
+      _appWithAuthController(
+        controller,
+        overrides: [
+          profileOnboardingSubmitterProvider.overrideWithValue(
+            profileSubmitter,
+          ),
+          onboardingPermissionRequesterProvider.overrideWithValue(permissions),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('profile-onboarding-stepper')), findsOneWidget);
+    expect(find.byKey(const Key('tether-code-field')), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const Key('profile-full-name-field')),
+      'Alice Reyes',
+    );
+    await tester.enterText(find.byKey(const Key('profile-age-field')), '24');
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Where did you find Bub?'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('source-tiktok-option')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('What is your relationship status?'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('relationship-status-dating')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('How long have you been together?'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('relationship-length-1-to-3-years')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('terms-accept-checkbox')));
+    await tester.tap(find.byKey(const Key('profile-finish-button')));
+    await tester.pumpAndSettle();
+
+    expect(profileSubmitter.submissions.single.fullName, 'Alice Reyes');
+    expect(profileSubmitter.submissions.single.age, 24);
+    expect(profileSubmitter.submissions.single.discoveredAppVia, 'tiktok');
+    expect(profileSubmitter.submissions.single.relationshipStatus, 'dating');
+    expect(
+      profileSubmitter.submissions.single.relationshipLength,
+      '1_to_3_years',
+    );
+    expect(permissions.requestCount, 1);
+    expect(controller.profileCompleteCount, 1);
+    expect(find.byKey(const Key('tether-code-field')), findsOneWidget);
+  });
+
+  testWidgets('profile onboarding requires accepting terms and policy', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final profileSubmitter = _FakeProfileOnboardingSubmitter();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          profileOnboardingSubmitterProvider.overrideWithValue(
+            profileSubmitter,
+          ),
+          onboardingPermissionRequesterProvider.overrideWithValue(
+            _FakeOnboardingPermissionRequester(),
+          ),
+        ],
+        child: const MaterialApp(home: ProfileOnboardingScreen()),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('profile-full-name-field')),
+      'Alice Reyes',
+    );
+    await tester.enterText(find.byKey(const Key('profile-age-field')), '24');
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('source-playstore-option')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('relationship-status-engaged')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('relationship-length-3-to-12-months')),
+    );
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('profile-finish-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Accept the Terms and Privacy Policy to continue'),
+      findsOneWidget,
+    );
+    expect(profileSubmitter.submissions, isEmpty);
+  });
+
+  testWidgets('profile onboarding terms and privacy copy opens policies', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          legalPolicyRepositoryProvider.overrideWithValue(
+            _FakeLegalPolicyRepository(),
+          ),
+        ],
+        child: const MaterialApp(home: ProfileOnboardingScreen()),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('profile-full-name-field')),
+      'Alice Reyes',
+    );
+    await tester.enterText(find.byKey(const Key('profile-age-field')), '24');
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('source-playstore-option')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('relationship-status-married')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('relationship-length-3-plus-years')));
+    await tester.tap(find.byKey(const Key('profile-next-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('terms-policy-link')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('legal-policy-screen-terms-of-service')),
+      findsOneWidget,
+    );
+    expect(find.text('Policy body for terms-of-service.'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('privacy-policy-link')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('legal-policy-screen-privacy-policy')),
+      findsOneWidget,
+    );
+    expect(find.text('Policy body for privacy-policy.'), findsOneWidget);
+  });
+
   testWidgets('first-time untethered user routes to tether onboarding', (
     tester,
   ) async {
@@ -111,7 +299,7 @@ void main() {
     );
     expect(
       tester.getSize(find.byKey(const Key('bub-app-bar-logo'))),
-      const Size(120, 30),
+      const Size(120, 35),
     );
     expect(
       tester.getTopLeft(find.byKey(const Key('bub-app-bar-logo'))).dx,
@@ -134,7 +322,7 @@ void main() {
     );
     expect(
       tester.getSize(find.byKey(const Key('bub-app-bar-logo'))),
-      const Size(120, 30),
+      const Size(120, 35),
     );
     expect(
       tester.getTopLeft(find.byKey(const Key('bub-app-bar-logo'))).dx,
@@ -260,6 +448,11 @@ void main() {
     expect(find.byKey(const Key('settings-theme-row')), findsOneWidget);
     expect(find.byKey(const Key('settings-language-row')), findsOneWidget);
     expect(find.byKey(const Key('settings-tether-section')), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('settings-account-section')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.byKey(const Key('settings-account-section')), findsOneWidget);
 
     await tester.tap(find.text('Home'));
@@ -350,6 +543,8 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
     expect(find.text('Bub sent'), findsOneWidget);
+    final sentToast = tester.widget<Text>(find.text('Bub sent'));
+    expect(sentToast.style?.decoration, TextDecoration.none);
     expect(tester.getTopLeft(find.text('Bub sent')).dy, lessThan(140));
     await tester.pump(const Duration(milliseconds: 2200));
   });
@@ -375,6 +570,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text("Bub couldn't send. Please try again."), findsOneWidget);
+    final errorToast = tester.widget<Text>(
+      find.text("Bub couldn't send. Please try again."),
+    );
+    expect(errorToast.style?.decoration, TextDecoration.none);
     expect(
       tester.getTopLeft(find.text("Bub couldn't send. Please try again.")).dy,
       lessThan(140),
@@ -463,29 +662,25 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Bobby'), findsNothing);
-    expect(find.textContaining('Tethered since'), findsOneWidget);
-    expect(find.byKey(const Key('home-tether-string')), findsOneWidget);
-    expect(find.byKey(const Key('home-tether-viewer-mood')), findsOneWidget);
-    expect(find.byKey(const Key('home-tether-partner-mood')), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('home-tether-viewer-mood')),
-        matching: find.text('calm'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('home-tether-partner-mood')),
-        matching: find.text('cozy'),
-      ),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Tethered for'), findsOneWidget);
+    expect(find.textContaining('Been tethered for'), findsNothing);
+    expect(find.textContaining('Tethered since'), findsNothing);
+    expect(find.byKey(const Key('home-hero-halo')), findsOneWidget);
+    expect(find.byKey(const Key('home-tether-string')), findsNothing);
+    expect(find.byKey(const Key('home-tether-viewer-mood')), findsNothing);
+    expect(find.byKey(const Key('home-tether-partner-mood')), findsNothing);
     expect(find.byKey(const Key('home-tether-since-date')), findsOneWidget);
     expect(find.byKey(const Key('home-tether-duration')), findsOneWidget);
+    final tetherBear = tester.widget<Image>(
+      find.byKey(const Key('home-tether-bear')),
+    );
+    expect(
+      (tetherBear.image as AssetImage).assetName,
+      'assets/illustrations/bears/bear-tethered.png',
+    );
     expect(
       tester.getSize(find.byKey(const Key('home-partner-card'))).height,
-      lessThan(165),
+      lessThan(320),
     );
     expect(find.byType(RefreshIndicator), findsOneWidget);
     final refreshList = tester.widget<ListView>(
@@ -574,7 +769,7 @@ void main() {
       find.byKey(const Key('home-mood-dialog-field')),
       'cozy',
     );
-    await tester.tap(find.text('Save mood'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
     expect(find.text('cozy'), findsOneWidget);
     expect(find.byKey(const Key('home-mood-card')), findsOneWidget);
@@ -649,6 +844,109 @@ void main() {
     expect(find.text('45 days'), findsOneWidget);
     expect(find.text('2 hours ago'), findsOneWidget);
     expect(find.text('30 mins ago'), findsOneWidget);
+  });
+
+  testWidgets('latest Bub streak uses singular and plural day labels', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _latestBubCardApp(
+        latestBub: HomeLatestBubResponse(
+          hasActivity: true,
+          partnerLastSentAt: DateTime(2026, 7, 17, 8, 0),
+          partnerLastSentCopy: 'Your partner Bubbed you',
+          streakDays: 1,
+        ),
+        isTethered: true,
+        now: DateTime(2026, 7, 17, 9, 0),
+      ),
+    );
+
+    expect(find.text('1 day'), findsOneWidget);
+    expect(find.text('1 days'), findsNothing);
+
+    await tester.pumpWidget(
+      _latestBubCardApp(
+        latestBub: HomeLatestBubResponse(
+          hasActivity: true,
+          partnerLastSentAt: DateTime(2026, 7, 17, 8, 0),
+          partnerLastSentCopy: 'Your partner Bubbed you',
+          streakDays: 2,
+        ),
+        isTethered: true,
+        now: DateTime(2026, 7, 17, 9, 0),
+      ),
+    );
+
+    expect(find.text('2 days'), findsOneWidget);
+  });
+
+  testWidgets('partner card shows tether duration in days without since copy', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _partnerCardApp(
+        HomeTetherCardResponse(
+          hasActiveTether: true,
+          partnerDisplayName: 'Bobby',
+          tetheredSince: DateTime.now().subtract(const Duration(days: 1)),
+        ),
+      ),
+    );
+
+    expect(find.text('Tethered for 1 day'), findsOneWidget);
+    expect(find.textContaining('Tethered since'), findsNothing);
+    expect(find.textContaining('Been tethered for'), findsNothing);
+
+    await tester.pumpWidget(
+      _partnerCardApp(
+        HomeTetherCardResponse(
+          hasActiveTether: true,
+          partnerDisplayName: 'Bobby',
+          tetheredSince: DateTime.now().subtract(const Duration(days: 2)),
+        ),
+      ),
+    );
+
+    expect(find.text('Tethered for 2 days'), findsOneWidget);
+    expect(find.textContaining('Tethered since'), findsNothing);
+  });
+
+  testWidgets('partner card uses hours minutes and seconds under one day', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _partnerCardApp(
+        HomeTetherCardResponse(
+          hasActiveTether: true,
+          partnerDisplayName: 'Bobby',
+          tetheredSince: DateTime.now().subtract(const Duration(hours: 3)),
+        ),
+      ),
+    );
+    expect(find.text('Tethered for 3 hours'), findsOneWidget);
+
+    await tester.pumpWidget(
+      _partnerCardApp(
+        HomeTetherCardResponse(
+          hasActiveTether: true,
+          partnerDisplayName: 'Bobby',
+          tetheredSince: DateTime.now().subtract(const Duration(minutes: 12)),
+        ),
+      ),
+    );
+    expect(find.text('Tethered for 12 minutes'), findsOneWidget);
+
+    await tester.pumpWidget(
+      _partnerCardApp(
+        HomeTetherCardResponse(
+          hasActiveTether: true,
+          partnerDisplayName: 'Bobby',
+          tetheredSince: DateTime.now().subtract(const Duration(seconds: 8)),
+        ),
+      ),
+    );
+    expect(find.text('Tethered for 8 seconds'), findsOneWidget);
   });
 
   testWidgets(
@@ -870,9 +1168,7 @@ void main() {
     );
   });
 
-  testWidgets('glass mood dialog validates and saves trimmed mood', (
-    tester,
-  ) async {
+  testWidgets('mood dialog validates and saves trimmed mood', (tester) async {
     await tester.pumpWidget(
       _appWithAuth(
         AuthState.authenticated(
@@ -901,7 +1197,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('home-mood-empty-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Save mood'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
     expect(find.text('Mood is required'), findsOneWidget);
 
@@ -909,7 +1205,7 @@ void main() {
       find.byKey(const Key('home-mood-dialog-field')),
       'this mood is too long today',
     );
-    await tester.tap(find.text('Save mood'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
     expect(find.text('Use 20 characters or fewer'), findsOneWidget);
 
@@ -917,7 +1213,7 @@ void main() {
       find.byKey(const Key('home-mood-dialog-field')),
       '  bright  ',
     );
-    await tester.tap(find.text('Save mood'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
     expect(find.text('bright'), findsOneWidget);
   });
@@ -965,7 +1261,7 @@ void main() {
     );
     expect(
       tester.getSize(find.byKey(const Key('home-partner-card'))).height,
-      lessThan(145),
+      lessThan(360),
     );
 
     await tester.tap(find.widgetWithText(FilledButton, 'Start tethering'));
@@ -1250,6 +1546,17 @@ Widget _latestBubCardApp({
   );
 }
 
+Widget _partnerCardApp(HomeTetherCardResponse tether) {
+  return MaterialApp(
+    theme: BubTheme.light,
+    home: Scaffold(
+      body: Center(
+        child: SizedBox(width: 300, child: HomePartnerCard(tether: tether)),
+      ),
+    ),
+  );
+}
+
 HomeDashboardResponse _dashboard({
   HomeTetherCardResponse? tether,
   HomeTodayMomentResponse? todayMoment,
@@ -1376,6 +1683,7 @@ class _FakeAuthController extends AuthController {
 
   final AuthState initial;
   var completeCount = 0;
+  var profileCompleteCount = 0;
 
   @override
   Future<AuthState> build() async => initial;
@@ -1409,6 +1717,19 @@ class _FakeAuthController extends AuthController {
   @override
   Future<void> skipTetherOnboarding() =>
       refreshTetherStatus(markComplete: true);
+
+  @override
+  Future<void> completeProfileOnboarding(UserResponse user) async {
+    profileCompleteCount += 1;
+    state = AsyncData(
+      AuthState.authenticated(
+        user: user,
+        tetherStatus: initial.tetherStatus!,
+        tetherOnboardingComplete: initial.tetherOnboardingComplete,
+        profileOnboardingComplete: true,
+      ),
+    );
+  }
 }
 
 UserResponse _user() => UserResponse(
@@ -1420,3 +1741,45 @@ UserResponse _user() => UserResponse(
   createdAt: DateTime.utc(2026),
   updatedAt: DateTime.utc(2026),
 );
+
+class _FakeProfileOnboardingSubmitter implements ProfileOnboardingSubmitter {
+  final submissions = <ProfileOnboardingSubmission>[];
+
+  @override
+  Future<UserResponse> submit(ProfileOnboardingSubmission submission) async {
+    submissions.add(submission);
+    return _user().copyWith(
+      displayName: submission.fullName,
+      age: submission.age,
+      discoveredAppVia: submission.discoveredAppVia,
+      profileOnboardingComplete: true,
+    );
+  }
+}
+
+class _FakeOnboardingPermissionRequester
+    implements OnboardingPermissionRequester {
+  var requestCount = 0;
+
+  @override
+  Future<void> requestInitialMediaPermissions() async {
+    requestCount += 1;
+  }
+}
+
+class _FakeLegalPolicyRepository implements LegalPolicyRepository {
+  @override
+  Future<LegalPolicy> fetchPolicy(String slug) async {
+    return LegalPolicy(
+      slug: slug,
+      title: switch (slug) {
+        'terms-of-service' => 'Terms of Service',
+        'cookies-policy' => 'Cookies Policy',
+        _ => 'Privacy Policy',
+      },
+      version: '2026-07-22',
+      effectiveDate: '2026-07-22',
+      body: 'Policy body for $slug.',
+    );
+  }
+}

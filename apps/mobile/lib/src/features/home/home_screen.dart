@@ -12,14 +12,17 @@ import '../../core/env.dart';
 import '../../features/bub/bub_heart_burst.dart';
 import '../../features/bub/bub_send_controller.dart';
 import '../../features/bub/first_bub_tutorial.dart';
+import '../../features/chat/chat_cache_store.dart';
 import '../../features/chat/chat_section.dart';
 import '../../features/home/home_dashboard_controller.dart';
 import '../../features/home/widgets/home_latest_bub_card.dart';
 import '../../features/home/widgets/home_mood_card.dart';
 import '../../features/home/widgets/home_partner_card.dart';
 import '../../features/home/widgets/home_today_moment_card.dart';
+import '../../features/notifications/notification_panel.dart';
 import '../../features/safe/safe_screen.dart';
 import '../../features/settings/settings_screen.dart';
+import '../../features/tether_onboarding/profile_onboarding_screen.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
 
@@ -42,6 +45,12 @@ class HomeScreen extends ConsumerWidget {
       value: final state,
     ) when state.route == AuthRouteState.untethered) {
       return _BubHome(onLogout: controller.logout, paired: false);
+    }
+
+    if (auth case AsyncData(
+      value: final state,
+    ) when state.route == AuthRouteState.needsProfileOnboarding) {
+      return const ProfileOnboardingScreen();
     }
 
     if (auth case AsyncData(
@@ -326,7 +335,26 @@ class _BubHomeState extends ConsumerState<_BubHome> {
 
   Future<void> _removeTether() async {
     try {
+      final userId = await ref.read(authServiceProvider).cacheUserId();
+      final cachedThread = userId == null
+          ? null
+          : await ref
+                .read(chatCacheStoreProvider)
+                .readActiveLatest(userId: userId);
       await ref.read(restClientProvider).tetherController.removeTether();
+      if (userId != null) {
+        final tetherConnectionId = cachedThread?.tetherConnectionId;
+        if (tetherConnectionId == null) {
+          await ref.read(chatCacheStoreProvider).clearUser(userId: userId);
+        } else {
+          await ref
+              .read(chatCacheStoreProvider)
+              .clearTether(
+                userId: userId,
+                tetherConnectionId: tetherConnectionId,
+              );
+        }
+      }
       await ref
           .read(authControllerProvider.notifier)
           .refreshTetherStatus(markSkipped: true);
@@ -349,6 +377,32 @@ class _BubHomeState extends ConsumerState<_BubHome> {
         isError: true,
       );
     }
+  }
+
+  void _showNotifications() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => NotificationPanel(onOpenLink: _openNotificationLink),
+    );
+  }
+
+  void _openNotificationLink(String linkPath) {
+    Navigator.of(context).maybePop();
+    if (linkPath == '/chat') {
+      _selectSection(_BubHomeSection.chat);
+      return;
+    }
+    if (linkPath == '/safe') {
+      _selectSection(_BubHomeSection.safe);
+      return;
+    }
+    if (linkPath == '/settings') {
+      _selectSection(_BubHomeSection.settings);
+      return;
+    }
+    _selectSection(_BubHomeSection.home);
   }
 
   @override
@@ -392,7 +446,11 @@ class _BubHomeState extends ConsumerState<_BubHome> {
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      appBar: AppBar(titleSpacing: 0, title: const _BubAppBarLogo()),
+      appBar: AppBar(
+        titleSpacing: 0,
+        title: const _BubAppBarLogo(),
+        actions: [NotificationBell(onPressed: _showNotifications)],
+      ),
       extendBody: true,
       body: Stack(
         fit: StackFit.expand,
@@ -543,19 +601,21 @@ class _BubHomeSectionBody extends ConsumerWidget {
           );
         }
         final isTethered = paired && tether.hasActiveTether == true;
+        final isUploadingMoment = ref.watch(momentUploadInProgressProvider);
         return RefreshIndicator(
           onRefresh: () => ref.read(homeDashboardProvider.notifier).refresh(),
           child: ListView(
             key: const Key('home-dashboard-refresh-list'),
             physics: const AlwaysScrollableScrollPhysics(),
             cacheExtent: 1200,
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 140),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 140),
             children: [
               HomePartnerCard(tether: tether),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               HomeTodayMomentCard(
                 moment: data.todayMoment,
                 isTethered: isTethered,
+                isUploading: isUploadingMoment,
                 onCaptureMoment: () async {
                   try {
                     await ref
@@ -576,13 +636,13 @@ class _BubHomeSectionBody extends ConsumerWidget {
                           .read(homeDashboardProvider.notifier)
                           .reactToTodayMoment(data.todayMoment!.momentId ?? ''),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               HomeLatestBubCard(
                 latestBub: latestBub,
                 isTethered: isTethered,
                 onFirstBubPressed: onStartFirstBub,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               HomeMoodCard(
                 mood: mood,
                 onSaveMood: (mood) =>
@@ -1072,6 +1132,7 @@ class _BubToast extends StatelessWidget {
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0,
+                  decoration: TextDecoration.none,
                 ),
               ),
             ),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_strings.dart';
 import '../../theme/bub_colors.dart';
+import 'legal_policy_screen.dart';
 import 'settings_controller.dart';
 import 'settings_store.dart';
 
@@ -20,6 +22,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsControllerProvider);
+    final strings = ref.watch(appStringsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark
         ? BubColors.textPrimaryDark
@@ -33,7 +36,7 @@ class SettingsScreen extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 136),
       children: [
         Text(
-          'Settings',
+          strings.settingsTitle,
           style: TextStyle(
             color: textColor,
             fontSize: 28,
@@ -43,7 +46,7 @@ class SettingsScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          'Personalize Bub and manage your account.',
+          strings.settingsSubtitle,
           style: TextStyle(
             color: mutedColor,
             fontSize: 14,
@@ -53,12 +56,12 @@ class SettingsScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 20),
         _SettingsSection(
-          title: 'Appearance',
+          title: strings.appearance,
           children: [
             _SettingsRow(
               key: Key('settings-theme-row'),
               icon: Icons.dark_mode_rounded,
-              title: 'Theme',
+              title: strings.theme,
               trailing: _SettingsMenu<BubSettingsThemeMode>(
                 value: settings.value?.themeMode ?? BubSettingsThemeMode.system,
                 values: BubSettingsThemeMode.values,
@@ -72,16 +75,16 @@ class SettingsScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 14),
         _SettingsSection(
-          title: 'Language',
+          title: strings.language,
           children: [
             _SettingsRow(
               key: Key('settings-language-row'),
               icon: Icons.language_rounded,
-              title: 'Language',
+              title: strings.language,
               trailing: _SettingsMenu<String>(
                 value: settings.value?.language ?? 'en',
-                values: const ['en'],
-                label: _languageLabel,
+                values: const ['en', 'fil'],
+                label: strings.languageName,
                 onSelected: (value) => ref
                     .read(settingsControllerProvider.notifier)
                     .setLanguage(value),
@@ -91,14 +94,28 @@ class SettingsScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 14),
         _SettingsSection(
+          key: const Key('settings-safe-section'),
+          title: strings.safe,
+          children: [
+            _SettingsRow(
+              actionKey: const Key('settings-safe-pin-recovery-button'),
+              icon: Icons.lock_reset_rounded,
+              title: strings.forgotSafePin,
+              value: strings.forgotSafePinDeferred,
+              enabled: false,
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _SettingsSection(
           key: const Key('settings-tether-section'),
-          title: 'Tether',
+          title: strings.tether,
           children: [
             _SettingsRow(
               actionKey: const Key('settings-remove-tether-button'),
               icon: Icons.favorite_rounded,
-              title: 'Remove tether',
-              value: paired ? 'Available' : 'Not tethered',
+              title: strings.removeTether,
+              value: paired ? strings.available : strings.notTethered,
               destructive: paired,
               enabled: paired,
               onTap: paired ? () => _confirmRemoveTether(context) : null,
@@ -107,19 +124,50 @@ class SettingsScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 14),
         _SettingsSection(
+          key: const Key('settings-privacy-legal-section'),
+          title: strings.privacyAndLegal,
+          children: [
+            _SettingsRow(
+              actionKey: const Key('settings-privacy-policy-button'),
+              icon: Icons.privacy_tip_rounded,
+              title: strings.privacyPolicy,
+              onTap: () => _openPolicy(context, 'privacy-policy'),
+            ),
+            _SettingsRow(
+              actionKey: const Key('settings-terms-button'),
+              icon: Icons.description_rounded,
+              title: strings.termsOfService,
+              onTap: () => _openPolicy(context, 'terms-of-service'),
+            ),
+            _SettingsRow(
+              actionKey: const Key('settings-cookies-button'),
+              icon: Icons.cookie_rounded,
+              title: strings.cookiesPolicy,
+              onTap: () => _openPolicy(context, 'cookies-policy'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _SettingsSection(
           key: const Key('settings-account-section'),
-          title: 'Account',
+          title: strings.account,
           children: [
             _SettingsRow(
               actionKey: const Key('settings-logout-button'),
               icon: Icons.logout_rounded,
-              title: 'Logout',
-              value: 'End session',
+              title: strings.logout,
+              value: strings.endSession,
               onTap: () => _confirmLogout(context),
             ),
           ],
         ),
       ],
+    );
+  }
+
+  void _openPolicy(BuildContext context, String slug) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => LegalPolicyScreen(slug: slug)),
     );
   }
 
@@ -154,7 +202,7 @@ class SettingsScreen extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: const Text('Remove tether?'),
         content: const Text(
-          'This removes Shared Moments, Bub History, Shared Safe, and Chat History for this tether.',
+          'This permanently deletes your chat conversation, images and media, Shared Safe, shared moments, Bub history, Bub streak, "Been tethered" history, and other couple history for this tether. This cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -178,13 +226,6 @@ class SettingsScreen extends ConsumerWidget {
       BubSettingsThemeMode.system => 'System',
       BubSettingsThemeMode.light => 'Light',
       BubSettingsThemeMode.dark => 'Dark',
-    };
-  }
-
-  static String _languageLabel(String value) {
-    return switch (value) {
-      'en' => 'English',
-      _ => value,
     };
   }
 }

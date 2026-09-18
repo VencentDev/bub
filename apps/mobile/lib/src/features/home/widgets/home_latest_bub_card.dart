@@ -216,7 +216,7 @@ class _PartnerBubStreak extends StatelessWidget {
                       const Text('❤️', style: TextStyle(fontSize: 11)),
                       const SizedBox(width: 3),
                       Text(
-                        '$streakDays days',
+                        _dayLabel(streakDays),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
@@ -236,6 +236,10 @@ class _PartnerBubStreak extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _dayLabel(int days) {
+    return '$days ${days == 1 ? 'day' : 'days'}';
   }
 }
 

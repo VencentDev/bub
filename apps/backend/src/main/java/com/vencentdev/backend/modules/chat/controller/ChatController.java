@@ -15,6 +15,8 @@ import com.vencentdev.backend.modules.chat.service.ChatService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.MediaType;
@@ -42,8 +44,12 @@ public class ChatController {
 
   @GetMapping("/thread")
   @Operation(operationId = "getChatThread")
-  public ChatThreadResponse thread(@Parameter(hidden = true) @CurrentUser AuthenticatedUser user) {
-    return chatService.thread(user);
+  public ChatThreadResponse thread(
+      @Parameter(hidden = true) @CurrentUser AuthenticatedUser user,
+      @RequestParam(required = false) Integer limit,
+      @RequestParam(required = false) Instant beforeCreatedAt,
+      @RequestParam(required = false) LocalDate aroundDate) {
+    return chatService.thread(user, limit, beforeCreatedAt, aroundDate);
   }
 
   @PostMapping("/messages")

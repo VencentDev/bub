@@ -40,6 +40,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -55,6 +56,7 @@ class ChatControllerIntegrationTest extends IntegrationTestBase {
   @Autowired private TetherInvitationRepository invitations;
   @Autowired private UserRepository users;
   @Autowired private MultipartProperties multipartProperties;
+  @Autowired private JdbcTemplate jdbc;
   @MockitoSpyBean private ChatLivePublisher chatLivePublisher;
 
   @BeforeEach
@@ -121,6 +123,67 @@ class ChatControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(jsonPath("$.messages", hasSize(4)))
         .andExpect(jsonPath("$.messages[0].body").value("hi bub"))
         .andExpect(jsonPath("$.messages[3].reply.snippet").value("hi bub"));
+  }
+
+  @Test
+  void threadDefaultsToLatestPageAndLoadsOlderMessagesByCursor() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    TetherConnection connection =
+        connections.save(
+            TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    for (int index = 1; index <= 55; index++) {
+      insertTextMessage(connection, alice, index, "2026-07-20T00:%02d:00Z".formatted(index));
+    }
+
+    String firstPage =
+        mockMvc
+            .perform(get("/api/v1/chat/thread").with(currentUser("alice")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.messages", hasSize(50)))
+            .andExpect(jsonPath("$.messages[0].body").value("message-06"))
+            .andExpect(jsonPath("$.messages[49].body").value("message-55"))
+            .andExpect(jsonPath("$.hasMoreBefore").value(true))
+            .andExpect(jsonPath("$.oldestCursor").exists())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String oldestCursor = objectMapper.readTree(firstPage).get("oldestCursor").asText();
+
+    mockMvc
+        .perform(
+            get("/api/v1/chat/thread")
+                .param("beforeCreatedAt", oldestCursor)
+                .with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.messages", hasSize(5)))
+        .andExpect(jsonPath("$.messages[0].body").value("message-01"))
+        .andExpect(jsonPath("$.messages[4].body").value("message-05"))
+        .andExpect(jsonPath("$.hasMoreBefore").value(false));
+  }
+
+  @Test
+  void threadLoadsMessagesAroundRequestedDate() throws Exception {
+    User alice = users.save(user("alice", "alice@example.com", "Alice"));
+    User bob = users.save(user("bob", "bob@example.com", "Bob"));
+    TetherConnection connection =
+        connections.save(
+            TetherConnection.builder().userOne(alice).userTwo(bob).active(true).build());
+    insertTextMessage(connection, alice, 1, "2026-07-18T09:00:00Z");
+    insertTextMessage(connection, alice, 2, "2026-07-18T09:05:00Z");
+    insertTextMessage(connection, alice, 3, "2026-07-20T09:00:00Z");
+
+    mockMvc
+        .perform(
+            get("/api/v1/chat/thread")
+                .param("aroundDate", "2026-07-18")
+                .param("limit", "2")
+                .with(currentUser("alice")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.messages", hasSize(2)))
+        .andExpect(jsonPath("$.messages[0].body").value("message-01"))
+        .andExpect(jsonPath("$.messages[1].body").value("message-02"))
+        .andExpect(jsonPath("$.hasMoreBefore").value(false));
   }
 
   @Test
@@ -435,6 +498,21 @@ class ChatControllerIntegrationTest extends IntegrationTestBase {
   private String firstMessageId(String json) throws Exception {
     JsonNode root = objectMapper.readTree(json);
     return root.get(0).get("id").asText();
+  }
+
+  private void insertTextMessage(
+      TetherConnection connection, User sender, int index, String timestamp) {
+    jdbc.update(
+        """
+        insert into chat_messages
+          (tether_connection_id, sender_user_id, message_type, body, delivered_at, created_at)
+        values (?, ?, 'TEXT', ?, ?::timestamptz, ?::timestamptz)
+        """,
+        connection.getId(),
+        sender.getId(),
+        "message-%02d".formatted(index),
+        timestamp,
+        timestamp);
   }
 
   @TestConfiguration

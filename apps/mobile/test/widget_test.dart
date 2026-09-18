@@ -10,6 +10,9 @@ import 'package:bub/src/auth/auth_state.dart';
 import 'package:bub/src/auth/token_store.dart';
 import 'package:bub/src/core/dio_provider.dart';
 import 'package:bub/src/features/chat/chat_controller.dart';
+import 'package:bub/src/features/notifications/notification_controller.dart';
+import 'package:bub/src/features/settings/legal_policy_controller.dart';
+import 'package:bub/src/features/settings/legal_policy_screen.dart';
 import 'package:bub/src/features/settings/settings_controller.dart';
 import 'package:bub/src/features/settings/settings_screen.dart';
 import 'package:bub/src/features/settings/settings_store.dart';
@@ -175,6 +178,49 @@ void main() {
     expect(find.byType(AppBar), findsOneWidget);
   });
 
+  testWidgets('top nav notification bell shows unread badge', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(() => _TetheredAuthController()),
+          notificationSummaryProvider.overrideWith(
+            () => _ReadyNotificationSummaryController(
+              const NotificationSummary(unreadCount: 3),
+            ),
+          ),
+        ],
+        child: const MobileApp(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('notifications-button')), findsOneWidget);
+    expect(find.byKey(const Key('notifications-badge')), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+  });
+
+  testWidgets('top nav notification badge caps at 99 plus', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(() => _TetheredAuthController()),
+          notificationSummaryProvider.overrideWith(
+            () => _ReadyNotificationSummaryController(
+              const NotificationSummary(unreadCount: 120),
+            ),
+          ),
+        ],
+        child: const MobileApp(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('notifications-badge')), findsOneWidget);
+    expect(find.text('99+'), findsOneWidget);
+  });
+
   test('auth controller provisions the user after login', () {
     final source = File('lib/src/auth/auth_controller.dart').readAsStringSync();
 
@@ -271,6 +317,7 @@ void main() {
 
     expect(source, contains("color: '#7C3AED'"));
     expect(source, contains('image: assets/branding/bub-logo.png'));
+    expect(source, contains('image: assets/branding/bub-logo-android12.png'));
     expect(
       source,
       isNot(contains('background_image: assets/branding/splash.png')),
@@ -346,6 +393,56 @@ void main() {
     },
   );
 
+  testWidgets('settings language menu includes English and Filipino', (
+    tester,
+  ) async {
+    final store = _MemorySettingsStore()..language = 'en';
+    await tester.pumpWidget(
+      _settingsApp(
+        SettingsScreen(
+          paired: true,
+          onLogout: () {},
+          onRemoveTether: () async {},
+        ),
+        store: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('English'), findsWidgets);
+    expect(find.text('Filipino'), findsOneWidget);
+  });
+
+  testWidgets('selecting Filipino persists fil and updates settings labels', (
+    tester,
+  ) async {
+    final store = _MemorySettingsStore()..language = 'en';
+    await tester.pumpWidget(
+      _settingsApp(
+        SettingsScreen(
+          paired: true,
+          onLogout: () {},
+          onRemoveTether: () async {},
+        ),
+        store: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Filipino').last);
+    await tester.pumpAndSettle();
+
+    expect(store.language, 'fil');
+    expect(find.text('Mga Setting'), findsOneWidget);
+    expect(find.text('Wika'), findsWidgets);
+    expect(find.text('Nakalimutan ang PIN'), findsOneWidget);
+  });
+
   testWidgets('settings logout confirms before running logout action', (
     tester,
   ) async {
@@ -360,6 +457,11 @@ void main() {
       ),
     );
 
+    await tester.drag(
+      find.byKey(const Key('settings-screen')),
+      const Offset(0, -520),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('settings-logout-button')));
     await tester.pumpAndSettle();
     expect(find.text('Log out?'), findsOneWidget);
@@ -387,7 +489,10 @@ void main() {
     await tester.tap(find.byKey(const Key('settings-remove-tether-button')));
     await tester.pumpAndSettle();
     expect(find.text('Remove tether?'), findsOneWidget);
-    expect(find.textContaining('Shared Moments'), findsOneWidget);
+    expect(find.textContaining('permanently deletes'), findsOneWidget);
+    expect(find.textContaining('chat conversation'), findsOneWidget);
+    expect(find.textContaining('Bub streak'), findsOneWidget);
+    expect(find.textContaining('Been tethered'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(FilledButton, 'Remove tether'));
     await tester.pumpAndSettle();
@@ -416,19 +521,155 @@ void main() {
     expect(action.onTap, isNull);
     expect(removeCount, 0);
   });
+
+  testWidgets('settings shows safe pin recovery as deferred', (tester) async {
+    await tester.pumpWidget(
+      _settingsApp(
+        SettingsScreen(
+          paired: true,
+          onLogout: () {},
+          onRemoveTether: () async {},
+        ),
+      ),
+    );
+
+    final action = tester.widget<InkWell>(
+      find.byKey(const Key('settings-safe-pin-recovery-button')),
+    );
+
+    expect(find.text('Forgot Safe PIN'), findsOneWidget);
+    expect(
+      find.text(
+        'PIN recovery will be available after secure email is configured.',
+      ),
+      findsOneWidget,
+    );
+    expect(action.onTap, isNull);
+  });
+
+  testWidgets('settings renders all legal policy rows', (tester) async {
+    await tester.pumpWidget(
+      _settingsApp(
+        SettingsScreen(
+          paired: true,
+          onLogout: () {},
+          onRemoveTether: () async {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('settings-privacy-legal-section')),
+      findsOneWidget,
+    );
+    expect(find.text('Privacy Policy'), findsOneWidget);
+    expect(find.text('Terms of Service'), findsOneWidget);
+    expect(find.text('Cookies Policy'), findsOneWidget);
+  });
+
+  testWidgets('tapping each legal row opens matching policy screen', (
+    tester,
+  ) async {
+    final repository = _FakeLegalPolicyRepository();
+    await tester.pumpWidget(
+      _settingsApp(
+        SettingsScreen(
+          paired: true,
+          onLogout: () {},
+          onRemoveTether: () async {},
+        ),
+        legalPolicyRepository: repository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (final entry in const [
+      ('settings-privacy-policy-button', 'privacy-policy', 'Privacy Policy'),
+      ('settings-terms-button', 'terms-of-service', 'Terms of Service'),
+      ('settings-cookies-button', 'cookies-policy', 'Cookies Policy'),
+    ]) {
+      await tester.ensureVisible(find.byKey(Key(entry.$1)));
+      await tester.tap(find.byKey(Key(entry.$1)));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(Key('legal-policy-screen-${entry.$2}')),
+        findsOneWidget,
+      );
+      expect(find.text(entry.$3), findsWidgets);
+      expect(find.text('Version 2026-07-22'), findsOneWidget);
+      expect(find.text('Effective 2026-07-22'), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets('policy fallback shows offline indicator', (tester) async {
+    await tester.pumpWidget(
+      _settingsApp(
+        const LegalPolicyScreenHarness(slug: 'privacy-policy'),
+        legalPolicyRepository: _FakeLegalPolicyRepository(stale: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('legal-policy-offline')), findsOneWidget);
+    expect(find.text('Offline copy'), findsOneWidget);
+  });
 }
 
-Widget _settingsApp(Widget child) {
+Widget _settingsApp(
+  Widget child, {
+  _MemorySettingsStore? store,
+  LegalPolicyRepository? legalPolicyRepository,
+}) {
   return ProviderScope(
     overrides: [
-      settingsStoreProvider.overrideWithValue(_MemorySettingsStore()),
+      settingsStoreProvider.overrideWithValue(store ?? _MemorySettingsStore()),
       settingsRemoteSyncProvider.overrideWithValue(_NoopSettingsRemoteSync()),
+      if (legalPolicyRepository != null)
+        legalPolicyRepositoryProvider.overrideWithValue(legalPolicyRepository),
     ],
     child: MaterialApp(
       theme: BubTheme.light,
       home: Scaffold(body: child),
     ),
   );
+}
+
+class LegalPolicyScreenHarness extends StatelessWidget {
+  const LegalPolicyScreenHarness({super.key, required this.slug});
+
+  final String slug;
+
+  @override
+  Widget build(BuildContext context) {
+    return LegalPolicyScreen(slug: slug);
+  }
+}
+
+class _FakeLegalPolicyRepository implements LegalPolicyRepository {
+  _FakeLegalPolicyRepository({this.stale = false});
+
+  final bool stale;
+
+  @override
+  Future<LegalPolicy> fetchPolicy(String slug) async {
+    return LegalPolicy(
+      slug: slug,
+      title: switch (slug) {
+        'terms-of-service' => 'Terms of Service',
+        'cookies-policy' => 'Cookies Policy',
+        _ => 'Privacy Policy',
+      },
+      version: '2026-07-22',
+      effectiveDate: '2026-07-22',
+      body: 'Policy body for $slug.',
+      stale: stale,
+    );
+  }
 }
 
 class _NoopSettingsRemoteSync implements SettingsRemoteSync {
@@ -478,4 +719,14 @@ class _ReadyChatController extends ChatThreadController {
 
   @override
   Future<ChatThreadResponse> build() async => thread;
+}
+
+class _ReadyNotificationSummaryController
+    extends NotificationSummaryController {
+  _ReadyNotificationSummaryController(this.summary);
+
+  final NotificationSummary summary;
+
+  @override
+  Future<NotificationSummary> build() async => summary;
 }

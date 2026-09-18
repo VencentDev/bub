@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../api/generated/models/chat_edit_message_request.dart';
@@ -13,26 +15,71 @@ import '../../api/generated/models/chat_thread_response.dart';
 import '../../api/generated/models/chat_typing_request.dart';
 import '../../core/dio_provider.dart';
 import '../../core/env.dart';
+import 'chat_cache_store.dart';
 import 'chat_live_connection.dart';
 
 class ChatThreadController extends AsyncNotifier<ChatThreadResponse> {
   ChatLiveConnection? _liveConnection;
   bool _refreshingFromLive = false;
+  bool _loadingOlder = false;
+  String? _userId;
 
   @override
   Future<ChatThreadResponse> build() async {
     ref.onDispose(() => _liveConnection?.dispose());
-    final thread = await ref
-        .read(restClientProvider)
-        .chatController
-        .getChatThread();
-    _syncLiveConnection(thread);
-    return thread;
+    final userId = await ref.read(authServiceProvider).cacheUserId();
+    _userId = userId;
+    if (userId != null) {
+      final cached = await ref
+          .read(chatCacheStoreProvider)
+          .readActiveLatest(userId: userId);
+      if (cached != null) {
+        _syncLiveConnection(cached);
+        unawaited(_refreshCachedThread(userId: userId));
+        return cached;
+      }
+    }
+    return _refreshFromNetwork(userId: userId);
   }
 
   Future<void> refresh() async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(build);
+    final userId = _userId ?? await ref.read(authServiceProvider).cacheUserId();
+    _userId = userId;
+    state = await AsyncValue.guard(() => _refreshFromNetwork(userId: userId));
+  }
+
+  Future<void> loadOlder() async {
+    if (_loadingOlder) {
+      return;
+    }
+    final current = switch (state) {
+      AsyncData(:final value) => value,
+      _ => null,
+    };
+    final cursor = current?.oldestCursor;
+    if (current?.hasMoreBefore != true || cursor == null || cursor.isEmpty) {
+      return;
+    }
+    _loadingOlder = true;
+    try {
+      final older = await _fetchThread(beforeCreatedAt: cursor);
+      final merged = _mergeOlderMessages(current!, older);
+      await _cacheThread(merged);
+      _syncLiveConnection(merged);
+      state = AsyncData(merged);
+    } finally {
+      _loadingOlder = false;
+    }
+  }
+
+  Future<void> loadAroundDate(DateTime date) async {
+    state = await AsyncValue.guard(() async {
+      final thread = await _fetchThread(aroundDate: date);
+      await _cacheThread(thread);
+      _syncLiveConnection(thread);
+      return thread;
+    });
   }
 
   Future<void> sendMessage({
@@ -182,13 +229,89 @@ class ChatThreadController extends AsyncNotifier<ChatThreadResponse> {
   Future<void> _mutateAndRefresh(Future<Object?> Function() mutation) async {
     state = await AsyncValue.guard(() async {
       await mutation();
-      final thread = await ref
-          .read(restClientProvider)
-          .chatController
-          .getChatThread();
-      _syncLiveConnection(thread);
-      return thread;
+      return _refreshFromNetwork(userId: _userId);
     });
+  }
+
+  Future<ChatThreadResponse> _refreshFromNetwork({
+    required String? userId,
+  }) async {
+    final thread = await _fetchThread();
+    await _cacheThread(thread, userId: userId);
+    _syncLiveConnection(thread);
+    return thread;
+  }
+
+  Future<void> _refreshCachedThread({required String userId}) async {
+    try {
+      final thread = await _refreshFromNetwork(userId: userId);
+      state = AsyncData(thread);
+    } catch (_) {
+      // Cached chat should remain visible if the background refresh fails.
+    }
+  }
+
+  Future<ChatThreadResponse> _fetchThread({
+    String? beforeCreatedAt,
+    DateTime? aroundDate,
+  }) async {
+    final response = await ref
+        .read(dioProvider)
+        .get<Map<String, Object?>>(
+          '/api/v1/chat/thread',
+          queryParameters: {
+            'limit': chatRecentCacheLimit,
+            'beforeCreatedAt': ?beforeCreatedAt,
+            if (aroundDate != null) 'aroundDate': _dateOnly(aroundDate),
+          },
+        );
+    final data = response.data;
+    if (data == null) {
+      throw DioException(
+        requestOptions: response.requestOptions,
+        response: response,
+        message: 'Chat thread response was empty.',
+      );
+    }
+    return ChatThreadResponse.fromJson(data);
+  }
+
+  Future<void> _cacheThread(ChatThreadResponse thread, {String? userId}) async {
+    final resolvedUserId =
+        userId ?? _userId ?? await ref.read(authServiceProvider).cacheUserId();
+    _userId = resolvedUserId;
+    if (resolvedUserId == null) {
+      return;
+    }
+    await ref
+        .read(chatCacheStoreProvider)
+        .writeLatest(userId: resolvedUserId, thread: thread);
+  }
+
+  ChatThreadResponse _mergeOlderMessages(
+    ChatThreadResponse current,
+    ChatThreadResponse older,
+  ) {
+    final currentMessages = current.messages ?? const [];
+    final existingIds = {
+      for (final message in currentMessages)
+        if (message.id != null) message.id!,
+    };
+    final olderMessages = [
+      for (final message in older.messages ?? const [])
+        if (message.id == null || !existingIds.contains(message.id)) message,
+    ];
+    return ChatThreadResponse(
+      hasActiveTether: older.hasActiveTether ?? current.hasActiveTether,
+      tetherConnectionId:
+          older.tetherConnectionId ?? current.tetherConnectionId,
+      partnerDisplayName:
+          older.partnerDisplayName ?? current.partnerDisplayName,
+      state: older.state ?? current.state,
+      messages: [...olderMessages, ...currentMessages],
+      hasMoreBefore: older.hasMoreBefore,
+      oldestCursor: older.oldestCursor ?? current.oldestCursor,
+    );
   }
 
   void _syncLiveConnection(ChatThreadResponse thread) {
@@ -214,11 +337,7 @@ class ChatThreadController extends AsyncNotifier<ChatThreadResponse> {
     }
     _refreshingFromLive = true;
     try {
-      final thread = await ref
-          .read(restClientProvider)
-          .chatController
-          .getChatThread();
-      _syncLiveConnection(thread);
+      final thread = await _refreshFromNetwork(userId: _userId);
       state = AsyncData(thread);
     } catch (_) {
       // Background live refresh failures should not replace the visible thread.
@@ -226,6 +345,13 @@ class ChatThreadController extends AsyncNotifier<ChatThreadResponse> {
       _refreshingFromLive = false;
     }
   }
+}
+
+String _dateOnly(DateTime date) {
+  final year = date.year.toString().padLeft(4, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '$year-$month-$day';
 }
 
 final chatThreadProvider =

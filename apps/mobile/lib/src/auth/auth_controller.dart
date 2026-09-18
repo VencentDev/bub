@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/generated/models/tether_status_response.dart';
+import '../api/generated/models/user_response.dart';
 import '../core/dio_provider.dart';
 import '../features/chat/chat_controller.dart';
 import '../features/home/home_dashboard_controller.dart';
@@ -66,7 +67,25 @@ class AuthController extends AsyncNotifier<AuthState> {
       AuthState.authenticated(
         user: user,
         tetherStatus: nextTetherStatus,
+        profileOnboardingComplete: current?.profileOnboardingComplete,
         tetherOnboardingComplete: true,
+      ),
+    );
+  }
+
+  Future<void> completeProfileOnboarding(UserResponse user) async {
+    final current = state.asData?.value;
+    final tetherStatus = current?.tetherStatus;
+    if (tetherStatus == null) {
+      return;
+    }
+    _invalidateAuthenticatedData();
+    state = AsyncData(
+      AuthState.authenticated(
+        user: user,
+        tetherStatus: tetherStatus,
+        profileOnboardingComplete: true,
+        tetherOnboardingComplete: current?.tetherOnboardingComplete ?? false,
       ),
     );
   }
@@ -96,6 +115,7 @@ class AuthController extends AsyncNotifier<AuthState> {
       return AuthState.authenticated(
         user: user,
         tetherStatus: tetherStatus,
+        profileOnboardingComplete: current?.profileOnboardingComplete,
         tetherOnboardingComplete: onboardingComplete,
       );
     });

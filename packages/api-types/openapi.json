@@ -1083,7 +1083,27 @@
           },
           "language": {
             "type": "string",
-            "enum": ["en"]
+            "enum": ["en", "fil"]
+          },
+          "age": {
+            "type": "integer",
+            "minimum": 13,
+            "maximum": 120
+          },
+          "discoveredAppVia": {
+            "type": "string",
+            "enum": ["tiktok", "playstore", "recommendation", "others"]
+          },
+          "relationshipStatus": {
+            "type": "string",
+            "enum": ["dating", "engaged", "married", "long_distance"]
+          },
+          "relationshipLength": {
+            "type": "string",
+            "enum": ["under_3_months", "3_to_12_months", "1_to_3_years", "3_plus_years"]
+          },
+          "termsAccepted": {
+            "type": "boolean"
           }
         }
       },
@@ -1118,7 +1138,26 @@
           },
           "language": {
             "type": "string",
-            "enum": ["en"]
+            "enum": ["en", "fil"]
+          },
+          "age": {
+            "type": "integer"
+          },
+          "discoveredAppVia": {
+            "type": "string"
+          },
+          "relationshipStatus": {
+            "type": "string"
+          },
+          "relationshipLength": {
+            "type": "string"
+          },
+          "termsAcceptedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "profileOnboardingComplete": {
+            "type": "boolean"
           },
           "createdAt": {
             "type": "string",

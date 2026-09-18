@@ -1,10 +1,31 @@
 import 'package:bub/src/features/safe/safe_controller.dart';
 import 'package:bub/src/features/safe/safe_screen.dart';
+import 'dart:async';
+
+import 'package:bub/src/features/settings/settings_controller.dart';
+import 'package:bub/src/features/settings/settings_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('Safe status renders loading state', (tester) async {
+    await tester.pumpWidget(_safeAppWithController(_LoadingSafeController()));
+    await tester.pump();
+
+    expect(find.byKey(const Key('safe-loading')), findsOneWidget);
+    expect(find.text('Loading Safe'), findsOneWidget);
+  });
+
+  testWidgets('Safe status renders error retry state', (tester) async {
+    await tester.pumpWidget(_safeAppWithController(_ErrorSafeController()));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('safe-error-state')), findsOneWidget);
+    expect(find.text('Safe could not load'), findsOneWidget);
+    expect(find.byKey(const Key('safe-retry-button')), findsOneWidget);
+  });
+
   testWidgets('untethered Safe state stays unavailable', (tester) async {
     await tester.pumpWidget(
       _safeApp(const SafeStatus(tethered: false, pinConfigured: false)),
@@ -337,6 +358,21 @@ void main() {
     expect(find.byKey(const Key('safe-pin-error')), findsOneWidget);
   });
 
+  testWidgets('Safe setup label renders in Filipino when selected', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _safeApp(
+        const SafeStatus(tethered: true, pinConfigured: false),
+        language: 'fil',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Itakda ang PIN'), findsOneWidget);
+    expect(find.text('I-set up ang Safe'), findsOneWidget);
+  });
+
   testWidgets('first-time setup dialog creates a Safe PIN', (tester) async {
     await tester.pumpWidget(
       _safeApp(const SafeStatus(tethered: true, pinConfigured: false)),
@@ -365,6 +401,7 @@ Widget _safeApp(
   bool deleteSucceeds = true,
   SafeSession session = const SafeSession(unlocked: false),
   List<SafeMediaItem> media = const [],
+  String language = 'en',
 }) {
   return _safeAppWithController(
     _FakeSafeController(
@@ -374,15 +411,19 @@ Widget _safeApp(
       media: media,
     ),
     session: session,
+    language: language,
   );
 }
 
 Widget _safeAppWithController(
-  _FakeSafeController controller, {
+  SafeController controller, {
   SafeSession session = const SafeSession(unlocked: false),
+  String language = 'en',
 }) {
   return ProviderScope(
     overrides: [
+      settingsStoreProvider.overrideWithValue(_MemorySettingsStore(language)),
+      settingsRemoteSyncProvider.overrideWithValue(_NoopSettingsRemoteSync()),
       safeSessionProvider.overrideWith(
         () => _FakeSafeSessionController(session),
       ),
@@ -390,6 +431,30 @@ Widget _safeAppWithController(
     ],
     child: const MaterialApp(home: SafeScreen()),
   );
+}
+
+class _NoopSettingsRemoteSync implements SettingsRemoteSync {
+  @override
+  Future<void> sync(BubSettings settings) async {}
+}
+
+class _MemorySettingsStore implements SettingsStore {
+  _MemorySettingsStore(this.language);
+
+  final String language;
+
+  @override
+  Future<BubSettingsThemeMode?> readThemeMode() async =>
+      BubSettingsThemeMode.system;
+
+  @override
+  Future<String?> readLanguage() async => language;
+
+  @override
+  Future<void> writeThemeMode(BubSettingsThemeMode value) async {}
+
+  @override
+  Future<void> writeLanguage(String value) async {}
 }
 
 Widget _safeRouteApp(
@@ -421,6 +486,22 @@ Widget _safeRouteApp(
       ),
     ),
   );
+}
+
+class _LoadingSafeController extends SafeController {
+  final _completer = Completer<SafeStatus>();
+
+  @override
+  Future<SafeStatus> build() {
+    return _completer.future;
+  }
+}
+
+class _ErrorSafeController extends SafeController {
+  @override
+  Future<SafeStatus> build() {
+    throw StateError('nope');
+  }
 }
 
 class _FakeSafeController extends SafeController {

@@ -39,7 +39,25 @@ class UserControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(jsonPath("$.email").value("old@example.com"))
         .andExpect(jsonPath("$.displayName").value("Old Name"))
         .andExpect(jsonPath("$.themeMode").value("system"))
-        .andExpect(jsonPath("$.language").value("en"));
+        .andExpect(jsonPath("$.language").value("en"))
+        .andExpect(jsonPath("$.age").value(nullValue()))
+        .andExpect(jsonPath("$.discoveredAppVia").value(nullValue()))
+        .andExpect(jsonPath("$.relationshipStatus").value(nullValue()))
+        .andExpect(jsonPath("$.relationshipLength").value(nullValue()))
+        .andExpect(jsonPath("$.termsAcceptedAt").value(nullValue()))
+        .andExpect(jsonPath("$.profileOnboardingComplete").value(false));
+  }
+
+  @Test
+  void existingUsersWithCompletedOnboardingSkipProfileStepper() throws Exception {
+    User existing = user("subject-16", "old@example.com", "Old Name");
+    existing.setProfileOnboardingCompletedAt(java.time.Instant.parse("2026-01-01T00:00:00Z"));
+    repository.save(existing);
+
+    mockMvc
+        .perform(get("/api/v1/users/me").with(currentUser("subject-16")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.profileOnboardingComplete").value(true));
   }
 
   @Test
@@ -108,6 +126,79 @@ class UserControllerIntegrationTest extends IntegrationTestBase {
         .andExpect(jsonPath("$.displayName").value("Old Name"))
         .andExpect(jsonPath("$.themeMode").value("dark"))
         .andExpect(jsonPath("$.language").value("en"));
+  }
+
+  @Test
+  void patchWithProfileOnboardingFieldsCompletesProfile() throws Exception {
+    repository.save(user("subject-10", "old@example.com", "Old Name"));
+
+    mockMvc
+        .perform(
+            patchMe(
+                "subject-10",
+                """
+                {
+                  "displayName":"Alice Reyes",
+                  "age":24,
+                  "discoveredAppVia":"tiktok",
+                  "relationshipStatus":"dating",
+                  "relationshipLength":"1_to_3_years",
+                  "termsAccepted":true
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.displayName").value("Alice Reyes"))
+        .andExpect(jsonPath("$.age").value(24))
+        .andExpect(jsonPath("$.discoveredAppVia").value("tiktok"))
+        .andExpect(jsonPath("$.relationshipStatus").value("dating"))
+        .andExpect(jsonPath("$.relationshipLength").value("1_to_3_years"))
+        .andExpect(jsonPath("$.termsAcceptedAt").exists())
+        .andExpect(jsonPath("$.profileOnboardingComplete").value(true));
+  }
+
+  @Test
+  void patchWithUnderageProfileOnboardingReturnsBadRequest() throws Exception {
+    repository.save(user("subject-11", "old@example.com", "Old Name"));
+
+    mockMvc
+        .perform(patchMe("subject-11", "{\"age\":12,\"termsAccepted\":true}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void patchWithInvalidDiscoveredAppViaReturnsBadRequest() throws Exception {
+    repository.save(user("subject-12", "old@example.com", "Old Name"));
+
+    mockMvc
+        .perform(patchMe("subject-12", "{\"discoveredAppVia\":\"poster\"}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void patchWithInvalidRelationshipStatusReturnsBadRequest() throws Exception {
+    repository.save(user("subject-14", "old@example.com", "Old Name"));
+
+    mockMvc
+        .perform(patchMe("subject-14", "{\"relationshipStatus\":\"complicated\"}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void patchWithInvalidRelationshipLengthReturnsBadRequest() throws Exception {
+    repository.save(user("subject-15", "old@example.com", "Old Name"));
+
+    mockMvc
+        .perform(patchMe("subject-15", "{\"relationshipLength\":\"forever\"}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void patchWithRejectedTermsReturnsBadRequest() throws Exception {
+    repository.save(user("subject-13", "old@example.com", "Old Name"));
+
+    mockMvc
+        .perform(patchMe("subject-13", "{\"termsAccepted\":false}"))
+        .andExpect(status().isBadRequest());
   }
 
   @Test
