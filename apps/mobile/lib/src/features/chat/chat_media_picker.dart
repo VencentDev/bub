@@ -29,14 +29,17 @@ class ChatMediaItem {
 }
 
 abstract class ChatMediaPicker {
-  Future<List<ChatMediaItem>> recentMedia();
+  /// Recent camera-roll items for the inline picker.
+  ///
+  /// Keep [limit] modest so opening the drawer stays snappy.
+  Future<List<ChatMediaItem>> recentMedia({int limit = 36});
 }
 
 class DeviceChatMediaPicker implements ChatMediaPicker {
-  static const _pageSize = 80;
+  static const _thumbnailSize = ThumbnailSize.square(120);
 
   @override
-  Future<List<ChatMediaItem>> recentMedia() async {
+  Future<List<ChatMediaItem>> recentMedia({int limit = 36}) async {
     final permission = await PhotoManager.requestPermissionExtend();
     if (!permission.hasAccess) {
       return const [];
@@ -53,44 +56,24 @@ class DeviceChatMediaPicker implements ChatMediaPicker {
     if (paths.isEmpty) {
       return const [];
     }
-    final assetPath = paths.first;
-    final totalAssets = await assetPath.assetCountAsync;
+
+    final pageSize = limit.clamp(1, 80);
+    final assets = await paths.first.getAssetListPaged(page: 0, size: pageSize);
     final items = <ChatMediaItem>[];
-    for (var page = 0; page * _pageSize < totalAssets; page += 1) {
-      final assets = await assetPath.getAssetListPaged(
-        page: page,
-        size: _pageSize,
+    for (final asset in assets) {
+      if (asset.type != AssetType.image && asset.type != AssetType.video) {
+        continue;
+      }
+      items.add(
+        ChatMediaItem(
+          id: asset.id,
+          createdAt: asset.createDateTime,
+          isVideo: asset.type == AssetType.video,
+          resolveFile: () => asset.file,
+          loadThumbnail: () => asset.thumbnailDataWithSize(_thumbnailSize),
+        ),
       );
-      for (final asset in assets) {
-        if (asset.type != AssetType.image && asset.type != AssetType.video) {
-          continue;
-        }
-        items.add(
-          ChatMediaItem(
-            id: asset.id,
-            createdAt: asset.createDateTime,
-            isVideo: asset.type == AssetType.video,
-            resolveFile: () => asset.file,
-            loadThumbnail: () =>
-                asset.thumbnailDataWithSize(const ThumbnailSize.square(240)),
-          ),
-        );
-      }
     }
-    items.sort((first, second) {
-      final firstDate = first.createdAt;
-      final secondDate = second.createdAt;
-      if (firstDate == null && secondDate == null) {
-        return 0;
-      }
-      if (firstDate == null) {
-        return 1;
-      }
-      if (secondDate == null) {
-        return -1;
-      }
-      return secondDate.compareTo(firstDate);
-    });
     return items;
   }
 }

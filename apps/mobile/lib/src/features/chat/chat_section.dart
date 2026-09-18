@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -25,6 +24,7 @@ import '../../features/safe/safe_screen.dart';
 import '../../core/async_state_widgets.dart';
 import '../../features/tether_onboarding/tether_onboarding_screens.dart';
 import '../../theme/bub_colors.dart';
+import '../../widgets/bub_dialog_sheet.dart';
 import 'chat_controller.dart';
 import 'chat_media_picker.dart';
 
@@ -58,9 +58,8 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
   var _stagedMediaIds = const <String>{};
   var _pendingTextMessages = const <_PendingTextMessage>[];
   var _pendingMediaMessages = const <_PendingMediaMessage>[];
-  _AttachmentMode? _stagedMediaMode;
+  var _sendToSafe = false;
   var _inlineMedia = const <ChatMediaItem>[];
-  var _inlineMediaMode = _AttachmentMode.quick;
   var _showInlineMediaPicker = false;
   var _inlineMediaExpanded = false;
   var _inlineMediaLoading = false;
@@ -108,12 +107,16 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
   }
 
   void _handleComposerFocusChanged() {
-    if (!_composerFocus.hasFocus || !_showInlineMediaPicker) {
+    if (!_composerFocus.hasFocus) {
+      return;
+    }
+    if (!_showInlineMediaPicker && !_showEmojiPicker) {
       return;
     }
     setState(() {
       _showInlineMediaPicker = false;
       _inlineMediaExpanded = false;
+      _showEmojiPicker = false;
     });
   }
 
@@ -151,108 +154,124 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
     if (data.hasActiveTether != true) {
       return const _UntetheredChatEmptyState();
     }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxInlineMediaGridHeight = math.max(
-          96.0,
-          constraints.maxHeight - 220,
-        );
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            GestureDetector(
-              key: const Key('chat-bub-tap-zone'),
-              behavior: HitTestBehavior.translucent,
-              onTap: _handleBubTap,
-              child: Column(
-                children: [
-                  _ChatHeader(
-                    thread: data,
-                    onBack: widget.onBack,
-                    quickImages: _quickImages(data.messages ?? const []),
-                    onSaveNickname: _savePartnerNickname,
-                    presenceNow: ref.watch(chatPresenceClockProvider)(),
-                  ),
-                  Expanded(
+    final messages = data.messages ?? const [];
+    final visiblePendingText = _visiblePendingTextMessages(
+      _pendingTextMessages,
+      messages,
+    );
+    final visiblePendingMedia = _visiblePendingMediaMessages(
+      _pendingMediaMessages,
+      messages,
+    );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        GestureDetector(
+          key: const Key('chat-bub-tap-zone'),
+          behavior: HitTestBehavior.translucent,
+          onTap: _handleBubTap,
+          child: Column(
+            children: [
+              _ChatHeader(
+                thread: data,
+                onBack: widget.onBack,
+                quickImages: _quickImages(messages),
+                onSaveNickname: _savePartnerNickname,
+                presenceNow: ref.watch(chatPresenceClockProvider)(),
+              ),
+              Expanded(
+                child: RepaintBoundary(
+                  child: DecoratedBox(
+                    key: const Key('chat-canvas-wash'),
+                    decoration: BoxDecoration(
+                      gradient: BubColors.chatCanvasGradient(
+                        Theme.of(context).brightness,
+                      ),
+                    ),
                     child: _MessageList(
-                      messages: data.messages ?? const [],
+                      messages: messages,
                       localNotices: [..._safeNotices, ..._pendingBubNotices],
-                      pendingTextMessages: _pendingTextMessages,
-                      pendingMediaMessages: _pendingMediaMessages,
+                      pendingTextMessages: visiblePendingText,
+                      pendingMediaMessages: visiblePendingMedia,
                       hasMoreBefore: data.hasMoreBefore == true,
                       onLoadOlder: () =>
                           ref.read(chatThreadProvider.notifier).loadOlder(),
                     ),
                   ),
-                  SafeArea(
-                    top: false,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _ChatComposer(
-                          controller: _composer,
-                          focusNode: _composerFocus,
-                          replyTo: _replyTo,
-                          inlineMedia: _inlineMedia,
-                          inlineMediaMode: _inlineMediaMode,
-                          showInlineMediaPicker: _showInlineMediaPicker,
-                          inlineMediaExpanded: _inlineMediaExpanded,
-                          inlineMediaLoading: _inlineMediaLoading,
-                          maxInlineMediaGridHeight: maxInlineMediaGridHeight,
-                          stagedMedia: _stagedMedia,
-                          stagedMediaIds: _stagedMediaIds,
-                          hasText: _composerHasText || _stagedMedia.isNotEmpty,
-                          onCancelReply: () => setState(() => _replyTo = null),
-                          onSend: _sendComposer,
-                          onAttachment: _toggleInlineMediaPicker,
-                          onInlineMediaModeChanged: _setInlineMediaMode,
-                          onInlineMediaSelected: _toggleInlineMediaSelection,
-                          onToggleInlineMediaExpanded: () => setState(
-                            () => _inlineMediaExpanded = !_inlineMediaExpanded,
-                          ),
-                          onRemoveStagedMedia: _removeStagedMedia,
-                          onQuickReaction: _sendQuickReaction,
-                          onToggleEmojiPicker: () => setState(
-                            () => _showEmojiPicker = !_showEmojiPicker,
+                ),
+              ),
+              SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _ChatComposer(
+                      controller: _composer,
+                      focusNode: _composerFocus,
+                      replyTo: _replyTo,
+                      inlineMedia: _inlineMedia,
+                      sendToSafe: _sendToSafe,
+                      showInlineMediaPicker: _showInlineMediaPicker,
+                      inlineMediaExpanded: _inlineMediaExpanded,
+                      inlineMediaLoading: _inlineMediaLoading,
+                      maxInlineMediaGridHeight: math.max(
+                        96.0,
+                        MediaQuery.sizeOf(context).height -
+                            MediaQuery.viewInsetsOf(context).bottom -
+                            280,
+                      ),
+                      stagedMedia: _stagedMedia,
+                      stagedMediaIds: _stagedMediaIds,
+                      canSend: _composerHasText || _stagedMedia.isNotEmpty,
+                      onCancelReply: () => setState(() => _replyTo = null),
+                      onSend: _sendComposer,
+                      onAttachment: _toggleInlineMediaPicker,
+                      onSendToSafeChanged: _setSendToSafe,
+                      onInlineMediaSelected: _toggleInlineMediaSelection,
+                      onToggleInlineMediaExpanded: () => setState(
+                        () => _inlineMediaExpanded = !_inlineMediaExpanded,
+                      ),
+                      onRemoveStagedMedia: _removeStagedMedia,
+                      onQuickReaction: _sendQuickReaction,
+                      onToggleEmojiPicker: _toggleEmojiPicker,
+                    ),
+                    if (_showEmojiPicker)
+                      RepaintBoundary(
+                        child: SizedBox(
+                          key: const Key('chat-emoji-picker'),
+                          height: 248,
+                          child: EmojiPicker(
+                            textEditingController: _composer,
+                            config: const Config(height: 248),
                           ),
                         ),
-                        if (_showEmojiPicker)
-                          SizedBox(
-                            key: const Key('chat-emoji-picker'),
-                            height: 248,
-                            child: EmojiPicker(
-                              textEditingController: _composer,
-                              config: const Config(height: 248),
-                            ),
+                      ),
+                    if (_safeUploadError != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                        child: Text(
+                          _safeUploadError!,
+                          key: const Key('chat-safe-upload-error'),
+                          style: const TextStyle(
+                            color: BubColors.coral,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
                           ),
-                        if (_safeUploadError != null)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                            child: Text(
-                              _safeUploadError!,
-                              key: const Key('chat-safe-upload-error'),
-                              style: const TextStyle(
-                                color: BubColors.coral,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            Positioned.fill(
-              child: BubHeartBurst(
-                trigger: _bubBurstTrigger,
-                heartKey: const Key('chat-bub-heart-burst-heart'),
-              ),
-            ),
-          ],
-        );
-      },
+            ],
+          ),
+        ),
+        Positioned.fill(
+          child: BubHeartBurst(
+            trigger: _bubBurstTrigger,
+            heartKey: const Key('chat-bub-heart-burst-heart'),
+          ),
+        ),
+      ],
     );
   }
 
@@ -329,6 +348,11 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
     try {
       await ref.read(bubSendControllerProvider.notifier).sendBub();
       await ref.read(chatThreadProvider.notifier).refresh();
+      if (mounted) {
+        final messages =
+            ref.read(chatThreadProvider).asData?.value.messages ?? const [];
+        _pruneResolvedLocalNotices(messages);
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -348,15 +372,26 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
   }
 
   Future<void> _sendComposer() async {
-    if (_stagedMedia.isNotEmpty) {
-      await _sendStagedMedia();
+    final text = _composer.text.trim();
+    final hasMedia = _stagedMedia.isNotEmpty;
+    if (!hasMedia && text.isEmpty) {
       return;
     }
-    await _sendText();
+    if (hasMedia) {
+      if (text.isNotEmpty) {
+        _composer.clear();
+        setState(() => _showEmojiPicker = false);
+      }
+      await _sendStagedMedia();
+      if (text.isNotEmpty && mounted) {
+        await _sendTextBody(text);
+      }
+      return;
+    }
+    await _sendTextBody(text);
   }
 
-  Future<void> _sendText() async {
-    final text = _composer.text.trim();
+  Future<void> _sendTextBody(String text) async {
     if (text.isEmpty) {
       return;
     }
@@ -392,20 +427,120 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
     }
   }
 
+  static List<_PendingTextMessage> _visiblePendingTextMessages(
+    List<_PendingTextMessage> pending,
+    List<ChatMessageResponse> messages,
+  ) {
+    final claimed = <String>{};
+    final visible = <_PendingTextMessage>[];
+    for (final pendingMessage in pending) {
+      final match = _matchingServerText(pendingMessage, messages, claimed);
+      if (match == null) {
+        visible.add(pendingMessage);
+        continue;
+      }
+      final matchId = match.id;
+      if (matchId != null) {
+        claimed.add(matchId);
+      }
+    }
+    return visible;
+  }
+
+  static List<_PendingMediaMessage> _visiblePendingMediaMessages(
+    List<_PendingMediaMessage> pending,
+    List<ChatMessageResponse> messages,
+  ) {
+    final claimed = <String>{};
+    final visible = <_PendingMediaMessage>[];
+    for (final pendingMessage in pending) {
+      final match = _matchingServerMedia(pendingMessage, messages, claimed);
+      if (match == null) {
+        visible.add(pendingMessage);
+        continue;
+      }
+      final matchId = match.id;
+      if (matchId != null) {
+        claimed.add(matchId);
+      }
+    }
+    return visible;
+  }
+
+  static ChatMessageResponse? _matchingServerText(
+    _PendingTextMessage pending,
+    List<ChatMessageResponse> messages,
+    Set<String> claimed,
+  ) {
+    for (final message in messages) {
+      final id = message.id;
+      final createdAt = message.createdAt;
+      if (id == null ||
+          claimed.contains(id) ||
+          message.viewerMessage != true ||
+          message.type != ChatMessageResponseType.text ||
+          message.body != pending.body ||
+          createdAt == null) {
+        continue;
+      }
+      if (createdAt.difference(pending.createdAt).abs() >
+          const Duration(minutes: 2)) {
+        continue;
+      }
+      return message;
+    }
+    return null;
+  }
+
+  static ChatMessageResponse? _matchingServerMedia(
+    _PendingMediaMessage pending,
+    List<ChatMessageResponse> messages,
+    Set<String> claimed,
+  ) {
+    for (final message in messages) {
+      final id = message.id;
+      final createdAt = message.createdAt;
+      final attachmentCount = message.attachments?.length ?? 0;
+      if (id == null ||
+          claimed.contains(id) ||
+          message.viewerMessage != true ||
+          message.type != ChatMessageResponseType.media ||
+          attachmentCount != pending.files.length ||
+          createdAt == null) {
+        continue;
+      }
+      if (createdAt.difference(pending.createdAt).abs() >
+          const Duration(minutes: 2)) {
+        continue;
+      }
+      return message;
+    }
+    return null;
+  }
+
   Future<void> _toggleInlineMediaPicker() async {
     setState(() => _showEmojiPicker = false);
     if (_showInlineMediaPicker) {
       setState(() => _showInlineMediaPicker = false);
       return;
     }
-    if (_composerFocus.hasFocus) {
-      _composerFocus.unfocus();
-    }
+
+    final hasCachedMedia = _inlineMedia.isNotEmpty;
     setState(() {
       _showInlineMediaPicker = true;
       _inlineMediaExpanded = false;
-      _inlineMediaLoading = true;
+      _inlineMediaLoading = !hasCachedMedia;
     });
+    // Dismiss keyboard after the drawer is painted so both don't animate hard.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _composerFocus.hasFocus) {
+        _composerFocus.unfocus();
+      }
+    });
+    if (hasCachedMedia) {
+      return;
+    }
+
     final picker = ref.read(chatMediaPickerProvider);
     final media = await picker.recentMedia();
     if (!mounted) {
@@ -415,6 +550,24 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
       _inlineMedia = media;
       _inlineMediaLoading = false;
     });
+  }
+
+  void _toggleEmojiPicker() {
+    final opening = !_showEmojiPicker;
+    setState(() {
+      _showEmojiPicker = opening;
+      if (opening) {
+        _showInlineMediaPicker = false;
+        _inlineMediaExpanded = false;
+      }
+    });
+    if (opening) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _composerFocus.hasFocus) {
+          _composerFocus.unfocus();
+        }
+      });
+    }
   }
 
   void _addSafeNotice(int count) {
@@ -427,6 +580,61 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
         ),
       );
     });
+  }
+
+  void _pruneResolvedLocalNotices(List<ChatMessageResponse> messages) {
+    final nextSafe = [
+      for (final notice in _safeNotices)
+        if (!_localNoticeCoveredByServer(notice, messages)) notice,
+    ];
+    final nextBub = [
+      for (final notice in _pendingBubNotices)
+        if (!_localNoticeCoveredByServer(notice, messages)) notice,
+    ];
+    if (nextSafe.length == _safeNotices.length &&
+        nextBub.length == _pendingBubNotices.length) {
+      return;
+    }
+    setState(() {
+      _safeNotices
+        ..clear()
+        ..addAll(nextSafe);
+      _pendingBubNotices
+        ..clear()
+        ..addAll(nextBub);
+    });
+  }
+
+  static bool _localNoticeCoveredByServer(
+    _LocalChatNotice notice,
+    List<ChatMessageResponse> messages, {
+    DateTime? now,
+  }) {
+    final cutoff = (now ?? DateTime.now()).subtract(
+      const Duration(seconds: 45),
+    );
+    if (notice.id.startsWith('pending-bub-')) {
+      return messages.any((message) {
+        final createdAt = message.createdAt?.toLocal();
+        return message.type == ChatMessageResponseType.bub &&
+            message.viewerMessage == true &&
+            createdAt != null &&
+            !createdAt.isBefore(cutoff);
+      });
+    }
+    if (notice.safeItemCount != null) {
+      return messages.any((message) {
+        final createdAt = message.createdAt?.toLocal();
+        final sameCopy =
+            message.body == notice.label ||
+            message.safeItemCount == notice.safeItemCount;
+        return message.type == ChatMessageResponseType.safeNotice &&
+            sameCopy &&
+            createdAt != null &&
+            !createdAt.isBefore(cutoff);
+      });
+    }
+    return false;
   }
 
   void _removeStagedMedia(int index) {
@@ -442,19 +650,11 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
         for (final (fileIndex, id) in _stagedMediaIds.indexed)
           if (fileIndex != index) id,
       };
-      if (_stagedMedia.isEmpty) {
-        _stagedMediaMode = null;
-      }
     });
   }
 
-  void _setInlineMediaMode(_AttachmentMode mode) {
-    setState(() {
-      _inlineMediaMode = mode;
-      if (_stagedMedia.isNotEmpty) {
-        _stagedMediaMode = mode;
-      }
-    });
+  void _setSendToSafe(bool value) {
+    setState(() => _sendToSafe = value);
   }
 
   Future<void> _toggleInlineMediaSelection(ChatMediaItem item) async {
@@ -470,7 +670,6 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
             if (id != item.id) id,
         };
       }
-      _stagedMediaMode = _stagedMedia.isEmpty ? null : _inlineMediaMode;
     });
     if (selected) {
       return;
@@ -482,24 +681,22 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
     setState(() {
       _stagedMedia = [..._stagedMedia, file];
       _stagedMediaIds = {..._stagedMediaIds, item.id};
-      _stagedMediaMode = _inlineMediaMode;
     });
   }
 
   Future<void> _sendStagedMedia() async {
     final files = _stagedMedia;
-    final mode = _stagedMediaMode;
-    if (files.isEmpty || mode == null) {
+    final toSafe = _sendToSafe;
+    if (files.isEmpty) {
       return;
     }
     setState(() {
       _stagedMedia = const [];
       _stagedMediaIds = const {};
-      _stagedMediaMode = null;
       _showInlineMediaPicker = false;
       _inlineMediaExpanded = false;
     });
-    if (mode == _AttachmentMode.safe) {
+    if (toSafe) {
       await _sendSafeMedia(files);
       return;
     }
@@ -555,7 +752,7 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
       setState(() {
         _stagedMedia = files;
         _stagedMediaIds = {for (final file in files) file.path};
-        _stagedMediaMode = _AttachmentMode.safe;
+        _sendToSafe = true;
       });
       return;
     }
@@ -567,6 +764,11 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
       final count = result.notice?.safeItemCount ?? result.items.length;
       _addSafeNotice(count == 0 ? files.length : count);
       await ref.read(chatThreadProvider.notifier).refresh();
+      if (mounted) {
+        final messages =
+            ref.read(chatThreadProvider).asData?.value.messages ?? const [];
+        _pruneResolvedLocalNotices(messages);
+      }
     } catch (_) {
       if (mounted) {
         setState(() => _safeUploadError = "Couldn't add that to Safe.");
@@ -611,8 +813,6 @@ class _ChatSectionState extends ConsumerState<ChatSection> {
   }
 }
 
-enum _AttachmentMode { quick, safe }
-
 class _ChatSafePinDialog extends StatefulWidget {
   const _ChatSafePinDialog({required this.setup, required this.onSubmit});
 
@@ -656,291 +856,69 @@ class _ChatSafePinDialogState extends State<_ChatSafePinDialog> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final panelColor = (isDark ? BubColors.darkDialog : BubColors.white)
-        .withValues(alpha: isDark ? 0.74 : 0.70);
-    final textColor = isDark ? BubColors.white : BubColors.textPrimaryLight;
     final softTextColor = isDark
         ? BubColors.textSecondaryDark
         : BubColors.textSecondaryLight;
-    final inputFill = (isDark ? BubColors.darkSurface : BubColors.white)
-        .withValues(alpha: isDark ? 0.58 : 0.72);
+    final inputFill = isDark
+        ? BubColors.darkSurface
+        : BubColors.purple.withValues(alpha: 0.04);
 
-    return Dialog(
+    return BubDialogSheet(
       key: Key(widget.setup ? 'safe-setup-dialog' : 'safe-unlock-dialog'),
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            top: -26,
-            right: 4,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  colors: [
-                    BubColors.pink.withValues(alpha: isDark ? 0.42 : 0.25),
-                    BubColors.pink.withValues(alpha: 0),
-                  ],
-                ),
-                shape: BoxShape.circle,
-              ),
-              child: const SizedBox(width: 126, height: 126),
-            ),
+          BubDialogHeader(
+            icon: widget.setup
+                ? Icons.lock_outline_rounded
+                : Icons.lock_open_rounded,
+            title: widget.setup ? 'Set a PIN for your Safe' : 'Unlock Safe',
+            subtitle: widget.setup
+                ? 'Your PIN is private to you.'
+                : 'Enter your private PIN to add this to Safe.',
+            onClose: _submitting ? null : () => Navigator.of(context).pop(),
           ),
-          Positioned(
-            bottom: -28,
-            left: -10,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  colors: [
-                    BubColors.violet.withValues(alpha: isDark ? 0.34 : 0.23),
-                    BubColors.violet.withValues(alpha: 0),
-                  ],
-                ),
-                shape: BoxShape.circle,
-              ),
-              child: const SizedBox(width: 118, height: 118),
-            ),
+          const SizedBox(height: 12),
+          _ChatSafePinField(
+            fieldKey: const Key('safe-pin-entry'),
+            controller: _pinController,
+            label: 'PIN',
+            icon: Icons.lock_rounded,
+            inputFill: inputFill,
+            softTextColor: softTextColor,
           ),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(32),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: panelColor,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: isDark
-                        ? [
-                            BubColors.white.withValues(alpha: 0.10),
-                            BubColors.darkDialog.withValues(alpha: 0.70),
-                            BubColors.pink.withValues(alpha: 0.12),
-                          ]
-                        : [
-                            BubColors.white.withValues(alpha: 0.78),
-                            const Color(0xFFFFF4FA).withValues(alpha: 0.64),
-                            const Color(0xFFF5EEFF).withValues(alpha: 0.72),
-                          ],
-                  ),
-                  borderRadius: BorderRadius.circular(32),
-                  border: Border.all(
-                    color: BubColors.white.withValues(
-                      alpha: isDark ? 0.14 : 0.72,
-                    ),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: BubColors.deepPurple.withValues(
-                        alpha: isDark ? 0.42 : 0.16,
-                      ),
-                      blurRadius: 34,
-                      offset: const Offset(0, 18),
-                    ),
-                    BoxShadow(
-                      color: BubColors.pink.withValues(
-                        alpha: isDark ? 0.18 : 0.12,
-                      ),
-                      blurRadius: 36,
-                      offset: const Offset(0, -10),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 46,
-                            height: 46,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              gradient: BubColors.bubGradient,
-                              borderRadius: BorderRadius.circular(18),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: BubColors.pink.withValues(alpha: 0.28),
-                                  blurRadius: 18,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            child: Icon(
-                              widget.setup
-                                  ? Icons.add_moderator_rounded
-                                  : Icons.lock_open_rounded,
-                              color: BubColors.white,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  widget.setup
-                                      ? 'Set a PIN for your Safe'
-                                      : 'Unlock Safe',
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  widget.setup
-                                      ? 'Your PIN is private to you.'
-                                      : 'Enter your private PIN to add this to Safe.',
-                                  style: TextStyle(
-                                    color: softTextColor,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: 0,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: _submitting
-                                ? null
-                                : () => Navigator.of(context).pop(),
-                            tooltip: 'Close',
-                            icon: const Icon(Icons.close_rounded),
-                            color: softTextColor,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      _ChatSafePinField(
-                        fieldKey: const Key('safe-pin-entry'),
-                        controller: _pinController,
-                        label: 'PIN',
-                        icon: Icons.lock_rounded,
-                        inputFill: inputFill,
-                        softTextColor: softTextColor,
-                        isDark: isDark,
-                      ),
-                      if (widget.setup) ...[
-                        const SizedBox(height: 12),
-                        _ChatSafePinField(
-                          fieldKey: const Key('safe-pin-confirm-entry'),
-                          controller: _confirmController,
-                          label: 'Confirm PIN',
-                          icon: Icons.verified_user_rounded,
-                          inputFill: inputFill,
-                          softTextColor: softTextColor,
-                          isDark: isDark,
-                        ),
-                      ],
-                      if (_error != null) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          _error!,
-                          key: const Key('safe-pin-error'),
-                          style: const TextStyle(
-                            color: BubColors.coral,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: _submitting
-                                  ? null
-                                  : () => Navigator.of(context).pop(),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: softTextColor,
-                                side: BorderSide(
-                                  color: BubColors.white.withValues(
-                                    alpha: isDark ? 0.12 : 0.58,
-                                  ),
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                minimumSize: const Size.fromHeight(48),
-                              ),
-                              child: const Text('Cancel'),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: _canSubmit
-                                    ? null
-                                    : BubColors.white.withValues(
-                                        alpha: isDark ? 0.10 : 0.54,
-                                      ),
-                                gradient: _canSubmit
-                                    ? BubColors.bubGradient
-                                    : null,
-                                borderRadius: BorderRadius.circular(18),
-                                border: _canSubmit
-                                    ? null
-                                    : Border.all(
-                                        color: BubColors.pink.withValues(
-                                          alpha: isDark ? 0.16 : 0.22,
-                                        ),
-                                      ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: BubColors.pink.withValues(
-                                      alpha: _canSubmit ? 0.28 : 0.08,
-                                    ),
-                                    blurRadius: 18,
-                                    offset: const Offset(0, 8),
-                                  ),
-                                ],
-                              ),
-                              child: FilledButton(
-                                key: const Key('safe-pin-submit'),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  shadowColor: Colors.transparent,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                  minimumSize: const Size.fromHeight(48),
-                                  disabledBackgroundColor: Colors.transparent,
-                                  disabledForegroundColor: softTextColor
-                                      .withValues(alpha: 0.72),
-                                ),
-                                onPressed: _canSubmit ? _submit : null,
-                                child: _submitting
-                                    ? const SizedBox.square(
-                                        dimension: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : Text(widget.setup ? 'Set PIN' : 'Unlock'),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+          if (widget.setup) ...[
+            const SizedBox(height: 10),
+            _ChatSafePinField(
+              fieldKey: const Key('safe-pin-confirm-entry'),
+              controller: _confirmController,
+              label: 'Confirm PIN',
+              icon: Icons.verified_user_outlined,
+              inputFill: inputFill,
+              softTextColor: softTextColor,
+            ),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _error!,
+              key: const Key('safe-pin-error'),
+              style: const TextStyle(
+                color: BubColors.coral,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
               ),
             ),
+          ],
+          const SizedBox(height: 12),
+          BubDialogActions(
+            onCancel: () => Navigator.of(context).pop(),
+            confirmKey: const Key('safe-pin-submit'),
+            confirmLabel: widget.setup ? 'Set PIN' : 'Unlock',
+            enabled: _canSubmit,
+            busy: _submitting,
+            onConfirm: _submit,
           ),
         ],
       ),
@@ -990,7 +968,6 @@ class _ChatSafePinField extends StatelessWidget {
     required this.icon,
     required this.inputFill,
     required this.softTextColor,
-    required this.isDark,
   });
 
   final Key fieldKey;
@@ -999,40 +976,61 @@ class _ChatSafePinField extends StatelessWidget {
   final IconData icon;
   final Color inputFill;
   final Color softTextColor;
-  final bool isDark;
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? BubColors.white : BubColors.textPrimaryLight;
+
     return TextField(
       key: fieldKey,
       controller: controller,
       obscureText: true,
       keyboardType: TextInputType.number,
+      style: TextStyle(
+        color: textColor,
+        fontSize: 15,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 4,
+      ),
       inputFormatters: [
         FilteringTextInputFormatter.digitsOnly,
         LengthLimitingTextInputFormatter(6),
       ],
       decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: BubColors.pink.withValues(alpha: 0.78)),
-        fillColor: inputFill,
+        hintText: label,
+        hintStyle: TextStyle(
+          color: softTextColor,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0,
+        ),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
+        prefixIcon: Icon(
+          icon,
+          size: 18,
+          color: BubColors.purple.withValues(alpha: 0.70),
+        ),
         filled: true,
-        labelStyle: TextStyle(color: softTextColor),
+        fillColor: inputFill,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
-            color: BubColors.white.withValues(alpha: isDark ? 0.10 : 0.62),
+            color: BubColors.purple.withValues(alpha: 0.14),
           ),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
-            color: BubColors.white.withValues(alpha: isDark ? 0.10 : 0.62),
+            color: BubColors.purple.withValues(alpha: 0.14),
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
-          borderSide: const BorderSide(color: BubColors.pink, width: 1.5),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: BubColors.purple, width: 1.4),
         ),
       ),
     );
@@ -1119,22 +1117,33 @@ class _ChatHeader extends StatelessWidget {
 
     return Material(
       key: const Key('chat-fullscreen-header'),
-      color: Theme.of(context).scaffoldBackgroundColor,
+      color: Colors.transparent,
       elevation: 0,
       child: SafeArea(
         bottom: false,
         child: DecoratedBox(
           decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: isDark
+                  ? [
+                      BubColors.darkSurface,
+                      BubColors.chatCanvasDarkTop.withValues(alpha: 0.92),
+                    ]
+                  : [
+                      BubColors.white,
+                      BubColors.chatCanvasLightTop.withValues(alpha: 0.96),
+                    ],
+            ),
             border: Border(
               bottom: BorderSide(
-                color: isDark
-                    ? BubColors.pink.withValues(alpha: 0.42)
-                    : BubColors.deepPurple.withValues(alpha: 0.12),
+                color: BubColors.purple.withValues(alpha: isDark ? 0.22 : 0.10),
               ),
             ),
           ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(4, 6, 12, 8),
+            padding: const EdgeInsets.fromLTRB(2, 4, 8, 8),
             child: Row(
               children: [
                 IconButton(
@@ -1142,51 +1151,135 @@ class _ChatHeader extends StatelessWidget {
                   onPressed: onBack ?? () => Navigator.maybePop(context),
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
-                CircleAvatar(
-                  backgroundColor: BubColors.pink.withValues(alpha: 0.16),
-                  foregroundColor: BubColors.pink,
-                  child: const Icon(Icons.favorite_rounded),
-                ),
-                const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        partner == null || partner.isEmpty
-                            ? 'Your Bub'
-                            : partner,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                        ),
+                  child: InkWell(
+                    key: const Key('chat-header-partner-tap'),
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => _showNicknameDialog(context),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 2,
                       ),
-                      if (status != null)
-                        Text(
-                          status,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      if (typing)
-                        const Text(
-                          'Typing...',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: BubColors.pink,
-                            fontWeight: FontWeight.w700,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: BubColors.purple.withValues(
+                                alpha: isDark ? 0.24 : 0.10,
+                              ),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: BubColors.purple.withValues(
+                                  alpha: isDark ? 0.28 : 0.14,
+                                ),
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.favorite_rounded,
+                              color: BubColors.purple,
+                              size: 20,
+                            ),
                           ),
-                        ),
-                    ],
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  partner == null || partner.isEmpty
+                                      ? 'Your Bub'
+                                      : partner,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? BubColors.white
+                                        : BubColors.textPrimaryLight,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                if (status != null)
+                                  Text(
+                                    status,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? BubColors.textSecondaryDark
+                                          : BubColors.textSecondaryLight,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                if (typing)
+                                  const Text(
+                                    'Typing...',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: BubColors.pink,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                IconButton(
+                PopupMenuButton<_ChatHeaderMenuAction>(
                   key: const Key('chat-header-more-button'),
-                  onPressed: () => _showMenu(context),
+                  tooltip: 'Chat options',
+                  offset: const Offset(0, 40),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: BubColors.purple.withValues(
+                        alpha: isDark ? 0.24 : 0.12,
+                      ),
+                    ),
+                  ),
+                  color: isDark ? BubColors.darkDialog : BubColors.white,
+                  onSelected: (action) {
+                    switch (action) {
+                      case _ChatHeaderMenuAction.nicknames:
+                        _showNicknameDialog(context);
+                      case _ChatHeaderMenuAction.images:
+                        _openQuickImagesPage(context);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      key: Key('chat-menu-nicknames'),
+                      value: _ChatHeaderMenuAction.nicknames,
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.badge_outlined),
+                        title: Text('Nicknames'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      key: const Key('chat-menu-images'),
+                      value: _ChatHeaderMenuAction.images,
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.photo_library_outlined),
+                        title: const Text('Images'),
+                        subtitle: Text('${quickImages.length} sent'),
+                      ),
+                    ),
+                  ],
                   icon: const Icon(Icons.more_vert_rounded),
                 ),
               ],
@@ -1215,42 +1308,6 @@ class _ChatHeader extends StatelessWidget {
     return '$hour:$minute';
   }
 
-  Future<void> _showMenu(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                key: const Key('chat-menu-nicknames'),
-                leading: const Icon(Icons.badge_outlined),
-                title: const Text('Nicknames'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showNicknameDialog(context);
-                },
-              ),
-              ListTile(
-                key: const Key('chat-menu-images'),
-                leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Images'),
-                subtitle: Text('${quickImages.length} sent'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _openQuickImagesPage(context);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _showNicknameDialog(BuildContext context) async {
     final controller = TextEditingController(text: thread.partnerDisplayName);
     await showDialog<void>(
@@ -1270,6 +1327,8 @@ class _ChatHeader extends StatelessWidget {
   }
 }
 
+enum _ChatHeaderMenuAction { nicknames, images }
+
 class _NicknameDialog extends StatelessWidget {
   const _NicknameDialog({required this.controller, required this.onSave});
 
@@ -1279,274 +1338,84 @@ class _NicknameDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final panelColor = (isDark ? BubColors.darkDialog : BubColors.white)
-        .withValues(alpha: isDark ? 0.74 : 0.70);
     final textColor = isDark ? BubColors.white : BubColors.textPrimaryLight;
     final softTextColor = isDark
         ? BubColors.textSecondaryDark
         : BubColors.textSecondaryLight;
-    final inputFill = (isDark ? BubColors.darkSurface : BubColors.white)
-        .withValues(alpha: isDark ? 0.58 : 0.72);
+    final inputFill = isDark
+        ? BubColors.darkSurface
+        : BubColors.purple.withValues(alpha: 0.04);
 
-    return Dialog(
+    return BubDialogSheet(
       key: const Key('chat-nickname-dialog'),
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 26, vertical: 24),
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            top: -22,
-            right: 8,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  colors: [
-                    BubColors.pink.withValues(alpha: isDark ? 0.38 : 0.22),
-                    BubColors.pink.withValues(alpha: 0),
-                  ],
-                ),
-                shape: BoxShape.circle,
+          BubDialogHeader(
+            icon: Icons.favorite_border_rounded,
+            title: 'Nickname',
+            subtitle: 'Shown only in your chat.',
+            onClose: () => Navigator.pop(context),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            key: const Key('chat-nickname-field'),
+            controller: controller,
+            autofocus: true,
+            maxLength: 80,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Partner nickname',
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
               ),
-              child: const SizedBox(width: 96, height: 96),
+              prefixIcon: Icon(
+                Icons.edit_outlined,
+                size: 18,
+                color: BubColors.purple.withValues(alpha: 0.70),
+              ),
+              counterStyle: TextStyle(color: softTextColor, fontSize: 11),
+              filled: true,
+              fillColor: inputFill,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(
+                  color: BubColors.purple.withValues(alpha: 0.14),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(
+                  color: BubColors.purple.withValues(alpha: 0.14),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(
+                  color: BubColors.purple,
+                  width: 1.4,
+                ),
+              ),
             ),
           ),
-          Positioned(
-            bottom: -24,
-            left: -8,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  colors: [
-                    BubColors.violet.withValues(alpha: isDark ? 0.30 : 0.20),
-                    BubColors.violet.withValues(alpha: 0),
-                  ],
-                ),
-                shape: BoxShape.circle,
-              ),
-              child: const SizedBox(width: 92, height: 92),
-            ),
-          ),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: panelColor,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: isDark
-                        ? [
-                            BubColors.white.withValues(alpha: 0.10),
-                            BubColors.darkDialog.withValues(alpha: 0.72),
-                            BubColors.pink.withValues(alpha: 0.10),
-                          ]
-                        : [
-                            BubColors.white.withValues(alpha: 0.82),
-                            const Color(0xFFFFF4FA).withValues(alpha: 0.62),
-                            const Color(0xFFF5EEFF).withValues(alpha: 0.70),
-                          ],
-                  ),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(
-                    color: BubColors.white.withValues(
-                      alpha: isDark ? 0.14 : 0.70,
-                    ),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: BubColors.deepPurple.withValues(
-                        alpha: isDark ? 0.40 : 0.15,
-                      ),
-                      blurRadius: 30,
-                      offset: const Offset(0, 16),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 42,
-                            height: 42,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              gradient: BubColors.bubGradient,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: BubColors.pink.withValues(alpha: 0.24),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 7),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.badge_rounded,
-                              color: BubColors.white,
-                              size: 21,
-                            ),
-                          ),
-                          const SizedBox(width: 11),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Nickname',
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: 21,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0,
-                                  ),
-                                ),
-                                const SizedBox(height: 1),
-                                Text(
-                                  'Shown only in your chat.',
-                                  style: TextStyle(
-                                    color: softTextColor,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            tooltip: 'Close',
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(Icons.close_rounded),
-                            color: softTextColor,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        key: const Key('chat-nickname-field'),
-                        controller: controller,
-                        autofocus: true,
-                        maxLength: 80,
-                        style: TextStyle(
-                          color: textColor,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Partner nickname',
-                          prefixIcon: Icon(
-                            Icons.favorite_rounded,
-                            color: BubColors.pink.withValues(alpha: 0.78),
-                          ),
-                          counterStyle: TextStyle(color: softTextColor),
-                          fillColor: inputFill,
-                          filled: true,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide(
-                              color: BubColors.white.withValues(
-                                alpha: isDark ? 0.10 : 0.62,
-                              ),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide(
-                              color: BubColors.white.withValues(
-                                alpha: isDark ? 0.10 : 0.62,
-                              ),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: const BorderSide(
-                              color: BubColors.pink,
-                              width: 1.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => Navigator.pop(context),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: softTextColor,
-                                side: BorderSide(
-                                  color: BubColors.white.withValues(
-                                    alpha: isDark ? 0.12 : 0.58,
-                                  ),
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(17),
-                                ),
-                                minimumSize: const Size.fromHeight(44),
-                              ),
-                              child: const Text('Cancel'),
-                            ),
-                          ),
-                          const SizedBox(width: 9),
-                          Expanded(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: BubColors.bubGradient,
-                                borderRadius: BorderRadius.circular(17),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: BubColors.pink.withValues(
-                                      alpha: 0.24,
-                                    ),
-                                    blurRadius: 16,
-                                    offset: const Offset(0, 7),
-                                  ),
-                                ],
-                              ),
-                              child: FilledButton(
-                                key: const Key('chat-nickname-save'),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  shadowColor: Colors.transparent,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(17),
-                                  ),
-                                  minimumSize: const Size.fromHeight(44),
-                                ),
-                                onPressed: () async {
-                                  await onSave(controller.text);
-                                  if (context.mounted) {
-                                    Navigator.pop(context);
-                                  }
-                                },
-                                child: const Text('Save'),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+          const SizedBox(height: 6),
+          BubDialogActions(
+            onCancel: () => Navigator.pop(context),
+            confirmKey: const Key('chat-nickname-save'),
+            confirmLabel: 'Save',
+            onConfirm: () async {
+              await onSave(controller.text);
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
+            },
           ),
         ],
       ),
@@ -1574,9 +1443,15 @@ class _MessageList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final latestOutgoingStatusMessageId = _latestOutgoingStatusMessageId();
+    final visibleLocalNotices = [
+      for (final notice in localNotices)
+        if (!_ChatSectionState._localNoticeCoveredByServer(notice, messages))
+          notice,
+    ];
     final items = [
       for (final message in messages) _ChatTimelineItem.message(message),
-      for (final notice in localNotices) _ChatTimelineItem.notice(notice),
+      for (final notice in visibleLocalNotices)
+        _ChatTimelineItem.notice(notice),
       for (final pendingText in pendingTextMessages)
         _ChatTimelineItem.pendingText(pendingText),
       for (final pendingMedia in pendingMediaMessages)
@@ -2073,20 +1948,34 @@ class _MessageBubbleState extends ConsumerState<_MessageBubble> {
                                     color: bareMessage || deleted
                                         ? Colors.transparent
                                         : bubbleColor,
-                                    borderRadius: BorderRadius.circular(18),
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: const Radius.circular(20),
+                                      topRight: const Radius.circular(20),
+                                      bottomLeft: Radius.circular(
+                                        mine ? 20 : 6,
+                                      ),
+                                      bottomRight: Radius.circular(
+                                        mine ? 6 : 20,
+                                      ),
+                                    ),
                                     border: deleted
                                         ? Border.all(
                                             color: BubColors.textSecondaryLight
                                                 .withValues(alpha: 0.34),
                                           )
-                                        : null,
+                                        : (!mine && !isDark
+                                              ? Border.all(
+                                                  color: BubColors.purple
+                                                      .withValues(alpha: 0.10),
+                                                )
+                                              : null),
                                   ),
                                   child: Padding(
                                     padding: bareMessage
                                         ? EdgeInsets.zero
                                         : const EdgeInsets.symmetric(
-                                            horizontal: 9,
-                                            vertical: 6,
+                                            horizontal: 12,
+                                            vertical: 8,
                                           ),
                                     child: _MessageBody(
                                       message: message,
@@ -3169,18 +3058,18 @@ class _ChatComposer extends StatelessWidget {
     required this.focusNode,
     required this.replyTo,
     required this.inlineMedia,
-    required this.inlineMediaMode,
+    required this.sendToSafe,
     required this.showInlineMediaPicker,
     required this.inlineMediaExpanded,
     required this.inlineMediaLoading,
     required this.maxInlineMediaGridHeight,
     required this.stagedMedia,
     required this.stagedMediaIds,
-    required this.hasText,
+    required this.canSend,
     required this.onCancelReply,
     required this.onSend,
     required this.onAttachment,
-    required this.onInlineMediaModeChanged,
+    required this.onSendToSafeChanged,
     required this.onInlineMediaSelected,
     required this.onToggleInlineMediaExpanded,
     required this.onRemoveStagedMedia,
@@ -3192,18 +3081,18 @@ class _ChatComposer extends StatelessWidget {
   final FocusNode focusNode;
   final ChatMessageResponse? replyTo;
   final List<ChatMediaItem> inlineMedia;
-  final _AttachmentMode inlineMediaMode;
+  final bool sendToSafe;
   final bool showInlineMediaPicker;
   final bool inlineMediaExpanded;
   final bool inlineMediaLoading;
   final double maxInlineMediaGridHeight;
   final List<File> stagedMedia;
   final Set<String> stagedMediaIds;
-  final bool hasText;
+  final bool canSend;
   final VoidCallback onCancelReply;
   final VoidCallback onSend;
   final VoidCallback onAttachment;
-  final ValueChanged<_AttachmentMode> onInlineMediaModeChanged;
+  final ValueChanged<bool> onSendToSafeChanged;
   final ValueChanged<ChatMediaItem> onInlineMediaSelected;
   final VoidCallback onToggleInlineMediaExpanded;
   final ValueChanged<int> onRemoveStagedMedia;
@@ -3212,19 +3101,18 @@ class _ChatComposer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: BubColors.deepPurple.withValues(alpha: 0.12),
-              blurRadius: 22,
-              offset: const Offset(0, 10),
-            ),
-          ],
+          color: isDark
+              ? BubColors.darkCard.withValues(alpha: 0.96)
+              : BubColors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: BubColors.purple.withValues(alpha: isDark ? 0.28 : 0.14),
+          ),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
@@ -3240,7 +3128,7 @@ class _ChatComposer extends StatelessWidget {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: BubColors.pink.withValues(alpha: 0.10),
+                    color: BubColors.purple.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
@@ -3263,36 +3151,22 @@ class _ChatComposer extends StatelessWidget {
                 ),
               Row(
                 children: [
-                  if (!hasText)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _ComposerActionSlot(
-                          visible: true,
-                          child: IconButton(
-                            key: const Key('chat-emoji-button'),
-                            onPressed: onToggleEmojiPicker,
-                            icon: const Icon(Icons.emoji_emotions_outlined),
-                          ),
-                        ),
-                        _ComposerActionSlot(
-                          visible: true,
-                          child: IconButton(
-                            key: const Key('chat-attachment-button'),
-                            onPressed: onAttachment,
-                            icon: const Icon(Icons.attach_file_rounded),
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _ComposerActionSlot(visible: false),
-                        _ComposerActionSlot(visible: false),
-                      ],
+                  _ComposerActionSlot(
+                    visible: true,
+                    child: IconButton(
+                      key: const Key('chat-emoji-button'),
+                      onPressed: onToggleEmojiPicker,
+                      icon: const Icon(Icons.emoji_emotions_outlined),
                     ),
+                  ),
+                  _ComposerActionSlot(
+                    visible: true,
+                    child: IconButton(
+                      key: const Key('chat-attachment-button'),
+                      onPressed: onAttachment,
+                      icon: const Icon(Icons.attach_file_rounded),
+                    ),
+                  ),
                   Expanded(
                     child: TextField(
                       key: const Key('chat-composer-field'),
@@ -3300,23 +3174,35 @@ class _ChatComposer extends StatelessWidget {
                       focusNode: focusNode,
                       minLines: 1,
                       maxLines: 4,
-                      decoration: const InputDecoration(
-                        hintText: 'Message',
+                      decoration: InputDecoration(
+                        hintText: 'Say something cute…',
+                        hintStyle: TextStyle(
+                          color: isDark
+                              ? BubColors.textHintDark
+                              : BubColors.textHintLight,
+                          fontWeight: FontWeight.w600,
+                        ),
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(vertical: 8),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 8),
                       ),
                       onSubmitted: (_) => onSend(),
                     ),
                   ),
                   _ComposerActionSlot(
                     visible: true,
-                    child: hasText
-                        ? IconButton.filled(
+                    child: canSend
+                        ? IconButton(
                             key: const Key('chat-send-button'),
                             onPressed: onSend,
+                            style: IconButton.styleFrom(
+                              backgroundColor: BubColors.purple,
+                              foregroundColor: BubColors.white,
+                              disabledBackgroundColor: BubColors.purple
+                                  .withValues(alpha: 0.42),
+                            ),
                             icon: const Icon(Icons.send_rounded),
                           )
                         : IconButton(
@@ -3334,12 +3220,12 @@ class _ChatComposer extends StatelessWidget {
                 const SizedBox(height: 7),
                 _InlineMediaPicker(
                   items: inlineMedia,
-                  mode: inlineMediaMode,
+                  sendToSafe: sendToSafe,
                   selectedItemIds: stagedMediaIds,
                   expanded: inlineMediaExpanded,
                   loading: inlineMediaLoading,
                   maxGridHeight: maxInlineMediaGridHeight,
-                  onModeChanged: onInlineMediaModeChanged,
+                  onSendToSafeChanged: onSendToSafeChanged,
                   onSelected: onInlineMediaSelected,
                   onToggleExpanded: onToggleInlineMediaExpanded,
                 ),
@@ -3362,58 +3248,73 @@ class _ChatComposer extends StatelessWidget {
 class _InlineMediaPicker extends StatelessWidget {
   const _InlineMediaPicker({
     required this.items,
-    required this.mode,
+    required this.sendToSafe,
     required this.selectedItemIds,
     required this.expanded,
     required this.loading,
     required this.maxGridHeight,
-    required this.onModeChanged,
+    required this.onSendToSafeChanged,
     required this.onSelected,
     required this.onToggleExpanded,
   });
 
   final List<ChatMediaItem> items;
-  final _AttachmentMode mode;
+  final bool sendToSafe;
   final Set<String> selectedItemIds;
   final bool expanded;
   final bool loading;
   final double maxGridHeight;
-  final ValueChanged<_AttachmentMode> onModeChanged;
+  final ValueChanged<bool> onSendToSafeChanged;
   final ValueChanged<ChatMediaItem> onSelected;
   final VoidCallback onToggleExpanded;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final softText = isDark
+        ? BubColors.textSecondaryDark
+        : BubColors.textSecondaryLight;
     final gridHeight = _gridHeightFor(context);
     return DecoratedBox(
       key: const Key('chat-inline-media-picker'),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.54),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant),
+        color: isDark
+            ? BubColors.darkCard.withValues(alpha: 0.92)
+            : BubColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: BubColors.purple.withValues(alpha: isDark ? 0.28 : 0.12),
+        ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+        padding: const EdgeInsets.fromLTRB(10, 8, 6, 10),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               children: [
-                _InlineMediaModeButton(
-                  key: const Key('chat-inline-media-quick-mode'),
-                  label: 'Quick',
-                  selected: mode == _AttachmentMode.quick,
-                  onTap: () => onModeChanged(_AttachmentMode.quick),
+                Icon(
+                  Icons.photo_library_outlined,
+                  size: 18,
+                  color: BubColors.purple.withValues(alpha: 0.78),
                 ),
                 const SizedBox(width: 8),
-                _InlineMediaModeButton(
-                  key: const Key('chat-inline-media-safe-mode'),
-                  label: 'Safe',
-                  selected: mode == _AttachmentMode.safe,
-                  onTap: () => onModeChanged(_AttachmentMode.safe),
+                Expanded(
+                  child: Text(
+                    'Recents',
+                    style: TextStyle(
+                      color: isDark
+                          ? BubColors.white
+                          : BubColors.textPrimaryLight,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
-                const Spacer(),
+                _SafeUploadToggle(
+                  value: sendToSafe,
+                  onChanged: onSendToSafeChanged,
+                ),
                 if (!loading && items.isNotEmpty)
                   IconButton(
                     key: const Key('chat-inline-media-expand-button'),
@@ -3424,53 +3325,59 @@ class _InlineMediaPicker extends StatelessWidget {
                       expanded
                           ? Icons.keyboard_arrow_down_rounded
                           : Icons.keyboard_arrow_up_rounded,
+                      color: softText,
                     ),
                   ),
               ],
             ),
             const SizedBox(height: 8),
-            ConstrainedBox(
+            SizedBox(
               key: const Key('chat-inline-media-grid-frame'),
-              constraints: BoxConstraints(maxHeight: gridHeight),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                height: gridHeight,
-                child: loading
-                    ? const Center(
-                        key: Key('chat-inline-media-loading'),
-                        child: SizedBox.square(
-                          dimension: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+              height: gridHeight,
+              child: loading
+                  ? const Center(
+                      key: Key('chat-inline-media-loading'),
+                      child: SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: BubColors.purple,
                         ),
-                      )
-                    : items.isEmpty
-                    ? const Center(
-                        key: Key('chat-inline-media-empty'),
-                        child: Icon(Icons.photo_library_outlined),
-                      )
-                    : GridView.builder(
-                        key: const Key('chat-inline-media-grid'),
-                        padding: EdgeInsets.zero,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              mainAxisSpacing: 4,
-                              crossAxisSpacing: 4,
-                            ),
-                        itemBuilder: (context, index) {
-                          final item = items[index];
-                          final selected = selectedItemIds.contains(item.id);
-                          return _InlineMediaItem(
-                            key: Key('chat-inline-media-item-${item.id}'),
-                            item: item,
-                            selected: selected,
-                            onTap: () => onSelected(item),
-                          );
-                        },
-                        itemCount: items.length,
                       ),
-              ),
+                    )
+                  : items.isEmpty
+                  ? Center(
+                      key: const Key('chat-inline-media-empty'),
+                      child: Text(
+                        'No photos yet',
+                        style: TextStyle(
+                          color: softText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )
+                  : GridView.builder(
+                      key: const Key('chat-inline-media-grid'),
+                      padding: EdgeInsets.zero,
+                      cacheExtent: 240,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            mainAxisSpacing: 5,
+                            crossAxisSpacing: 5,
+                          ),
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        final selected = selectedItemIds.contains(item.id);
+                        return _InlineMediaItem(
+                          key: Key('chat-inline-media-item-${item.id}'),
+                          item: item,
+                          selected: selected,
+                          onTap: () => onSelected(item),
+                        );
+                      },
+                      itemCount: items.length,
+                    ),
             ),
           ],
         ),
@@ -3480,49 +3387,67 @@ class _InlineMediaPicker extends StatelessWidget {
 
   double _gridHeightFor(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
-    final desiredHeight = expanded ? mediaQuery.size.height * 0.54 : 238.0;
+    final desiredHeight = expanded ? mediaQuery.size.height * 0.54 : 220.0;
     final upperBound = math.max(96.0, maxGridHeight);
     final lowerBound = math.min(120.0, upperBound);
     return desiredHeight.clamp(lowerBound, upperBound).toDouble();
   }
 }
 
-class _InlineMediaModeButton extends StatelessWidget {
-  const _InlineMediaModeButton({
-    super.key,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
+class _SafeUploadToggle extends StatelessWidget {
+  const _SafeUploadToggle({required this.value, required this.onChanged});
 
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+  final bool value;
+  final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: selected ? BubColors.pink : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected
-                ? BubColors.pink
-                : Theme.of(context).colorScheme.outlineVariant,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : null,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: const Key('chat-inline-media-safe-toggle'),
+        onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(999),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: value
+                ? BubColors.purple
+                : BubColors.purple.withValues(alpha: isDark ? 0.16 : 0.06),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: BubColors.purple.withValues(
+                alpha: value ? 0.0 : (isDark ? 0.28 : 0.14),
+              ),
             ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                value ? Icons.lock_rounded : Icons.lock_open_rounded,
+                size: 14,
+                color: value
+                    ? BubColors.white
+                    : BubColors.purple.withValues(alpha: 0.86),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                'Safe',
+                style: TextStyle(
+                  color: value
+                      ? BubColors.white
+                      : (isDark
+                            ? BubColors.textSecondaryDark
+                            : BubColors.textSecondaryLight),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -3546,34 +3471,36 @@ class _InlineMediaItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(13),
+      borderRadius: BorderRadius.circular(14),
       child: SizedBox.expand(
         child: Stack(
           children: [
             Positioned.fill(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(13),
+                borderRadius: BorderRadius.circular(14),
                 child: ColoredBox(
-                  color: Theme.of(context).colorScheme.surface,
-                  child: item.isVideo
-                      ? const Center(
-                          child: Icon(
-                            Icons.play_circle_fill_rounded,
-                            color: BubColors.pink,
-                            size: 32,
-                          ),
-                        )
-                      : _InlineMediaThumbnail(item: item),
+                  color: BubColors.purple.withValues(alpha: 0.06),
+                  child: _InlineMediaThumbnail(item: item),
                 ),
               ),
             ),
+            if (item.isVideo)
+              const Positioned(
+                left: 6,
+                bottom: 6,
+                child: Icon(
+                  Icons.play_circle_fill_rounded,
+                  color: BubColors.white,
+                  size: 22,
+                ),
+              ),
             if (selected)
               Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: BubColors.pink.withValues(alpha: 0.20),
-                    borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: BubColors.pink, width: 3),
+                    color: BubColors.purple.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: BubColors.purple, width: 2),
                   ),
                 ),
               ),
@@ -3581,11 +3508,19 @@ class _InlineMediaItem extends StatelessWidget {
               const Positioned(
                 top: 6,
                 right: 6,
-                child: CircleAvatar(
-                  radius: 11,
-                  backgroundColor: BubColors.pink,
-                  foregroundColor: Colors.white,
-                  child: Icon(Icons.check_rounded, size: 15),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: BubColors.purple,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(2),
+                    child: Icon(
+                      Icons.check_rounded,
+                      size: 14,
+                      color: BubColors.white,
+                    ),
+                  ),
                 ),
               ),
           ],
@@ -3605,20 +3540,33 @@ class _InlineMediaThumbnail extends StatefulWidget {
 }
 
 class _InlineMediaThumbnailState extends State<_InlineMediaThumbnail> {
+  static final Map<String, Uint8List> _cache = {};
   late Future<Object?> _thumbnail;
 
   @override
   void initState() {
     super.initState();
-    _thumbnail = widget.item.loadThumbnail();
+    _thumbnail = _load();
   }
 
   @override
   void didUpdateWidget(_InlineMediaThumbnail oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.item.id != widget.item.id) {
-      _thumbnail = widget.item.loadThumbnail();
+      _thumbnail = _load();
     }
+  }
+
+  Future<Object?> _load() async {
+    final cached = _cache[widget.item.id];
+    if (cached != null) {
+      return cached;
+    }
+    final bytes = await widget.item.loadThumbnail();
+    if (bytes != null) {
+      _cache[widget.item.id] = bytes;
+    }
+    return bytes;
   }
 
   @override
@@ -3628,21 +3576,30 @@ class _InlineMediaThumbnailState extends State<_InlineMediaThumbnail> {
       builder: (context, snapshot) {
         final bytes = snapshot.data;
         if (bytes is Uint8List) {
-          return Image.memory(bytes, fit: BoxFit.cover);
+          return Image.memory(
+            bytes,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.low,
+          );
         }
         final file = widget.item.file;
         if (file != null) {
           return Image.file(
             file,
             fit: BoxFit.cover,
+            filterQuality: FilterQuality.low,
             errorBuilder: (_, _, _) =>
                 const Center(child: Icon(Icons.photo_rounded)),
           );
         }
         return const Center(
           child: SizedBox.square(
-            dimension: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            dimension: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: BubColors.purple,
+            ),
           ),
         );
       },
