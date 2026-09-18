@@ -11,12 +11,14 @@ class HomeTodayMomentCard extends StatelessWidget {
     required this.onReact,
     required this.onCaptureMoment,
     this.isTethered = false,
+    this.isUploading = false,
   });
 
   final HomeTodayMomentResponse? moment;
   final VoidCallback onReact;
   final VoidCallback onCaptureMoment;
   final bool isTethered;
+  final bool isUploading;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +46,7 @@ class HomeTodayMomentCard extends StatelessWidget {
                 if (isTethered) ...[
                   _SelfMomentShortcut(
                     moment: current,
+                    isUploading: isUploading,
                     onCaptureMoment: onCaptureMoment,
                   ),
                   const SizedBox(height: 10),
@@ -341,10 +344,12 @@ class _SelfMomentShortcut extends StatelessWidget {
   const _SelfMomentShortcut({
     required this.moment,
     required this.onCaptureMoment,
+    this.isUploading = false,
   });
 
   final HomeTodayMomentResponse? moment;
   final VoidCallback onCaptureMoment;
+  final bool isUploading;
 
   @override
   Widget build(BuildContext context) {
@@ -355,7 +360,10 @@ class _SelfMomentShortcut extends StatelessWidget {
         viewerPhotoUrl.isNotEmpty;
 
     if (!hasSelfMoment) {
-      return _CameraSnapshotTile(onCaptureMoment: onCaptureMoment);
+      return _CameraSnapshotTile(
+        onCaptureMoment: onCaptureMoment,
+        isUploading: isUploading,
+      );
     }
 
     return Transform.rotate(
@@ -365,8 +373,13 @@ class _SelfMomentShortcut extends StatelessWidget {
         child: InkWell(
           key: const Key('home-today-moment-self-polaroid'),
           borderRadius: BorderRadius.circular(12),
-          onTap: () =>
-              _showSelfMomentPreview(context, viewerPhotoUrl, onCaptureMoment),
+          onTap: isUploading
+              ? null
+              : () => _showSelfMomentPreview(
+                  context,
+                  viewerPhotoUrl,
+                  onCaptureMoment,
+                ),
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: BubColors.white,
@@ -383,22 +396,44 @@ class _SelfMomentShortcut extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(5, 5, 5, 13),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  viewerPhotoUrl,
-                  width: 54,
-                  height: 54,
-                  fit: BoxFit.cover,
-                  loadingBuilder: _momentImageLoadingBuilder,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    width: 54,
-                    height: 54,
-                    alignment: Alignment.center,
-                    color: BubColors.partnerBubbleLight,
-                    child: const Icon(
-                      Icons.photo_rounded,
-                      color: BubColors.deepPurple,
-                      size: 20,
-                    ),
+                child: SizedBox.square(
+                  dimension: 54,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.network(
+                        viewerPhotoUrl,
+                        width: 54,
+                        height: 54,
+                        fit: BoxFit.cover,
+                        loadingBuilder: _momentImageLoadingBuilder,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          width: 54,
+                          height: 54,
+                          alignment: Alignment.center,
+                          color: BubColors.partnerBubbleLight,
+                          child: const Icon(
+                            Icons.photo_rounded,
+                            color: BubColors.deepPurple,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                      if (isUploading)
+                        const ColoredBox(
+                          color: Color(0x66000000),
+                          child: Center(
+                            child: SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(
+                                key: Key('home-today-moment-upload-spinner'),
+                                strokeWidth: 2,
+                                color: BubColors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -534,9 +569,13 @@ class _MomentImageSkeleton extends StatelessWidget {
 }
 
 class _CameraSnapshotTile extends StatelessWidget {
-  const _CameraSnapshotTile({required this.onCaptureMoment});
+  const _CameraSnapshotTile({
+    required this.onCaptureMoment,
+    this.isUploading = false,
+  });
 
   final VoidCallback onCaptureMoment;
+  final bool isUploading;
 
   @override
   Widget build(BuildContext context) {
@@ -545,7 +584,7 @@ class _CameraSnapshotTile extends StatelessWidget {
       child: InkWell(
         key: const Key('home-today-moment-camera-tile'),
         borderRadius: BorderRadius.circular(16),
-        onTap: onCaptureMoment,
+        onTap: isUploading ? null : onCaptureMoment,
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: BubColors.white.withValues(alpha: 0.88),
@@ -559,13 +598,24 @@ class _CameraSnapshotTile extends StatelessWidget {
               ),
             ],
           ),
-          child: const SizedBox.square(
+          child: SizedBox.square(
             dimension: 64,
-            child: Icon(
-              Icons.camera_alt_rounded,
-              color: BubColors.deepPurple,
-              size: 28,
-            ),
+            child: isUploading
+                ? const Center(
+                    child: SizedBox.square(
+                      dimension: 22,
+                      child: CircularProgressIndicator(
+                        key: Key('home-today-moment-upload-spinner'),
+                        strokeWidth: 2.4,
+                        color: BubColors.deepPurple,
+                      ),
+                    ),
+                  )
+                : const Icon(
+                    Icons.camera_alt_rounded,
+                    color: BubColors.deepPurple,
+                    size: 28,
+                  ),
           ),
         ),
       ),
