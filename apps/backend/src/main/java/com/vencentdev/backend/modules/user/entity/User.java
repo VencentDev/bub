@@ -13,6 +13,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -66,4 +67,25 @@ public class User extends AuditableEntity {
   @Builder.Default
   @Column(nullable = false, length = 16)
   private String language = "en";
+
+  @Column private Integer age;
+
+  @Column(name = "discovered_app_via")
+  private String discoveredAppVia;
+
+  @Column(name = "relationship_status")
+  private String relationshipStatus;
+
+  @Column(name = "relationship_length")
+  private String relationshipLength;
+
+  @Column(name = "terms_accepted_at")
+  private Instant termsAcceptedAt;
+
+  @Column(name = "profile_onboarding_completed_at")
+  private Instant profileOnboardingCompletedAt;
+
+  public boolean isProfileOnboardingComplete() {
+    return profileOnboardingCompletedAt != null;
+  }
 }

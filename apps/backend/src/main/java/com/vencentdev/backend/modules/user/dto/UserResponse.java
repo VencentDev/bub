@@ -16,5 +16,11 @@ public record UserResponse(
     KycStatus kycStatus,
     ThemeMode themeMode,
     String language,
+    Integer age,
+    String discoveredAppVia,
+    String relationshipStatus,
+    String relationshipLength,
+    Instant termsAcceptedAt,
+    boolean profileOnboardingComplete,
     Instant createdAt,
     Instant updatedAt) {}
